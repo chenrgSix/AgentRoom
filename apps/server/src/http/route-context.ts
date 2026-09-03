@@ -16,6 +16,8 @@ import type { RemoteProviderBindingService } from
 import type { RemoteEvidenceService } from "../remote/remote-evidence-service.js";
 import type { RemoteEvidenceAdoptionService } from
   "../remote/remote-evidence-adoption-service.js";
+import type { RemoteInputAttestationService } from
+  "../remote/remote-input-attestation-service.js";
 
 import type { ArtifactPublicationService } from
   "../artifact/artifact-publication-service.js";
@@ -120,6 +122,7 @@ export interface ServerRouteContext {
   repositoryVerifications: RepositoryVerificationService;
   remoteProviderBindings: RemoteProviderBindingService;
   remoteEvidence: RemoteEvidenceService;
+  remoteInputAttestations: RemoteInputAttestationService;
   remoteEvidenceAdoptions: RemoteEvidenceAdoptionService;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;

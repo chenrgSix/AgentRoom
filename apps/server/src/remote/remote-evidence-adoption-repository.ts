@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { EvidenceAdoption, SourceEvidence } from
+import type { EvidenceAdoption, EvidenceReuseContract, SourceEvidence } from
   "@convene-wire/contracts/execution-plan";
 import {
   assertExecutionCommand,
@@ -10,6 +10,7 @@ import { SqliteTransactionBoundary } from
 
 export interface RemoteEvidenceAdoptionBundle {
   adoption: EvidenceAdoption;
+  reuse: EvidenceReuseContract;
   source: SourceEvidence;
 }
 
@@ -25,22 +26,27 @@ export class RemoteEvidenceAdoptionRepository {
     nodeKey: string
   ): RemoteEvidenceAdoptionBundle | undefined {
     const row = this.database.prepare(`
-      SELECT adoption.adoption_json, source.source_json
+      SELECT adoption.adoption_json, reuse.contract_json, source.source_json
       FROM execution_remote_evidence_adoptions adoption
+      JOIN execution_remote_evidence_reuse_contracts reuse
+        ON reuse.adoption_id = adoption.adoption_id
+        AND reuse.adoption_digest = adoption.adoption_digest
       JOIN execution_remote_source_evidence source
         ON source.source_evidence_id = adoption.source_evidence_id
         AND source.source_digest = adoption.source_digest
       WHERE adoption.plan_id = ? AND adoption.plan_revision = ?
         AND adoption.node_key = ? AND adoption.gate = 'verified_output'
     `).get(planId, planRevision, nodeKey) as {
-      adoption_json: string; source_json: string;
+      adoption_json: string; contract_json: string; source_json: string;
     } | undefined;
     if (!row) return undefined;
     const adoption = JSON.parse(row.adoption_json) as EvidenceAdoption;
+    const reuse = JSON.parse(row.contract_json) as EvidenceReuseContract;
     const source = JSON.parse(row.source_json) as SourceEvidence;
     assertExecutionCommand("evidenceAdoption", adoption);
+    assertExecutionCommand("evidenceReuseContract", reuse);
     assertExecutionCommand("sourceEvidence", source);
-    return { adoption, source };
+    return { adoption, reuse, source };
   }
 
   public getByOperation(operationId: string): RemoteEvidenceAdoptionBundle | undefined {
@@ -55,7 +61,8 @@ export class RemoteEvidenceAdoptionRepository {
 
   public retain(
     providerBindingId: string,
-    adoption: EvidenceAdoption
+    adoption: EvidenceAdoption,
+    reuse: EvidenceReuseContract
   ): RemoteEvidenceAdoptionBundle {
     return this.transactions.immediate(() => {
       const replay = this.getByOperation(adoption.operationId);
@@ -85,6 +92,29 @@ export class RemoteEvidenceAdoptionRepository {
         adoption.adoptionDigest,
         canonicalExecutionJSON(adoption),
         adoption.createdAt
+      );
+      this.database.prepare(`
+        INSERT INTO execution_remote_evidence_reuse_contracts (
+          reuse_contract_id, schema_version, adoption_id, adoption_digest,
+          plan_id, plan_revision, node_key, gate, runtime_input_binding_digest,
+          reuse_input_evidence_digest, node_execution_digest,
+          node_reuse_contract_digest, contract_digest, contract_json, created_at
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        reuse.reuseContractId,
+        reuse.adoptionId,
+        reuse.adoptionDigest,
+        reuse.planId,
+        reuse.planRevision,
+        reuse.nodeKey,
+        reuse.gate,
+        reuse.runtimeInputBindingDigest,
+        reuse.reuseInputEvidenceDigest,
+        reuse.nodeExecutionDigest,
+        reuse.nodeReuseContractDigest,
+        reuse.contractDigest,
+        canonicalExecutionJSON(reuse),
+        reuse.createdAt
       );
       return this.get(adoption.planId, adoption.planRevision, adoption.nodeKey)!;
     });

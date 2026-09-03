@@ -4,10 +4,12 @@ import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import type { RemoteProviderBinding } from
+import type { ProviderInputAttestation, RemoteProviderBinding } from
   "@convene-wire/contracts/execution-plan";
 import {
   providerObservationDigest,
+  providerInputAttestationDigest,
+  remoteInputEvidenceDigest,
   remoteProviderBindingDigest
 } from "@convene-wire/contracts/execution-validation";
 import { validateRemoteGitBundle } from
@@ -61,6 +63,45 @@ function observation() {
   return value;
 }
 
+function inputAttestation(): ProviderInputAttestation {
+  const value: ProviderInputAttestation = {
+    version: 1,
+    operationId: "op_boundary_inputs0001",
+    attestationId: "attestation_boundary0001",
+    providerRepositoryId: "owner/repository",
+    nodeKey: "Build",
+    commit: "b".repeat(40),
+    tree: "c".repeat(40),
+    inputs: [{
+      adoptionId: "adoption_boundary0001",
+      adoptionDigest: "a".repeat(64),
+      reuseInput: {
+        inputSlot: "source",
+        producer: {
+          kind: "adopted_evidence",
+          edge: {
+            edgeKey: "PrepareBuild",
+            fromNodeKey: "Prepare",
+            toNodeKey: "Build",
+            gate: "verified_output",
+            bindings: [{ outputSlot: "output", inputSlot: "source" }]
+          },
+          sourceEvidenceId: "source_boundary0001",
+          sourceDigest: "b".repeat(64),
+          proofSetDigest: "c".repeat(64)
+        },
+        artifact: { kind: "patch", contentDigest: "d".repeat(64) }
+      }
+    }],
+    remoteInputEvidenceDigest: "0".repeat(64),
+    providerAttestationDigest: "0".repeat(64),
+    attestedAt: now
+  };
+  value.remoteInputEvidenceDigest = remoteInputEvidenceDigest(value.inputs);
+  value.providerAttestationDigest = providerInputAttestationDigest(value);
+  return value;
+}
+
 test("provider retry looks up a response-lost effect and never repeats POST", async () => {
   const retained = observation();
   let lookupCount = 0;
@@ -101,6 +142,47 @@ test("provider retry looks up a response-lost effect and never repeats POST", as
     observation: retained,
     bundle: Buffer.from("git")
   });
+  assert.equal(lookupCount, 2);
+  assert.equal(postCount, 1);
+});
+
+test("input attestation reconciles an unknown POST outcome by exact lookup", async () => {
+  const retained = inputAttestation();
+  let lookupCount = 0;
+  let postCount = 0;
+  const client = new RemoteProviderClient(
+    () => "runtime-only-token",
+    async (input, init) => {
+      const url = String(input);
+      if (url.endsWith(`/v1/input-attestations/${retained.operationId}`)) {
+        lookupCount += 1;
+        return lookupCount === 1
+          ? new Response(null, { status: 404 })
+          : Response.json(retained);
+      }
+      if (url.endsWith("/v1/input-attestations") && init?.method === "POST") {
+        postCount += 1;
+        throw new Error("response lost after provider retained attestation");
+      }
+      throw new Error(`unexpected request ${url}`);
+    }
+  );
+  const request = {
+    operationId: retained.operationId,
+    providerRepositoryId: retained.providerRepositoryId,
+    nodeKey: retained.nodeKey,
+    commit: retained.commit,
+    tree: retained.tree,
+    inputs: retained.inputs,
+    remoteInputEvidenceDigest: retained.remoteInputEvidenceDigest
+  };
+  await assert.rejects(client.observeInputAttestation(binding(), request),
+    (error: unknown) => error instanceof RemoteProviderClientError &&
+      error.outcomeUnknown);
+  assert.deepEqual(
+    await client.observeInputAttestation(binding(), request),
+    retained
+  );
   assert.equal(lookupCount, 2);
   assert.equal(postCount, 1);
 });

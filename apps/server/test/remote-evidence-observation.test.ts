@@ -13,6 +13,7 @@ import type {
   GovernedExecutionManifest
 } from "@convene-wire/contracts/execution-plan";
 import {
+  providerInputAttestationDigest,
   providerObservationDigest
 } from "@convene-wire/contracts/execution-validation";
 import { fixture, now } from "./helpers/execution-plan-fixture.js";
@@ -26,6 +27,8 @@ import { ExecutionPlanRepository } from
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { AuthService } from "../src/security/auth-service.js";
+import { backfillRemoteEvidenceReuseContracts } from
+  "../src/remote/remote-evidence-reuse-backfill.js";
 
 const run = promisify(execFile);
 const digest = (source: Buffer) => createHash("sha256").update(source).digest("hex");
@@ -133,9 +136,10 @@ test("authenticated remote commit and CI observations retain result-free evidenc
     }
     const commitLookup = request.url?.match(/^\/v1\/commit-observations\/(op_[^/]+)$/u);
     const ciLookup = request.url?.match(/^\/v1\/ci-observations\/(op_[^/]+)$/u);
+    const inputLookup = request.url?.match(/^\/v1\/input-attestations\/(op_[^/]+)$/u);
     const bundleLookup = request.url?.match(/^\/v1\/commit-observations\/(observation_[^/]+)\/bundle$/u);
-    if (request.method === "GET" && (commitLookup || ciLookup)) {
-      const retained = effects.get((commitLookup ?? ciLookup)![1]!);
+    if (request.method === "GET" && (commitLookup || ciLookup || inputLookup)) {
+      const retained = effects.get((commitLookup ?? ciLookup ?? inputLookup)![1]!);
       if (!retained) response.writeHead(404).end();
       else response.writeHead(200, { "content-type": "application/json" })
         .end(JSON.stringify(retained));
@@ -154,7 +158,7 @@ test("authenticated remote commit and CI observations retain result-free evidenc
       const pending = {
         version: 1,
         operationId: command.operationId,
-        observationId: "observation_commitremote0001",
+        observationId: `observation_remote_${operationId.slice(3)}`,
         providerRepositoryId: operationId.includes("foreign")
           ? "foreign/repository" : command.providerRepositoryId,
         objectFormat: operationId.includes("objectformat") ? "sha256" : "sha1",
@@ -181,7 +185,7 @@ test("authenticated remote commit and CI observations retain result-free evidenc
       const pending = {
         version: 1,
         operationId: command.operationId,
-        observationId: `observation_ciremote000000${command.attempt}`,
+        observationId: `observation_ci_${String(command.operationId).slice(3)}`,
         providerRepositoryId: command.providerRepositoryId,
         checkKey: command.checkKey,
         attempt: command.attempt,
@@ -192,6 +196,29 @@ test("authenticated remote commit and CI observations retain result-free evidenc
         observedAt: now
       };
       pending.providerObservationDigest = providerObservationDigest(pending);
+      effects.set(command.operationId as string, pending);
+      response.writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify(pending));
+      return;
+    }
+    if (request.method === "POST" && request.url === "/v1/input-attestations") {
+      const command = await body(request);
+      const operationId = String(command.operationId);
+      const pending = {
+        version: 1,
+        operationId: command.operationId,
+        attestationId: `attestation_remote_${String(command.operationId).slice(3)}`,
+        providerRepositoryId: command.providerRepositoryId,
+        nodeKey: command.nodeKey,
+        commit: command.commit,
+        tree: command.tree,
+        inputs: command.inputs,
+        remoteInputEvidenceDigest: operationId.includes("wrongdigest")
+          ? "d".repeat(64) : command.remoteInputEvidenceDigest,
+        providerAttestationDigest: "0".repeat(64),
+        attestedAt: now
+      };
+      pending.providerAttestationDigest = providerInputAttestationDigest(pending);
       effects.set(command.operationId as string, pending);
       response.writeHead(200, { "content-type": "application/json" })
         .end(JSON.stringify(pending));
@@ -264,13 +291,32 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   consume.scope = structuredClone(build.scope);
   consume.inputs = [{ slotKey: "patch", kind: "patch", required: true }];
   consume.outputs = [{ slotKey: "output", kind: "patch", required: true }];
-  command.definition.edges = [{
-    edgeKey: "build_consume",
-    fromNodeKey: "Build",
-    toNodeKey: "Consume",
-    gate: "verified_output",
-    bindings: [{ outputSlot: "output", inputSlot: "patch" }]
-  }];
+  const remoteConsume = structuredClone(consume);
+  remoteConsume.nodeKey = "RemoteConsume";
+  remoteConsume.agentId = f.agentId;
+  remoteConsume.task = {
+    ...structuredClone(consume.task),
+    title: "Consume an attested remote input",
+    goal: "Produce a remote patch from the exact adopted Build evidence"
+  };
+  remoteConsume.repository.grantId = "grant_remote_input00001";
+  command.definition.nodes.push(remoteConsume);
+  command.definition.edges = [
+    {
+      edgeKey: "build_remote_consume",
+      fromNodeKey: "Build",
+      toNodeKey: "RemoteConsume",
+      gate: "verified_output",
+      bindings: [{ outputSlot: "output", inputSlot: "patch" }]
+    },
+    {
+      edgeKey: "remote_consume_local",
+      fromNodeKey: "RemoteConsume",
+      toNodeKey: "Consume",
+      gate: "verified_output",
+      bindings: [{ outputSlot: "output", inputSlot: "patch" }]
+    }
+  ];
   command.definition.policy.maxConcurrency = 1;
   const draft = await f.create(command);
   const plan = (await f.ok("POST",
@@ -432,7 +478,7 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.deepEqual(resolver().resolve({
     planId: plan.planId,
     planRevision: plan.current.revision,
-    nodeKey: "Consume"
+    nodeKey: "RemoteConsume"
   }), { ready: false, blocker: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED" });
   const adopted = await f.ok("POST",
     `/api/execution-plans/${plan.planId}/remote-evidence-adoptions`, {
@@ -502,7 +548,7 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   const resolved = resolver().resolve({
     planId: plan.planId,
     planRevision: plan.current.revision,
-    nodeKey: "Consume"
+    nodeKey: "RemoteConsume"
   });
   assert.equal(resolved.ready, true);
   if (!resolved.ready) assert.fail("remote adoption did not release dependency");
@@ -517,6 +563,122 @@ test("authenticated remote commit and CI observations retain result-free evidenc
     path.dirname(f.databasePath), "artifact-blobs", patch.storage_key
   ));
   assert.deepEqual(sealedPatch, expectedPatch);
+
+  const remoteCommit = await f.ok("POST",
+    `/api/execution-plans/${plan.planId}/remote-commit-observations`, {
+      ...commitCommand,
+      operationId: "op_remote_input_commit01",
+      nodeKey: "RemoteConsume"
+    });
+  await f.ok("POST",
+    `/api/execution-plans/${plan.planId}/remote-ci-observations`, {
+      operationId: "op_remote_input_ci00001",
+      providerBindingId: binding.providerBindingId,
+      planRevision: plan.current.revision,
+      nodeKey: "RemoteConsume",
+      expectedPlanDigest: plan.current.digest,
+      expectedControlRevision: plan.controlRevision,
+      sourceEvidenceId: remoteCommit.source.sourceEvidenceId,
+      checkKey: "unit",
+      attempt: 1
+    });
+  const remoteAdoptionCommand = {
+    operationId: "op_remote_input_adopt001",
+    providerBindingId: binding.providerBindingId,
+    planRevision: plan.current.revision,
+    nodeKey: "RemoteConsume",
+    expectedPlanDigest: plan.current.digest,
+    expectedControlRevision: plan.controlRevision,
+    sourceEvidenceId: remoteCommit.source.sourceEvidenceId
+  };
+  const unattested = await f.request("POST",
+    `/api/execution-plans/${plan.planId}/remote-evidence-adoptions`,
+    remoteAdoptionCommand);
+  assert.equal(unattested.statusCode, 409, unattested.body);
+  assert.match(unattested.body, /REMOTE_INPUT_ATTESTATION_REQUIRED/u);
+  const attestationCommand = {
+    operationId: "op_remote_input_attest01",
+    providerBindingId: binding.providerBindingId,
+    planRevision: plan.current.revision,
+    nodeKey: "RemoteConsume",
+    expectedPlanDigest: plan.current.digest,
+    expectedControlRevision: plan.controlRevision,
+    sourceEvidenceId: remoteCommit.source.sourceEvidenceId
+  };
+  const sealedPatchPath = path.join(
+    path.dirname(f.databasePath), "artifact-blobs", patch.storage_key
+  );
+  await writeFile(sealedPatchPath, Buffer.alloc(sealedPatch.length, 0x78));
+  const tamperedArtifact = await f.request("POST",
+    `/api/execution-plans/${plan.planId}/remote-input-attestations`, {
+      ...attestationCommand,
+      operationId: "op_remote_input_tamper001"
+    });
+  assert.equal(tamperedArtifact.statusCode, 409, tamperedArtifact.body);
+  assert.match(tamperedArtifact.body, /REMOTE_INPUT_ARTIFACT_INVALID/u);
+  await writeFile(sealedPatchPath, sealedPatch);
+  const providerMismatch = await f.request("POST",
+    `/api/execution-plans/${plan.planId}/remote-input-attestations`, {
+      ...attestationCommand,
+      operationId: "op_remote_input_wrongdigest1"
+    });
+  assert.equal(providerMismatch.statusCode, 409, providerMismatch.body);
+  assert.match(providerMismatch.body, /REMOTE_PROVIDER_RESPONSE_INVALID/u);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM remote_input_attestations
+  `).get() as { n: number }).n, 0);
+  const inputPostsBefore = calls.filter((call) =>
+    call === "POST /v1/input-attestations").length;
+  const [attestation, attestationReplay] = await Promise.all([
+    f.ok("POST",
+      `/api/execution-plans/${plan.planId}/remote-input-attestations`,
+      attestationCommand),
+    f.ok("POST",
+      `/api/execution-plans/${plan.planId}/remote-input-attestations`,
+      attestationCommand)
+  ]);
+  assert.deepEqual(attestationReplay, attestation);
+  assert.equal(calls.filter((call) =>
+    call === "POST /v1/input-attestations").length, inputPostsBefore + 1);
+  assert.equal(attestation.inputs.length, 1);
+  assert.equal(attestation.inputs[0].reuseInput.inputSlot, "patch");
+  assert.equal(attestation.inputs[0].adoptionId, adopted.adoption.adoptionId);
+  assert.equal(attestation.inputs[0].reuseInput.producer.sourceEvidenceId,
+    adopted.source.sourceEvidenceId);
+  f.database.exec(`
+    CREATE TRIGGER fail_remote_reuse_once
+    BEFORE INSERT ON execution_remote_evidence_reuse_contracts
+    BEGIN SELECT RAISE(ABORT, 'injected remote reuse failure'); END;
+  `);
+  const injected = await f.request("POST",
+    `/api/execution-plans/${plan.planId}/remote-evidence-adoptions`, {
+      ...remoteAdoptionCommand,
+      operationId: "op_remote_input_fault001"
+    });
+  assert.equal(injected.statusCode, 400, injected.body);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_remote_evidence_adoptions
+    WHERE node_key = 'RemoteConsume'
+  `).get() as { n: number }).n, 0);
+  f.database.exec("DROP TRIGGER fail_remote_reuse_once");
+  const remoteAdopted = await f.ok("POST",
+    `/api/execution-plans/${plan.planId}/remote-evidence-adoptions`,
+    remoteAdoptionCommand);
+  assert.equal(remoteAdopted.reuse.reuseInputEvidenceDigest,
+    attestation.remoteInputEvidenceDigest);
+  assert.deepEqual(remoteAdopted.reuse.reuseInputs,
+    attestation.inputs.map((entry: { reuseInput: unknown }) => entry.reuseInput));
+  const localResolution = resolver().resolve({
+    planId: plan.planId,
+    planRevision: plan.current.revision,
+    nodeKey: "Consume"
+  });
+  assert.equal(localResolution.ready, true);
+  if (!localResolution.ready) {
+    assert.fail("attested remote adoption did not release local dependency");
+  }
+  assert.equal(localResolution.selections[0]?.sourceAuthority?.adoptionId,
+    remoteAdopted.adoption.adoptionId);
 
   const consumeNode = plan.current.definition.nodes.find(
     (node: { nodeKey: string }) => node.nodeKey === "Consume"
@@ -602,8 +764,9 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.equal(input.gate, "verified_output");
   assert.equal(input.sourceResultId, null);
   assert.equal(input.sourceAuthority?.sourceEvidenceId,
-    observed.source.sourceEvidenceId);
-  assert.equal(input.sourceAuthority?.adoptionId, adopted.adoption.adoptionId);
+    remoteCommit.source.sourceEvidenceId);
+  assert.equal(input.sourceAuthority?.adoptionId,
+    remoteAdopted.adoption.adoptionId);
   const delivered = await f.request("GET",
     `/api/bridge/runs/${manifest.scope.runId}/execution-inputs/${input.bindingId}/content`,
     undefined,
@@ -638,7 +801,33 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.match(changedReplay.body, /REMOTE_EVIDENCE_OPERATION_CONFLICT/u);
   assert.deepEqual(calls, callsBeforeReplay);
   assert.equal(calls.filter((call) =>
-    call === "POST /v1/commit-observations").length, 6);
+    call === "POST /v1/commit-observations").length, 7);
+  assert.throws(() => f.database.exec(`
+    UPDATE remote_input_attestations SET source_digest = '${"f".repeat(64)}'
+  `), /RemoteInputAttestation is immutable/u);
+  assert.throws(() => f.database.exec(`
+    DELETE FROM remote_input_attestations
+  `), /RemoteInputAttestation is retained evidence/u);
+  assert.throws(() => f.database.exec(`
+    UPDATE execution_remote_evidence_reuse_contracts
+    SET reuse_input_evidence_digest = '${"f".repeat(64)}'
+  `), /Remote EvidenceReuseContract is immutable/u);
+  f.database.exec("DROP TRIGGER execution_remote_reuse_contracts_immutable_delete");
+  f.database.prepare(`
+    DELETE FROM execution_remote_evidence_reuse_contracts
+    WHERE adoption_id = ?
+  `).run(adopted.adoption.adoptionId);
+  assert.equal(new ExecutionNodeMaterializationRepository(f.database).getAdopted({
+    planId: plan.planId,
+    planRevision: plan.current.revision,
+    nodeKey: "Build"
+  }, "verified_output"), undefined);
+  assert.equal(backfillRemoteEvidenceReuseContracts(f.database), 1);
+  assert.ok(new ExecutionNodeMaterializationRepository(f.database).getAdopted({
+    planId: plan.planId,
+    planRevision: plan.current.revision,
+    nodeKey: "Build"
+  }, "verified_output"));
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 

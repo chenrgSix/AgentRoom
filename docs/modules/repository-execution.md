@@ -544,13 +544,17 @@ outside the control plane.
 Remote producers remain input-free after REPO-003. A commit descendant of the
 planned base does not prove that the producer consumed every adopted graph
 input, especially when the input is a patch, document, report or test Artifact.
-`REPO-005` therefore owns a separate `RemoteInputAttestation` companion rather
-than overloading the commit observation. It must retain ordered exact
-`adoptionId`/`adoptionDigest` pins as authority and separately derive the same
-logical input projection used by `reuseInputEvidenceDigest`. Admission requires
-`remoteInputEvidenceDigest == planned reuseInputEvidenceDigest` plus an exact
-join back to every current approved incoming edge. Until that implementation is
-accepted, any remote node with declared inputs or incoming edges fails closed.
+The frozen [REPO-005 goal](../acceptance/repo-005-remote-input-attestation-goal.md)
+therefore adds a separate provider-authenticated `RemoteInputAttestation`
+companion rather than overloading the commit observation. It retains ordered
+exact `adoptionId`/`adoptionDigest` pins as authority and an unchanged graph
+`ReuseInput` projection for logical comparison. Admission requires
+`remoteInputEvidenceDigest == planned reuseInputEvidenceDigest`, exact
+commit/tree identity and a current join back to every approved incoming edge,
+source, proof set and sealed Artifact. The first version accepts only one
+adopted graph producer for every declared required slot; external, optional,
+unbound or ambiguous inputs remain closed. Until implementation acceptance, any
+remote node with declared inputs or incoming edges still fails closed.
 
 ## Security and Failure Matrix
 

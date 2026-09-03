@@ -41,7 +41,8 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
     "schedulerManualDispatchCommand", "schedulerAdvanceCommand", "schedulerDispatchReceipt",
     "evidenceReuseContract", "remoteProviderBinding", "remoteProviderBindingRevocation",
     "providerCommitObservation", "remoteCommitObservation", "providerCIObservation",
-    "remoteCIObservationReceipt", "executionEvidencePage",
+    "remoteCIObservationReceipt", "providerInputAttestation", "remoteInputAttestation",
+    "executionEvidencePage",
     "remoteEvidenceAdoptionCommand", "integrationApprovalCommand"} {
     schema, err := compiler.Compile(id+"#/$defs/"+kind)
     if err != nil { panic(err) }
@@ -78,7 +79,8 @@ func validateEvidenceSemantics(kind string, value any) bool {
   if !ok { return kind != "sourceEvidence" && kind != "evidenceAdoption" && kind != "evidenceReuseContract" &&
     kind != "remoteProviderBinding" && kind != "remoteProviderBindingRevocation" &&
     kind != "providerCommitObservation" && kind != "remoteCommitObservation" &&
-    kind != "providerCIObservation" && kind != "remoteCIObservationReceipt" }
+    kind != "providerCIObservation" && kind != "remoteCIObservationReceipt" &&
+    kind != "providerInputAttestation" && kind != "remoteInputAttestation" }
   switch kind {
   case "sourceEvidence":
     pins, ok := record["artifactPins"].([]any)
@@ -156,6 +158,66 @@ func validateEvidenceSemantics(kind string, value any) bool {
   case "remoteCIObservationReceipt":
     unsigned := withoutExecutionFields(record, "receiptDigest")
     if executionValueDigest(unsigned) != executionString(record, "receiptDigest") { return false }
+  case "providerInputAttestation":
+    return validateRemoteInputAttestation(record, false)
+  case "remoteInputAttestation":
+    return validateRemoteInputAttestation(record, true)
+  }
+  return true
+}
+
+func validateRemoteInputAttestation(record map[string]any, retained bool) bool {
+  commit, tree := executionString(record, "commit"), executionString(record, "tree")
+  if len(commit) != len(tree) || (len(commit) != 40 && len(commit) != 64) { return false }
+  entries, ok := record["inputs"].([]any)
+  if !ok { return false }
+  logical := make([]any, 0, len(entries))
+  previous := ""
+  seenAdoptions := map[string]bool{}
+  for index, candidate := range entries {
+    entry, ok := candidate.(map[string]any)
+    if !ok { return false }
+    adoption := executionString(entry, "adoptionId")
+    input, ok := entry["reuseInput"].(map[string]any)
+    if !ok { return false }
+    slot := executionString(input, "inputSlot")
+    if (index > 0 && previous >= slot) || seenAdoptions[adoption] { return false }
+    previous, seenAdoptions[adoption] = slot, true
+    producer, ok := input["producer"].(map[string]any)
+    if !ok || executionString(producer, "kind") != "adopted_evidence" { return false }
+    edge, ok := producer["edge"].(map[string]any)
+    if !ok || executionString(edge, "toNodeKey") != executionString(record, "nodeKey") {
+      return false
+    }
+    bindings, ok := edge["bindings"].([]any)
+    if !ok { return false }
+    matches := 0
+    for _, candidate := range bindings {
+      binding, ok := candidate.(map[string]any)
+      if ok && executionString(binding, "inputSlot") == slot { matches++ }
+    }
+    if matches != 1 { return false }
+    logical = append(logical, input)
+  }
+  if executionValueDigest(logical) != executionString(record, "remoteInputEvidenceDigest") {
+    return false
+  }
+  provider := record
+  if retained {
+    provider = map[string]any{}
+    for _, key := range []string{"version", "operationId", "attestationId",
+      "providerRepositoryId", "nodeKey", "commit", "tree", "inputs",
+      "remoteInputEvidenceDigest", "providerAttestationDigest", "attestedAt"} {
+      provider[key] = record[key]
+    }
+  }
+  unsignedProvider := withoutExecutionFields(provider, "providerAttestationDigest")
+  if executionValueDigest(unsignedProvider) != executionString(record, "providerAttestationDigest") {
+    return false
+  }
+  if retained {
+    unsigned := withoutExecutionFields(record, "attestationDigest")
+    if executionValueDigest(unsigned) != executionString(record, "attestationDigest") { return false }
   }
   return true
 }

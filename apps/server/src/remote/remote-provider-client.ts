@@ -1,6 +1,7 @@
 import type {
   ProviderCIObservation,
   ProviderCommitObservation,
+  ProviderInputAttestation,
   RemoteProviderBinding
 } from "@convene-wire/contracts/execution-plan";
 import {
@@ -40,6 +41,16 @@ export interface RemoteCIObservationRequest {
   attempt: number;
   commit: string;
   tree: string;
+}
+
+export interface RemoteInputAttestationRequest {
+  operationId: string;
+  providerRepositoryId: string;
+  nodeKey: string;
+  commit: string;
+  tree: string;
+  inputs: ProviderInputAttestation["inputs"];
+  remoteInputEvidenceDigest: string;
 }
 
 function requireCredential(value: string | undefined): string {
@@ -86,7 +97,8 @@ function requireContentType(response: Response, expected: string): void {
 
 async function parseJSON<T>(
   response: Response,
-  kind: "providerCommitObservation" | "providerCIObservation"
+  kind: "providerCommitObservation" | "providerCIObservation" |
+    "providerInputAttestation"
 ): Promise<T> {
   requireContentType(response, "application/json");
   let value: unknown;
@@ -155,11 +167,27 @@ export class RemoteProviderClient {
     ));
   }
 
+  public async observeInputAttestation(
+    binding: RemoteProviderBinding,
+    request: RemoteInputAttestationRequest
+  ): Promise<ProviderInputAttestation> {
+    return this.withTimeout((signal) =>
+      this.lookupOrCreate<ProviderInputAttestation>(
+        binding,
+        "input-attestations",
+        request,
+        "providerInputAttestation",
+        signal
+      ));
+  }
+
   private async lookupOrCreate<T>(
     binding: RemoteProviderBinding,
-    resource: "commit-observations" | "ci-observations",
-    request: RemoteCommitObservationRequest | RemoteCIObservationRequest,
-    kind: "providerCommitObservation" | "providerCIObservation",
+    resource: "commit-observations" | "ci-observations" | "input-attestations",
+    request: RemoteCommitObservationRequest | RemoteCIObservationRequest |
+      RemoteInputAttestationRequest,
+    kind: "providerCommitObservation" | "providerCIObservation" |
+      "providerInputAttestation",
     signal: AbortSignal
   ): Promise<T> {
     const lookup = new URL(

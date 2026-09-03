@@ -4,7 +4,7 @@ import type { ServerRouteContext } from "./route-context.js";
 
 export function registerRemoteEvidenceRoutes({
   app, clock, principal, remoteProviderBindings, remoteEvidence,
-  remoteEvidenceAdoptions
+  remoteInputAttestations, remoteEvidenceAdoptions
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 64 * 1024,
@@ -42,6 +42,13 @@ export function registerRemoteEvidenceRoutes({
     "/api/execution-plans/:planId/remote-ci-observations",
     options,
     async (request) => remoteEvidence.observeCI(
+      principal(request), request.params.planId, request.body, clock()
+    )
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/remote-input-attestations",
+    options,
+    async (request) => remoteInputAttestations.observe(
       principal(request), request.params.planId, request.body, clock()
     )
   );

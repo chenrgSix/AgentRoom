@@ -207,7 +207,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
     assert.deepEqual(migrated.appliedVersions,
-      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]);
+      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -273,7 +273,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     database.close();
     const result = await migrateDatabase(f.databasePath);
     assert.deepEqual(result.appliedVersions,
-      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]);
+      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -419,7 +419,20 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_scheduler_fairness_history_immutable_delete",
       "execution_scheduler_fairness_cursor_insert_guard",
       "execution_scheduler_fairness_cursor_update_guard",
-      "execution_scheduler_fairness_cursor_immutable_delete"
+      "execution_scheduler_fairness_cursor_immutable_delete",
+      "remote_input_attestation_operations",
+      "remote_input_attestation_operations_require_scope_insert",
+      "remote_input_attestation_operations_preserve_identity",
+      "remote_input_attestation_operations_state_transition",
+      "remote_input_attestation_operations_immutable_delete",
+      "remote_input_attestations",
+      "remote_input_attestations_require_scope_insert",
+      "remote_input_attestations_immutable_update",
+      "remote_input_attestations_immutable_delete",
+      "execution_remote_evidence_reuse_contracts",
+      "execution_remote_reuse_contracts_require_scope_insert",
+      "execution_remote_reuse_contracts_immutable_update",
+      "execution_remote_reuse_contracts_immutable_delete"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

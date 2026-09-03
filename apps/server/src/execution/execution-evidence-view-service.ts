@@ -25,6 +25,8 @@ import type { RemoteEvidenceAdoptionService } from
   "../remote/remote-evidence-adoption-service.js";
 import type { RemoteProviderBindingRepository } from
   "../remote/remote-provider-binding-repository.js";
+import type { RemoteInputAttestationRepository } from
+  "../remote/remote-input-attestation-repository.js";
 import type { WebPrincipal } from "../security/auth-service.js";
 
 type EvidencePlan = ExecutionEvidencePage["plans"][number];
@@ -69,6 +71,7 @@ export class ExecutionEvidenceViewService {
     private readonly materializations: ExecutionNodeMaterializationRepository,
     private readonly remoteAdoptions: RemoteEvidenceAdoptionRepository,
     private readonly remoteAdoptionAuthority: RemoteEvidenceAdoptionService,
+    private readonly remoteInputAttestations: RemoteInputAttestationRepository,
     private readonly remoteBindings: RemoteProviderBindingRepository,
     private readonly integrations: RepositoryIntegrationService
   ) {
@@ -247,7 +250,12 @@ export class ExecutionEvidenceViewService {
     );
     const blockers: string[] = [];
     const binding = this.remoteBindings.get(row.provider_binding_id);
-    if (node.inputs.length > 0) blockers.push("REMOTE_INPUT_ATTESTATION_REQUIRED");
+    if (node.inputs.length > 0 && !this.remoteInputAttestations.getForSource(
+      plan.planId,
+      plan.current.revision,
+      node.nodeKey,
+      source.sourceEvidenceId
+    )) blockers.push("REMOTE_INPUT_ATTESTATION_REQUIRED");
     if (!binding || binding.revocation) blockers.push("REMOTE_PROVIDER_REVOKED");
     if (row.expected_plan_digest !== plan.current.digest ||
       row.expected_control_revision !== plan.controlRevision) {

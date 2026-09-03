@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import type {
   EvidenceAdoption,
+  EvidenceReuseContract,
   GateProofRef,
   RemoteEvidenceAdoptionCommandTemplate
 } from
@@ -13,6 +14,8 @@ import {
   evidenceProofSetDigest,
   executionOperationDigest
 } from "@convene-wire/contracts/execution-validation";
+import { createRemoteEvidenceReuseContract } from
+  "../execution/execution-evidence-reuse.js";
 import { ExecutionError } from "../execution/execution-error.js";
 import type { ExecutionPlanRepository } from
   "../execution/execution-plan-repository.js";
@@ -24,6 +27,13 @@ import {
   RemoteEvidenceAdoptionRepository,
   type RemoteEvidenceAdoptionBundle
 } from "./remote-evidence-adoption-repository.js";
+import {
+  RemoteInputAttestationPlanner,
+  RemoteInputPlanError,
+  remoteInputTopologySupported
+} from "./remote-input-attestation-planner.js";
+import type { RemoteInputAttestationRepository } from
+  "./remote-input-attestation-repository.js";
 
 interface AdoptCommand {
   operationId: string;
@@ -46,14 +56,6 @@ interface ProofRow {
   profile_digest: string;
   profile_id: string;
   profile_revision: number;
-}
-
-export function remoteEvidenceNeedsInputAttestation(
-  definition: { nodes: Array<{ nodeKey: string; inputs: unknown[] }> },
-  nodeKey: string
-): boolean {
-  const node = definition.nodes.find((entry) => entry.nodeKey === nodeKey);
-  return !node || node.inputs.length > 0;
 }
 
 const fail = (code: string, statusCode: 400 | 404 | 409 = 409): never => {
@@ -97,7 +99,9 @@ export class RemoteEvidenceAdoptionService {
     private readonly evidence: RemoteEvidenceRepository,
     private readonly bindings: RemoteProviderBindingRepository,
     private readonly plans: ExecutionPlanRepository,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly inputAttestations: RemoteInputAttestationRepository,
+    private readonly inputPlanner: RemoteInputAttestationPlanner
   ) {}
 
   /** Read-only exact command preparation; adoptVerified remains the authority. */
@@ -125,7 +129,13 @@ export class RemoteEvidenceAdoptionService {
       source.inputDigest !== executionOperationDigest([]) ||
       source.origin?.kind !== "remote_observation" ||
       source.origin.providerBindingId !== providerBindingId ||
-      remoteEvidenceNeedsInputAttestation(plan.current.definition, nodeKey) ||
+      this.reuseInputs(
+        plan.current.definition,
+        planId,
+        plan.current.revision,
+        nodeKey,
+        sourceEvidenceId
+      ) === undefined ||
       this.database.prepare(`
         SELECT 1 FROM execution_dispatch_intents
         WHERE plan_id = ? AND plan_revision = ? AND node_key = ? LIMIT 1
@@ -185,7 +195,7 @@ export class RemoteEvidenceAdoptionService {
       source.inputDigest !== executionOperationDigest([]) ||
       source.origin?.kind !== "remote_observation" ||
       source.origin.providerBindingId !== command.providerBindingId ||
-      remoteEvidenceNeedsInputAttestation(
+      !remoteInputTopologySupported(
         plan.current.definition,
         command.nodeKey
       ) ||
@@ -194,6 +204,16 @@ export class RemoteEvidenceAdoptionService {
         WHERE plan_id = ? AND plan_revision = ? AND node_key = ? LIMIT 1
       `).get(planId, command.planRevision, command.nodeKey)) {
       return fail("REMOTE_EVIDENCE_ADOPTION_UNAVAILABLE");
+    }
+    const reuseInputs = this.reuseInputs(
+      plan.current.definition,
+      planId,
+      command.planRevision,
+      command.nodeKey,
+      command.sourceEvidenceId
+    );
+    if (reuseInputs === undefined) {
+      return fail("REMOTE_INPUT_ATTESTATION_REQUIRED");
     }
     const required = node.verificationProfiles.filter((profile) =>
       profile.required);
@@ -263,6 +283,14 @@ export class RemoteEvidenceAdoptionService {
       },
       createdAt: now
     });
+    const reuse = createRemoteEvidenceReuseContract({
+      adoption,
+      integrationPolicy: plan.current.definition.policy,
+      node,
+      reuseInputs,
+      task: JSON.parse(context.task_snapshot_json) as
+        Parameters<typeof createRemoteEvidenceReuseContract>[0]["task"]
+    });
     const replay = this.repository.getByOperation(command.operationId);
     if (replay) {
       if (canonicalExecutionJSON(replay.adoption) !== canonicalExecutionJSON(adoption)) {
@@ -270,7 +298,43 @@ export class RemoteEvidenceAdoptionService {
       }
       return replay;
     }
-    return this.repository.retain(command.providerBindingId, adoption);
+    return this.repository.retain(command.providerBindingId, adoption, reuse);
+  }
+
+  private reuseInputs(
+    definition: Parameters<typeof remoteInputTopologySupported>[0],
+    planId: string,
+    planRevision: number,
+    nodeKey: string,
+    sourceEvidenceId: string
+  ): EvidenceReuseContract["reuseInputs"] | undefined {
+    if (!remoteInputTopologySupported(definition, nodeKey)) return undefined;
+    const node = definition.nodes.find((entry) => entry.nodeKey === nodeKey)!;
+    if (node.inputs.length === 0) return [];
+    const attestation = this.inputAttestations.getForSource(
+      planId,
+      planRevision,
+      nodeKey,
+      sourceEvidenceId
+    );
+    if (!attestation) return undefined;
+    try {
+      const planned = this.inputPlanner.plan(
+        definition,
+        planId,
+        planRevision,
+        nodeKey
+      );
+      if (planned.remoteInputEvidenceDigest !==
+          attestation.remoteInputEvidenceDigest ||
+        canonicalExecutionJSON(planned.inputs) !==
+          canonicalExecutionJSON(attestation.inputs)) return undefined;
+      return attestation.inputs.map((entry) =>
+        structuredClone(entry.reuseInput));
+    } catch (error) {
+      if (error instanceof RemoteInputPlanError) return undefined;
+      throw error;
+    }
   }
 
   private proofRows(

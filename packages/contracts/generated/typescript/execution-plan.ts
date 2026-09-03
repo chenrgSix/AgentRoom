@@ -3398,7 +3398,7 @@ export interface EvidenceReuseContract {
   planRevision:              number;
   reuseContractId:           string;
   reuseInputEvidenceDigest:  string;
-  reuseInputs:               ReuseInput[];
+  reuseInputs:               ReuseInputElement[];
   runtimeInputBindingDigest: string;
   task:                      EvidenceReuseContractTask;
   version:                   number;
@@ -3470,29 +3470,29 @@ export interface BraggadociousVerificationProfile {
   revision:  number;
 }
 
-export interface ReuseInput {
-  artifact:  ReuseInputArtifact;
+export interface ReuseInputElement {
+  artifact:  TentacledArtifact;
   inputSlot: string;
-  producer:  Producer;
+  producer:  PurpleProducer;
 }
 
-export interface ReuseInputArtifact {
+export interface TentacledArtifact {
   contentDigest: string;
   kind:          ExternalInputKind;
 }
 
-export interface Producer {
-  edge?:              ProducerEdge;
+export interface PurpleProducer {
+  edge?:              CunningEdge;
   kind:               ProducerKind;
   proofSetDigest?:    string;
   sourceDigest?:      string;
   sourceEvidenceId?:  string;
-  externalInput?:     ProducerExternalInput;
+  externalInput?:     CunningExternalInput;
   reviewDigest?:      string;
   reviewOperationId?: string;
 }
 
-export interface ProducerEdge {
+export interface CunningEdge {
   bindings:    FriskyBinding[];
   edgeKey:     string;
   fromNodeKey: string;
@@ -3505,7 +3505,7 @@ export interface FriskyBinding {
   outputSlot: string;
 }
 
-export interface ProducerExternalInput {
+export interface CunningExternalInput {
   artifactId:       string;
   artifactRevision: number;
   contentDigest:    string;
@@ -3705,6 +3705,155 @@ export interface RemoteCIObservationReceipt {
   sourceEvidenceId:          string;
   tree:                      string;
   version:                   number;
+}
+
+export interface ProviderInputAttestation {
+  attestationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  attestedAt:                string;
+  commit:                    string;
+  inputs:                    [ProviderInputAttestationInput, ...ProviderInputAttestationInput[]];
+  nodeKey:                   string;
+  operationId:               string;
+  providerAttestationDigest: string;
+  providerRepositoryId:      string;
+  remoteInputEvidenceDigest: string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface ProviderInputAttestationInput {
+  adoptionDigest: string;
+  adoptionId:     string;
+  reuseInput:     PurpleReuseInput;
+}
+
+export interface PurpleReuseInput {
+  artifact:  StickyArtifact;
+  inputSlot: string;
+  producer:  FluffyProducer;
+}
+
+export interface StickyArtifact {
+  contentDigest: string;
+  kind:          ExternalInputKind;
+}
+
+export interface FluffyProducer {
+  edge?:              MagentaEdge;
+  kind:               ProducerKind;
+  proofSetDigest?:    string;
+  sourceDigest?:      string;
+  sourceEvidenceId?:  string;
+  externalInput?:     MagentaExternalInput;
+  reviewDigest?:      string;
+  reviewOperationId?: string;
+}
+
+export interface MagentaEdge {
+  bindings:    MischievousBinding[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface MischievousBinding {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface MagentaExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export interface RemoteInputAttestation {
+  attestationDigest: string;
+  attestationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  attestedAt:                string;
+  commit:                    string;
+  inputs:                    [RemoteInputAttestationInput, ...RemoteInputAttestationInput[]];
+  nodeKey:                   string;
+  operationId:               string;
+  planId:                    string;
+  planRevision:              number;
+  providerAttestationDigest: string;
+  providerBindingId:         string;
+  providerRepositoryId:      string;
+  remoteInputEvidenceDigest: string;
+  repositoryId:              string;
+  sourceDigest:              string;
+  sourceEvidenceId:          string;
+  sourceObservationDigest:   string;
+  sourceObservationId:       string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface RemoteInputAttestationInput {
+  adoptionDigest: string;
+  adoptionId:     string;
+  reuseInput:     FluffyReuseInput;
+}
+
+export interface FluffyReuseInput {
+  artifact:  IndigoArtifact;
+  inputSlot: string;
+  producer:  TentacledProducer;
+}
+
+export interface IndigoArtifact {
+  contentDigest: string;
+  kind:          ExternalInputKind;
+}
+
+export interface TentacledProducer {
+  edge?:              FriskyEdge;
+  kind:               ProducerKind;
+  proofSetDigest?:    string;
+  sourceDigest?:      string;
+  sourceEvidenceId?:  string;
+  externalInput?:     FriskyExternalInput;
+  reviewDigest?:      string;
+  reviewOperationId?: string;
+}
+
+export interface FriskyEdge {
+  bindings:    BraggadociousBinding[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface BraggadociousBinding {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface FriskyExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
 }
 
 export interface ExecutionEvidencePage {

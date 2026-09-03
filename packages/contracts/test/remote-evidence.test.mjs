@@ -3,9 +3,12 @@ import test from "node:test";
 
 import {
   assertExecutionCommand,
+  providerInputAttestationDigest,
   providerObservationDigest,
   remoteCIObservationReceiptDigest,
   remoteCommitObservationDigest,
+  remoteInputAttestationDigest,
+  remoteInputEvidenceDigest,
   remoteProviderBindingDigest,
   remoteProviderBindingRevocationDigest
 } from "../src/execution-validation.mjs";
@@ -75,6 +78,45 @@ function providerCI() {
     observedAt: at
   };
   value.providerObservationDigest = providerObservationDigest(value);
+  return value;
+}
+
+function providerInputAttestation() {
+  const value = {
+    version: 1,
+    operationId: "op_remote_inputs00001",
+    attestationId: "attestation_remoteinputs0001",
+    providerRepositoryId: "owner/repository",
+    nodeKey: "Build",
+    commit: sha1("2"),
+    tree: sha1("3"),
+    inputs: [{
+      adoptionId: "adoption_inputsource0001",
+      adoptionDigest: digest("a"),
+      reuseInput: {
+        inputSlot: "source",
+        producer: {
+          kind: "adopted_evidence",
+          edge: {
+            edgeKey: "PrepareBuild",
+            fromNodeKey: "Prepare",
+            toNodeKey: "Build",
+            gate: "verified_output",
+            bindings: [{ outputSlot: "patch", inputSlot: "source" }]
+          },
+          sourceEvidenceId: "source_inputsource0001",
+          sourceDigest: digest("b"),
+          proofSetDigest: digest("c")
+        },
+        artifact: { contentDigest: digest("d"), kind: "patch" }
+      }
+    }],
+    remoteInputEvidenceDigest: digest("0"),
+    providerAttestationDigest: digest("0"),
+    attestedAt: at
+  };
+  value.remoteInputEvidenceDigest = remoteInputEvidenceDigest(value.inputs);
+  value.providerAttestationDigest = providerInputAttestationDigest(value);
   return value;
 }
 
@@ -187,4 +229,93 @@ test("remote CI receipt is distinct from provider observation and exact-source b
   assert.throws(() => assertExecutionCommand("providerCIObservation", {
     ...external, callbackSecret: "forbidden"
   }), /PLAN_SCHEMA_INVALID/u);
+});
+
+test("remote input attestations separate adoption authority from logical equality", () => {
+  const external = providerInputAttestation();
+  assert.doesNotThrow(() =>
+    assertExecutionCommand("providerInputAttestation", external));
+  const retained = {
+    ...external,
+    providerBindingId: "provider_example001",
+    repositoryId: "repo_example001",
+    planId: "plan_example001",
+    planRevision: 1,
+    sourceEvidenceId: "source_remoteoutput0001",
+    sourceDigest: digest("e"),
+    sourceObservationId: "observation_commit0001",
+    sourceObservationDigest: digest("f"),
+    attestationDigest: digest("0")
+  };
+  retained.attestationDigest = remoteInputAttestationDigest(retained);
+  assert.doesNotThrow(() =>
+    assertExecutionCommand("remoteInputAttestation", retained));
+  assert.equal(retained.remoteInputEvidenceDigest,
+    remoteInputEvidenceDigest(retained.inputs));
+
+  const secondAuthority = structuredClone(external);
+  secondAuthority.inputs[0].adoptionId = "adoption_inputsource0002";
+  secondAuthority.inputs[0].adoptionDigest = digest("9");
+  secondAuthority.providerAttestationDigest =
+    providerInputAttestationDigest(secondAuthority);
+  assert.equal(secondAuthority.remoteInputEvidenceDigest,
+    external.remoteInputEvidenceDigest);
+  assert.notEqual(secondAuthority.providerAttestationDigest,
+    external.providerAttestationDigest);
+
+  const reordered = structuredClone(external);
+  const earlier = structuredClone(reordered.inputs[0]);
+  earlier.adoptionId = "adoption_inputsource0003";
+  earlier.adoptionDigest = digest("8");
+  earlier.reuseInput.inputSlot = "artifact";
+  earlier.reuseInput.producer.edge.edgeKey = "ArtifactBuild";
+  earlier.reuseInput.producer.edge.bindings = [{
+    outputSlot: "patch",
+    inputSlot: "artifact"
+  }];
+  reordered.inputs = [reordered.inputs[0], earlier];
+  reordered.remoteInputEvidenceDigest = remoteInputEvidenceDigest(reordered.inputs);
+  reordered.providerAttestationDigest = providerInputAttestationDigest(reordered);
+  assert.throws(() => assertExecutionCommand(
+    "providerInputAttestation",
+    reordered
+  ), /REMOTE_INPUT_ATTESTATION_INPUT_ORDER/u);
+
+  for (const mutate of [
+    (value) => { value.inputs[0].reuseInput.producer.sourceDigest = digest("1"); },
+    (value) => { value.inputs[0].reuseInput.producer.proofSetDigest = digest("2"); },
+    (value) => { value.inputs[0].reuseInput.artifact.contentDigest = digest("3"); },
+    (value) => { value.inputs[0].reuseInput.producer.edge.toNodeKey = "Other"; },
+    (value) => { value.tree = digest("4"); },
+    (value) => { value.credential = "forbidden"; }
+  ]) {
+    const invalid = structuredClone(external);
+    mutate(invalid);
+    assert.throws(() =>
+      assertExecutionCommand("providerInputAttestation", invalid));
+  }
+
+  const externalProducer = structuredClone(external);
+  externalProducer.inputs[0].reuseInput.producer = {
+    kind: "external_result",
+    externalInput: {
+      nodeKey: "Build",
+      inputSlot: "source",
+      sourceTaskId: "task_source0001",
+      sourceResultId: "result_source0001",
+      artifactId: "artifact_source0001",
+      artifactRevision: 1,
+      contentDigest: digest("d"),
+      kind: "patch"
+    },
+    reviewOperationId: "op_review_source0001",
+    reviewDigest: digest("5")
+  };
+  externalProducer.remoteInputEvidenceDigest =
+    remoteInputEvidenceDigest(externalProducer.inputs);
+  externalProducer.providerAttestationDigest =
+    providerInputAttestationDigest(externalProducer);
+  assert.throws(() =>
+    assertExecutionCommand("providerInputAttestation", externalProducer),
+  /REMOTE_INPUT_ATTESTATION_PRODUCER_INVALID/u);
 });

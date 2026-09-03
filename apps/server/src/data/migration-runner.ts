@@ -7,6 +7,8 @@ import Database from "better-sqlite3";
 
 import { backfillLegacyEvidenceAdoptions } from
   "../execution/execution-evidence-backfill.js";
+import { backfillRemoteEvidenceReuseContracts } from
+  "../remote/remote-evidence-reuse-backfill.js";
 import { secureDatabaseFiles } from "./database.js";
 
 const migrationFilename = /^(?<version>[0-9]{4})_(?<name>[a-z0-9_]+)\.sql$/;
@@ -232,6 +234,12 @@ export async function migrateDatabase(
     // ordinary startup does not call this path once the migration is recorded.
     if (appliedVersions.includes(76)) {
       backfillLegacyEvidenceAdoptions(database);
+    }
+
+    // Migration 82 makes the remote reuse companion an authoritative read
+    // prerequisite. Populate only pre-existing input-free remote adoptions.
+    if (appliedVersions.includes(82)) {
+      backfillRemoteEvidenceReuseContracts(database);
     }
 
     const currentVersion = migrations.at(-1)?.version ?? 0;

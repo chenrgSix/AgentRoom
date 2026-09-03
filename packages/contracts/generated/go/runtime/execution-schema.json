@@ -7721,6 +7721,634 @@
         }
       }
     },
+    "providerInputAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "attestationId",
+        "providerRepositoryId",
+        "nodeKey",
+        "commit",
+        "tree",
+        "inputs",
+        "remoteInputEvidenceDigest",
+        "providerAttestationDigest",
+        "attestedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "attestationId": {
+          "type": "string",
+          "pattern": "^attestation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "nodeKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "adoptionId",
+              "adoptionDigest",
+              "reuseInput"
+            ],
+            "properties": {
+              "adoptionId": {
+                "type": "string",
+                "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+              },
+              "adoptionDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "reuseInput": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "inputSlot",
+                  "producer",
+                  "artifact"
+                ],
+                "properties": {
+                  "inputSlot": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                  },
+                  "producer": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "edge",
+                          "sourceEvidenceId",
+                          "sourceDigest",
+                          "proofSetDigest"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "const": "adopted_evidence"
+                          },
+                          "edge": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "edgeKey",
+                              "fromNodeKey",
+                              "toNodeKey",
+                              "gate",
+                              "bindings"
+                            ],
+                            "properties": {
+                              "edgeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "fromNodeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "toNodeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "gate": {
+                                "enum": [
+                                  "accepted_result",
+                                  "verified_output",
+                                  "integrated_commit"
+                                ]
+                              },
+                              "bindings": {
+                                "type": "array",
+                                "minItems": 0,
+                                "maxItems": 32,
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "outputSlot",
+                                    "inputSlot"
+                                  ],
+                                  "properties": {
+                                    "outputSlot": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                                    },
+                                    "inputSlot": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "sourceEvidenceId": {
+                            "type": "string",
+                            "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                          },
+                          "sourceDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "proofSetDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "externalInput",
+                          "reviewOperationId",
+                          "reviewDigest"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "const": "external_result"
+                          },
+                          "externalInput": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "nodeKey",
+                              "inputSlot",
+                              "sourceTaskId",
+                              "sourceResultId",
+                              "artifactId",
+                              "artifactRevision",
+                              "contentDigest",
+                              "kind"
+                            ],
+                            "properties": {
+                              "nodeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "inputSlot": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "sourceTaskId": {
+                                "type": "string",
+                                "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "sourceResultId": {
+                                "type": "string",
+                                "pattern": "^result_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "artifactId": {
+                                "type": "string",
+                                "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "artifactRevision": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "contentDigest": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "kind": {
+                                "enum": [
+                                  "patch",
+                                  "commit",
+                                  "document",
+                                  "test_result"
+                                ]
+                              }
+                            }
+                          },
+                          "reviewOperationId": {
+                            "type": "string",
+                            "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                          },
+                          "reviewDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "artifact": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "contentDigest",
+                      "kind"
+                    ],
+                    "properties": {
+                      "contentDigest": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "kind": {
+                        "enum": [
+                          "patch",
+                          "commit",
+                          "document",
+                          "test_result"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "remoteInputEvidenceDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "providerAttestationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "attestedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "remoteInputAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "attestationId",
+        "providerBindingId",
+        "repositoryId",
+        "providerRepositoryId",
+        "planId",
+        "planRevision",
+        "nodeKey",
+        "sourceEvidenceId",
+        "sourceDigest",
+        "sourceObservationId",
+        "sourceObservationDigest",
+        "commit",
+        "tree",
+        "inputs",
+        "remoteInputEvidenceDigest",
+        "providerAttestationDigest",
+        "attestationDigest",
+        "attestedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "attestationId": {
+          "type": "string",
+          "pattern": "^attestation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerBindingId": {
+          "type": "string",
+          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+        },
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^repo_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "planId": {
+          "type": "string",
+          "pattern": "^plan_[A-Za-z0-9_-]{8,128}$"
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nodeKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "sourceEvidenceId": {
+          "type": "string",
+          "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceObservationId": {
+          "type": "string",
+          "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "sourceObservationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "adoptionId",
+              "adoptionDigest",
+              "reuseInput"
+            ],
+            "properties": {
+              "adoptionId": {
+                "type": "string",
+                "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+              },
+              "adoptionDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "reuseInput": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "inputSlot",
+                  "producer",
+                  "artifact"
+                ],
+                "properties": {
+                  "inputSlot": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                  },
+                  "producer": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "edge",
+                          "sourceEvidenceId",
+                          "sourceDigest",
+                          "proofSetDigest"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "const": "adopted_evidence"
+                          },
+                          "edge": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "edgeKey",
+                              "fromNodeKey",
+                              "toNodeKey",
+                              "gate",
+                              "bindings"
+                            ],
+                            "properties": {
+                              "edgeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "fromNodeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "toNodeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "gate": {
+                                "enum": [
+                                  "accepted_result",
+                                  "verified_output",
+                                  "integrated_commit"
+                                ]
+                              },
+                              "bindings": {
+                                "type": "array",
+                                "minItems": 0,
+                                "maxItems": 32,
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "outputSlot",
+                                    "inputSlot"
+                                  ],
+                                  "properties": {
+                                    "outputSlot": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                                    },
+                                    "inputSlot": {
+                                      "type": "string",
+                                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "sourceEvidenceId": {
+                            "type": "string",
+                            "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                          },
+                          "sourceDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          },
+                          "proofSetDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "kind",
+                          "externalInput",
+                          "reviewOperationId",
+                          "reviewDigest"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "const": "external_result"
+                          },
+                          "externalInput": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "nodeKey",
+                              "inputSlot",
+                              "sourceTaskId",
+                              "sourceResultId",
+                              "artifactId",
+                              "artifactRevision",
+                              "contentDigest",
+                              "kind"
+                            ],
+                            "properties": {
+                              "nodeKey": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "inputSlot": {
+                                "type": "string",
+                                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                              },
+                              "sourceTaskId": {
+                                "type": "string",
+                                "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "sourceResultId": {
+                                "type": "string",
+                                "pattern": "^result_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "artifactId": {
+                                "type": "string",
+                                "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "artifactRevision": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "contentDigest": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "kind": {
+                                "enum": [
+                                  "patch",
+                                  "commit",
+                                  "document",
+                                  "test_result"
+                                ]
+                              }
+                            }
+                          },
+                          "reviewOperationId": {
+                            "type": "string",
+                            "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                          },
+                          "reviewDigest": {
+                            "type": "string",
+                            "pattern": "^[a-f0-9]{64}$"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "artifact": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "contentDigest",
+                      "kind"
+                    ],
+                    "properties": {
+                      "contentDigest": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "kind": {
+                        "enum": [
+                          "patch",
+                          "commit",
+                          "document",
+                          "test_result"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "remoteInputEvidenceDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "providerAttestationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "attestationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "attestedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
     "executionEvidencePage": {
       "type": "object",
       "additionalProperties": false,

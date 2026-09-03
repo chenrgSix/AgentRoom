@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
+import { copyFile, mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test, { type TestContext } from "node:test";
 import type { FastifyInstance } from "fastify";
 import type {
@@ -20,7 +23,10 @@ import { validateBridgeMessage } from "@convene-wire/contracts/bridge-validator"
 import { createServerApp } from "../src/app.js";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
-import { migrateDatabase } from "../src/data/migration-runner.js";
+import {
+  defaultMigrationsDirectory,
+  migrateDatabase
+} from "../src/data/migration-runner.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
@@ -3725,11 +3731,24 @@ test("scheduler migration backfills automatic controls and retained admission hi
     DROP TABLE execution_scheduler_receipts;
     DROP TABLE execution_scheduler_operations;
     DROP TABLE execution_scheduler_controls;
-    DELETE FROM schema_migrations WHERE version = 81;
+    DELETE FROM schema_migrations WHERE version IN (81, 82);
   `);
   f.database.close();
 
-  const migration = await migrateDatabase(f.databasePath);
+  const migrationDirectory = await mkdtemp(path.join(
+    os.tmpdir(),
+    "convene-wire-scheduler-migrations-"
+  ));
+  t.after(() => rm(migrationDirectory, { recursive: true, force: true }));
+  for (const name of await readdir(defaultMigrationsDirectory)) {
+    if (/^00(?:[0-7][0-9]|80|81)_/u.test(name)) {
+      await copyFile(
+        path.join(defaultMigrationsDirectory, name),
+        path.join(migrationDirectory, name)
+      );
+    }
+  }
+  const migration = await migrateDatabase(f.databasePath, migrationDirectory);
   assert.deepEqual(migration.appliedVersions, [81]);
   const migrated = openDatabase(f.databasePath);
   t.after(() => {

@@ -498,6 +498,182 @@
           "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
         }
       }
+    },
+    "attestationId": {
+      "type": "string",
+      "pattern": "^attestation_[A-Za-z0-9_-]{8,128}$"
+    },
+    "remoteAttestedInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adoptionId",
+        "adoptionDigest",
+        "reuseInput"
+      ],
+      "properties": {
+        "adoptionId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/adoptionId"
+        },
+        "adoptionDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "reuseInput": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/reuseInput"
+        }
+      }
+    },
+    "providerInputAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "attestationId",
+        "providerRepositoryId",
+        "nodeKey",
+        "commit",
+        "tree",
+        "inputs",
+        "remoteInputEvidenceDigest",
+        "providerAttestationDigest",
+        "attestedAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "attestationId": {
+          "$ref": "#/$defs/attestationId"
+        },
+        "providerRepositoryId": {
+          "$ref": "#/$defs/providerRepositoryId"
+        },
+        "nodeKey": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "commit": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "tree": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/remoteAttestedInput"
+          }
+        },
+        "remoteInputEvidenceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "providerAttestationDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "attestedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "remoteInputAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "attestationId",
+        "providerBindingId",
+        "repositoryId",
+        "providerRepositoryId",
+        "planId",
+        "planRevision",
+        "nodeKey",
+        "sourceEvidenceId",
+        "sourceDigest",
+        "sourceObservationId",
+        "sourceObservationDigest",
+        "commit",
+        "tree",
+        "inputs",
+        "remoteInputEvidenceDigest",
+        "providerAttestationDigest",
+        "attestationDigest",
+        "attestedAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "attestationId": {
+          "$ref": "#/$defs/attestationId"
+        },
+        "providerBindingId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/providerBindingId"
+        },
+        "repositoryId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryId"
+        },
+        "providerRepositoryId": {
+          "$ref": "#/$defs/providerRepositoryId"
+        },
+        "planId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planId"
+        },
+        "planRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "nodeKey": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "sourceEvidenceId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidenceId"
+        },
+        "sourceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "sourceObservationId": {
+          "$ref": "#/$defs/observationId"
+        },
+        "sourceObservationDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "commit": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "tree": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/remoteAttestedInput"
+          }
+        },
+        "remoteInputEvidenceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "providerAttestationDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "attestationDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "attestedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
     }
   }
 }
