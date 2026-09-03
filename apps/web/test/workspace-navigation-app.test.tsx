@@ -115,6 +115,10 @@ async function fixture(t: TestContext) {
     return request;
   };
   const testing = await import("@testing-library/react");
+  // This file crosses a real Fastify/SQLite boundary. A cold isolated cache on
+  // a loaded acceptance host can legitimately exceed Testing Library's short
+  // default without changing the eventual navigation contract.
+  testing.configure({ asyncUtilTimeout: 10_000 });
   cleanup = async () => {
     await testing.act(async () => {
       testing.cleanup();
