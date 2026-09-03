@@ -1,10 +1,10 @@
 # SEC-014 Remote Provider Egress Goal
 
-Status: frozen on 2026-09-03. `docs/TASKS.md` remains the sole delivery-state
-register. REPO-003's accepted provider binding, runtime-only credential and
-authenticated lookup-before-create protocol remain authoritative; SEC-010's
-fixed-origin, credential-redaction and no-provider-proxy boundaries remain
-unchanged.
+Status: frozen and accepted on 2026-09-03. `docs/TASKS.md` remains the sole
+delivery-state register. REPO-003's accepted provider binding, runtime-only
+credential and authenticated lookup-before-create protocol remain
+authoritative; SEC-010's fixed-origin, credential-redaction and
+no-provider-proxy boundaries remain unchanged.
 
 ## Goal
 
@@ -125,3 +125,61 @@ TLS, scan the network, share DNS pins across calls, retry ambiguous provider
 effects, implement GitHub/GitLab behavior, mutate a remote repository, accept
 webhooks, alter Hosted Agent transport, deploy the Server, publish a Release or
 claim live Internet/provider acceptance.
+
+## Delivery Evidence
+
+The implementation is split into independently reversible commits:
+
+- `3314f61` freezes the threat model, authority, compatibility and acceptance;
+- `e80b76d` corrects the evidence text to preserve REPO-003's intentional
+  provider-origin metadata while keeping credentials and resolution detail out;
+- `5a3b2b4` adds and wires the direct pinned transport, production/test binding
+  gate, closed errors and deterministic HTTP/HTTPS security matrix;
+- `8afb7d6` makes the transport overwrite any caller-supplied Host header with
+  the exact original URL authority.
+
+Production remote-provider calls no longer use global `fetch`. The Server
+resolves all final addresses for each request, rejects the complete set if any
+answer is non-public, opens a new socket to the selected pin without an ambient
+proxy, checks the actual peer, and only then constructs HTTP. HTTPS completes
+normal certificate validation under the original hostname/SNI before the
+credential-bearing request exists. Redirect locations are never followed and
+connections are not pooled. The existing injected fetch seam can carry a
+WeakSet-held loopback marker only when created by the deterministic egress test
+factory; no binding, request field, database fact or environment variable can
+set or persist it.
+
+The seven focused tests prove IPv4/IPv6 and mapped/transition address tables,
+mixed-answer and CNAME-like final-answer rejection, literal handling, exact
+peer comparison, per-connection rebinding, redirect/proxy/Host handling,
+closed connection failure, eight concurrent independent sockets and Server
+restart. A real loopback HTTPS server with a fixed `provider.test` test CA
+observes the original Host and SNI; a missing CA and wrong hostname both fail.
+An authenticated lookup receives `404`, DNS changes to private before create,
+and zero POST reaches the provider. Default and arbitrary unmarked injected
+fetches cannot admit a loopback binding, while the marked deterministic
+transport loses that capability on ordinary restart. Error inspection contains
+only a closed code, not the credential, provider hostname or resolved address.
+
+Final verification on Node.js 22.23.1 and macOS arm64:
+
+- `node --import tsx --test
+  apps/server/test/remote-provider-egress-policy.test.ts` — 7/7 pass;
+- focused remote-provider boundary/binding/evidence tests — 16/16 pass;
+- `npm test --workspace @convene-wire/server` — 562/562 pass and the exact
+  `/private/tmp/convene-wire-test-run-tgTjTQ` root is removed;
+- `npm run validate` — 14 schemas and 258 fixtures pass;
+- `npm run build` — Server, Web and generated Contracts build; Vite reports
+  only its existing bundle-size warning;
+- `npm run test:e2e` — nine deterministic tests pass, the explicitly opt-in
+  live Codex/Pi test skips, and the exact
+  `/private/tmp/convene-wire-test-run-H9IOzS` root is removed;
+- `npm run lint:docs` — 232 maintained Markdown files pass;
+- `git diff --check` — no whitespace errors.
+
+This evidence uses deterministic local DNS seams and loopback HTTP/HTTPS. It
+does not exercise public recursive DNS, a live GitHub/GitLab/provider account,
+packet-level routing or proxy appliances, a deployed container/network policy,
+Linux/Windows sockets, native CA stores, NAT64 infrastructure or a physical
+second machine. No provider credential, production database, deployment,
+Bridge binary, remote repository or Release was changed.
