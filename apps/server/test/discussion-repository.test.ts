@@ -35,18 +35,6 @@ const ids = {
 };
 const taskId = `task_default_${ids.room.slice(5)}`;
 
-function waveSelection(agentIds: string[]) {
-  return createDiscussionWaveSelection({
-    version: 1,
-    strategy: "all_eligible",
-    focusQuestionIds: [],
-    eligibleAgentIds: agentIds,
-    selectedAgentIds: agentIds,
-    requiredRoles: [],
-    focusedParticipantLimit: 3
-  });
-}
-
 function seed(core: CoreRepository): void {
   core.createUser({ userId: ids.user, displayName: "Alice", createdAt: now });
   core.createTeamWithOwner(
@@ -324,7 +312,7 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
     };
     repository.create(discussion, [
       { discussionId: ids.discussion, ordinal: 0, agentId: ids.agent1, role: "participant" },
-      { discussionId: ids.discussion, ordinal: 1, agentId: ids.agent2, role: "participant" }
+      { discussionId: ids.discussion, ordinal: 1, agentId: ids.agent2, role: "reviewer" }
     ], {
       budgetEventId: "budget_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
       discussionId: ids.discussion,
@@ -351,7 +339,15 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
       createdAt: now,
       updatedAt: now,
       closedAt: null,
-      selection: waveSelection([ids.agent1, ids.agent2])
+      selection: createDiscussionWaveSelection({
+        version: 1,
+        strategy: "question_focused",
+        focusQuestionIds: ["question_security"],
+        eligibleAgentIds: [ids.agent1, ids.agent2],
+        selectedAgentIds: [ids.agent1, ids.agent2],
+        requiredRoles: ["reviewer"],
+        focusedParticipantLimit: 2
+      })
     };
     const turns: DiscussionTurn[] = [ids.agent1, ids.agent2].map(
       (speakerAgentId, index) => ({
@@ -408,6 +404,21 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
       ),
       [0, 1]
     );
+    const reopenedDatabase = openDatabase(databasePath);
+    try {
+      const reopenedSelection = new DiscussionRepository(reopenedDatabase)
+        .getWave(wave.waveId)?.selection;
+      assert.deepEqual(reopenedSelection?.selectedAgentIds, [
+        ids.agent1,
+        ids.agent2
+      ]);
+      assert.equal(
+        reopenedSelection?.selectionDigest,
+        "65e01c51f0c1f5d1dde8112a0fff886cead0beb39c15eb45f8e967337b70301c"
+      );
+    } finally {
+      reopenedDatabase.close();
+    }
     const recoveryAnchorId = "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W7";
     core.appendMessage({
       messageId: recoveryAnchorId,
