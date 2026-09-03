@@ -1,6 +1,6 @@
 # DISC-012 Read-only Quorum and Supplemental Evidence Goal
 
-Status: active on 2026-09-03. This document was frozen before implementation
+Status: accepted on 2026-09-03. This document was frozen before implementation
 and is the implementation and acceptance authority for `DISC-012`;
 `docs/TASKS.md` remains the sole delivery-state register.
 
@@ -159,3 +159,82 @@ A green quorum unit test alone is not acceptance. Final evidence must include
 reopened SQLite seal and supplemental rows, exact source sequences/digests,
 outstanding Run states, successor participant IDs, negative authority results
 and physical temporary-directory before/after snapshots.
+
+## Accepted Implementation
+
+Migration 0085 preserves every existing Discussion as explicit `all_settled`,
+normalizes its compatibility-only quorum values and adds immutable Wave seals
+and supplemental-evidence rows. New `read_only_quorum` admission accepts only
+current managed Bridge Agents with an active Device, an enforceable read-only
+Runtime policy and the additive supplemental-evidence capability. Manual,
+hosted, fake, missing-policy, local-policy, workspace-write and unsupported
+participants cannot acquire this authority.
+
+`discussion-quorum.ts` owns canonical seal/evidence digests. The Orchestrator
+first reconciles all already-terminal member Runs, orders accepted members by
+the frozen Wave ordinal and atomically commits the partial Wave, seal, progress,
+decision, budget and successor. Live omitted Runs keep their actual state and
+their Agent is unavailable to later Waves until that Run settles. Recovery
+reuses the committed seal and successor and cannot double-charge or reselect.
+
+Every admitted Delivery freezes one Server-created operation and exact
+Discussion/Wave/Turn identity. The Bridge persists its content-free
+supplemental message after the canonical reply and terminal event but before
+terminal transport, then replays the same operation after response loss or
+restart. Central rejoins the current Device, Agent, Room, Task, read-only
+policy, delivery offer, Run, reply and Message before retaining one immutable
+audit record. It accepts no replacement reply content and grants no Task,
+Result, Plan or execution-proof authority.
+
+The Discussion evidence reader projects only a sealed Wave's accepted Turn
+IDs. Delivery planning also removes every rejected late Message from Room and
+Task context and does not publish a contiguous Room bundle across that hole,
+so a canonical late Room Message cannot silently re-enter a later Runtime
+prompt. The public Discussion view exposes seals and supplemental evidence as
+separate audit facts.
+
+## Acceptance Evidence
+
+The accepted wire and implementation are commits `b579abc`, `0c4bb9c` and
+`5fd29d7` on `main`. Verification on 2026-09-03 produced these results:
+
+- 40 focused Discussion tests passed. They cover default compatibility
+  normalization, invalid bounds, every managed mutable/unsupported Runtime
+  policy, fake participant rejection, required Reviewer threshold, pre-deadline
+  no-op, accepted-member no-op, atomic failure injection, restart recovery and
+  immutable SQL rows. The production one-second deadline sweep uses the same
+  idempotent quorum reconciliation path, so soft-deadline progress does not
+  depend on a Server restart or on the omitted member eventually returning.
+- The recovery case persisted terminal Reviewer and Coder replies in reverse
+  arrival order without invoking their callbacks. Reopened SQLite recovered
+  both by frozen member ordinal, pinned source reply sequence `2`, exact Room
+  Message sequences and validated 64-hex canonical seal/evidence digests. The
+  omitted Security Run remained `working` at the seal and was absent from the
+  successor; its later completion changed neither seal nor progress.
+- The same case retained exactly one late supplemental record, replayed its
+  operation idempotently, rejected changed operation identity after retention
+  and rejected replay after Room authority was removed. The complete next
+  Delivery JSON excluded the late marker and omitted a misleading contiguous
+  Room bundle.
+- The full Server suite passed 593 tests. Contract validation passed 101 Node
+  tests plus generated TypeScript and Go checks; schema validation covered 14
+  schemas and 258 fixtures. The workspace production build completed for
+  Server, Web and Contracts.
+- `npm run test:e2e` passed nine deterministic scenarios, including physical
+  two-Bridge integration and parallel CAS/fan-in, and skipped only the explicit
+  live-Runtime case. `npm run test:bridge` passed every Go Bridge package; race
+  tests and `go vet` passed for the changed delivery and connection packages.
+- Markdown lint and `git diff --check` reported no issue. Three consecutive
+  isolated `npm run test:temp-lifecycle` rounds each passed 24 success, failure,
+  spawn, timeout, signal, nested and parallel cleanup assertions. Under the
+  private base `/private/tmp/convene-wire-disc012-51uojM`, before and after
+  counts for `agentroom-*`, `agent-room-*`, `convenewire-*` and
+  `convene-wire-*` were all zero, the remaining entry count was zero and the
+  owned base was removed.
+
+## Retained Boundaries
+
+Quorum does not approve a Plan, accept a Result, satisfy an execution gate,
+cancel an omitted Run or grant repository/Git authority. `QA-054` is the next
+Core gate and must prove the complete human-governed bounded-autonomy product
+path without weakening these boundaries.

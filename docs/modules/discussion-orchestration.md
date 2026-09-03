@@ -3,12 +3,12 @@
 [ADR-0036](../adr/0036-add-governed-software-team-execution.md) adds structured
 decision/plan proposals without execution or Result acceptance authority.
 Code review/test pipelines belong to Execution, not Wave semantics. Focused
-selection now uses frozen policy and immutable per-Wave snapshots; later read-
-only quorum modes still require separate append-only supplemental evidence.
-Existing terminal Run events remain immutable. All-settled remains the default.
-The exact opt-in quorum and supplemental-evidence target is frozen in
-[`DISC-012`](../acceptance/disc-012-read-only-quorum-goal.md); the task remains
-ACTIVE until its implementation and physical acceptance evidence exist.
+selection uses frozen policy and immutable per-Wave snapshots. Opt-in read-only
+quorum mode now retains an immutable accepted projection and a separate append-
+only late-evidence record. Existing terminal Run events remain immutable and
+all-settled remains the default. The implementation and physical acceptance
+record are retained in
+[`DISC-012`](../acceptance/disc-012-read-only-quorum-goal.md).
 
 ## Scope
 
