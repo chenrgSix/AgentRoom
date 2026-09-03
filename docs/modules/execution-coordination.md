@@ -622,6 +622,12 @@ and target policy, and compares only `nodeReuseContractDigest` plus
 digests remain audit identities, not reuse equivalence. The first Core slice
 does not carry Optional Remote Evidence.
 
+Downstream input binding treats the carried adoption as its revision-local
+consumption authority while preserving the original `ResultReview` operation as
+the `accepted_result` gate proof. Migration 0086 makes that separation explicit;
+the input reader verifies the adoption digest instead of trying to reinterpret
+the carry operation as a second human review.
+
 One-shot Agent adoption requires a current exact Task Owner/Team Owner
 delegation and a deterministic no-broadening comparison. The Task set, node
 permissions, Agent/repository/grant/profile identity, slots, required checks and

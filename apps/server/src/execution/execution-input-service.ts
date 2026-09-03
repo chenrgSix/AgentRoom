@@ -33,6 +33,7 @@ interface AcceptedSource {
   operation_id: string; reviewed_by_member_id: string; reviewed_at: string;
 }
 interface MaterializedSource {
+  adoption_native: number;
   adoption_digest: string;
   adoption_id: string;
   source_digest: string;
@@ -71,6 +72,12 @@ function acceptedProjection(source: MaterializedSource): AcceptedSource {
     reviewed_by_member_id: source.reviewed_by_member_id,
     reviewed_at: source.reviewed_at
   };
+}
+
+function materializedGateDigest(source: MaterializedSource): string {
+  return source.gate === "accepted_result" && source.adoption_native === 0
+    ? executionOperationDigest(acceptedProjection(source))
+    : source.materialization_digest;
 }
 
 /** Owns explicit input grants, never Result acceptance or repository execution. */
@@ -168,11 +175,7 @@ export class ExecutionInputService {
           ? (source as MaterializedSource).gate_operation_id
           : (source as AcceptedSource).operation_id,
         gateDigest: edge
-          ? edge.gate === "accepted_result"
-            ? executionOperationDigest(acceptedProjection(
-              source as MaterializedSource
-            ))
-            : (source as MaterializedSource).materialization_digest
+          ? materializedGateDigest(source as MaterializedSource)
           : executionOperationDigest(source),
         sourceTaskId, sourceDefinitionRevision: source.definition_revision, sourceCriteriaRevision: source.criteria_revision,
         sourceResultId: selection.sourceResultId, sourceResultVersion: source.result_version,
@@ -319,9 +322,7 @@ export class ExecutionInputService {
           binding.sourceOutputSlot,
           plan.roomId
         );
-        const gateDigest = binding.gate === "accepted_result"
-          ? executionOperationDigest(acceptedProjection(source))
-          : source.materialization_digest;
+        const gateDigest = materializedGateDigest(source);
         if (
           gateDigest !== binding.gateDigest ||
           source.gate_operation_id !== binding.gateOperationId ||
@@ -423,6 +424,21 @@ export class ExecutionInputService {
         materialization.source_digest,
         materialization.gate_operation_id,
         materialization.materialization_digest,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM execution_carried_evidence_adoptions carried
+          WHERE carried.adoption_id = materialization.adoption_id
+            AND carried.adoption_digest = materialization.adoption_digest
+            AND carried.plan_id = materialization.plan_id
+            AND carried.plan_revision = materialization.plan_revision
+            AND carried.node_key = materialization.node_key
+        ) OR EXISTS (
+          SELECT 1 FROM execution_remote_evidence_adoptions remote
+          WHERE remote.adoption_id = materialization.adoption_id
+            AND remote.adoption_digest = materialization.adoption_digest
+            AND remote.plan_id = materialization.plan_id
+            AND remote.plan_revision = materialization.plan_revision
+            AND remote.node_key = materialization.node_key
+        ) THEN 1 ELSE 0 END AS adoption_native,
         materialization.candidate_commit, materialization.candidate_tree,
         review.operation_id, review.reviewed_by_member_id, review.reviewed_at
       FROM execution_all_adopted_node_materializations materialization

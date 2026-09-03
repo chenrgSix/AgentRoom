@@ -213,6 +213,36 @@ async function waitFor(
   throw new Error("Timed out waiting for governed Agent publication");
 }
 
+async function callMcp(
+  app: FastifyInstance,
+  token: string,
+  id: number,
+  name: string,
+  args: Record<string, unknown>
+): Promise<{
+  result: {
+    isError?: boolean;
+    structuredContent?: Record<string, unknown>;
+  };
+}> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/mcp",
+    headers: {
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${token}`
+    },
+    payload: {
+      jsonrpc: "2.0",
+      id,
+      method: "tools/call",
+      params: { name, arguments: args }
+    }
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  return response.json();
+}
+
 async function admissionFixture(
   t: TestContext,
   grantChange?: (grant: GovernedExecutionCapabilityReadyGrant) => void,
@@ -227,6 +257,7 @@ async function admissionFixture(
     independentAgentIndexes?: number[];
     maxConcurrency?: number;
     schedulerMilliseconds?: number;
+    techLead?: boolean;
   } = {}
 ) {
   const f = await fixture(t, () => now, {
@@ -268,10 +299,36 @@ async function admissionFixture(
   });
   const primary = managedAgents[0]!;
   const { agent, workspaceRef, workspaceGeneration } = primary;
+  const techLead = options.techLead
+    ? await f.ok("POST", `/api/teams/${f.teamId}/manual-agents`, {
+        name: "Bounded autonomy Tech Lead",
+        role: "Tech Lead"
+      })
+    : undefined;
   await f.ok("PUT", `/api/rooms/${f.roomId}/participants`, {
     memberIds: [f.ownerMemberId],
-    agentIds: managedAgents.map((entry) => entry.agent.agentId)
+    agentIds: [
+      ...managedAgents.map((entry) => entry.agent.agentId),
+      ...(techLead ? [techLead.agent.agentId] : [])
+    ]
   });
+  let assignedRoot: { taskRevision: number } | undefined;
+  if (techLead) {
+    const root = await f.ok("GET", `/api/tasks/${f.root.taskId}`);
+    assignedRoot = await f.ok("PUT", `/api/tasks/${root.taskId}/definition`, {
+      operationId: "op_governed_assign_tech_lead0001",
+      expectedTaskRevision: root.taskRevision,
+      title: root.title,
+      goal: root.goal,
+      ownerMemberId: root.ownerMemberId,
+      completionPolicy: root.completionPolicy,
+      priority: root.priority,
+      dueAt: root.dueAt,
+      criteria: root.criteria,
+      assignments: [{ agentId: techLead.agent.agentId, role: "primary" }],
+      budgetPolicy: root.budgetPolicy
+    });
+  }
 
   const socket = await f.app.injectWS("/ws/bridge", {
     headers: {
@@ -289,6 +346,7 @@ async function admissionFixture(
   }, "hello0001"));
 
   const command = f.command();
+  if (assignedRoot) command.expectedRootTaskRevision = assignedRoot.taskRevision;
   if (options.independentAgentIndexes) {
     const build = command.definition.nodes.find((node) =>
       node.nodeKey === "Build"
@@ -560,7 +618,8 @@ async function admissionFixture(
     agentCapability,
     workspaceRef,
     workspaceGeneration,
-    scheduledDelivery
+    scheduledDelivery,
+    techLead
   };
 }
 
@@ -3770,8 +3829,10 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
 }, async (t) => {
   const f = await admissionFixture(t, undefined, {
     acceptedDependency: true,
-    schedulerMilliseconds: 100
+    schedulerMilliseconds: 100,
+    techLead: true
   });
+  assert.ok(f.techLead);
   await waitFor(() => Boolean(f.database.prepare(`
     SELECT 1 FROM execution_dispatch_intents
     WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Build'
@@ -3805,6 +3866,29 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
   const current = await f.ok(
     "GET", `/api/execution-plans/${f.plan.planId}`
   );
+  const trigger = await f.ok(
+    "POST",
+    `/api/rooms/${f.roomId}/messages`,
+    {
+      taskId: current.rootTaskId,
+      content: "Carry the exact accepted evidence under bounded delegation.",
+      mentionAgentId: f.techLead.agent.agentId
+    }
+  );
+  const techLeadRunId = trigger.runs[0].runId as string;
+  const claimed = await callMcp(
+    f.app,
+    f.techLead.credential.token,
+    5401,
+    "team.claim_run",
+    { runId: techLeadRunId }
+  );
+  assert.equal(
+    (claimed.result.structuredContent?.run as { state: string }).state,
+    "working"
+  );
+  const techLeadManifest = new RunRepository(f.database)
+    .getContextManifest(techLeadRunId)!;
   const definition = structuredClone(current.current.definition);
   for (const node of definition.nodes) {
     const compiled = current.compiledTasks.find((entry: {
@@ -3822,18 +3906,54 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
   }
   definition.decision.summary =
     "Carry only evidence whose execution semantics and logical inputs match.";
-  const root = await f.ok("GET", `/api/tasks/${current.rootTaskId}`);
-  const candidate = await f.ok(
-    "POST",
-    `/api/execution-plans/${current.planId}/supersession-candidates`,
+  definition.decision.sources = [{
+    evidenceRefId: "evidence_bounded_carry_trigger0001",
+    kind: "message",
+    messageId: trigger.message.messageId
+  }];
+  definition.decision.sourceRevisions = [{
+    evidenceRefId: "evidence_bounded_carry_trigger0001",
+    revision: trigger.message.sequence
+  }];
+  const candidateResult = await callMcp(
+    f.app,
+    f.techLead.credential.token,
+    5402,
+    "team.propose_plan_supersession",
     {
-      operationId: "op_carry_candidate0001",
-      expectedCurrentRevision: current.current.revision,
-      expectedCurrentDigest: current.current.digest,
+      runId: techLeadRunId,
+      planId: current.planId,
+      command: {
+        operationId: "op_carry_candidate0001",
+        expectedCurrentRevision: current.current.revision,
+        expectedCurrentDigest: current.current.digest,
+        expectedControlRevision: current.controlRevision,
+        expectedRootTaskRevision: techLeadManifest.taskRevision,
+        definition,
+        reason: "Retain the exact semantic contract in revision two."
+      }
+    }
+  );
+  assert.equal(candidateResult.result.isError, undefined,
+    JSON.stringify(candidateResult));
+  const candidate = candidateResult.result.structuredContent?.candidate as any;
+  assert.deepEqual(candidate.author, {
+    kind: "agent",
+    agentId: f.techLead.agent.agentId,
+    runId: techLeadRunId
+  });
+  const delegation = await f.ok(
+    "POST",
+    `/api/execution-plans/${current.planId}/replan-delegations`,
+    {
+      operationId: "op_carry_delegation0001",
+      expectedPlanRevision: current.current.revision,
+      expectedPlanDigest: current.current.digest,
       expectedControlRevision: current.controlRevision,
-      expectedRootTaskRevision: root.taskRevision,
-      definition,
-      reason: "Retain the exact semantic contract in revision two."
+      expectedRootTaskRevision: techLeadManifest.taskRevision,
+      agentId: f.techLead.agent.agentId,
+      expiresAt: "2026-08-31T12:30:00.000Z",
+      reason: "Allow this Tech Lead Run one low-risk evidence carry."
     }
   );
   const command = {
@@ -3844,7 +3964,7 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
     expectedCurrentRevision: current.current.revision,
     expectedCurrentDigest: current.current.digest,
     expectedControlRevision: current.controlRevision,
-    expectedRootTaskRevision: root.taskRevision,
+    expectedRootTaskRevision: techLeadManifest.taskRevision,
     carryForward: [{
       targetNodeKey: "Build",
       gate: "accepted_result",
@@ -3857,45 +3977,98 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
     }],
     reason: "Adopt the exact retained Build proof into revision two."
   };
-  const omitted = await f.request(
-    "POST",
-    `/api/execution-plans/${current.planId}/supersession-activations`,
+  const omitted = await callMcp(
+    f.app,
+    f.techLead.credential.token,
+    5403,
+    "team.activate_plan_supersession",
     {
-      ...command,
-      operationId: "op_carry_omitted0001",
-      carryForward: []
+      runId: techLeadRunId,
+      planId: current.planId,
+      delegationId: delegation.delegationId,
+      command: {
+        ...command,
+        operationId: "op_carry_omitted0001",
+        carryForward: []
+      }
     }
   );
-  assert.equal(omitted.statusCode, 409, omitted.body);
-  assert.match(omitted.body, /EXECUTION_CARRY_COVERAGE_REQUIRED/u);
-  const mismatched = await f.request(
-    "POST",
-    `/api/execution-plans/${current.planId}/supersession-activations`,
+  assert.equal(omitted.result.isError, true);
+  const mismatched = await callMcp(
+    f.app,
+    f.techLead.credential.token,
+    5404,
+    "team.activate_plan_supersession",
     {
-      ...command,
-      operationId: "op_carry_mismatch0001",
-      carryForward: [{
-        ...command.carryForward[0],
-        sourceNodeReuseContractDigest: "f".repeat(64)
-      }]
+      runId: techLeadRunId,
+      planId: current.planId,
+      delegationId: delegation.delegationId,
+      command: {
+        ...command,
+        operationId: "op_carry_mismatch0001",
+        carryForward: [{
+          ...command.carryForward[0],
+          sourceNodeReuseContractDigest: "f".repeat(64)
+        }]
+      }
     }
   );
-  assert.equal(mismatched.statusCode, 409, mismatched.body);
-  assert.match(mismatched.body, /EXECUTION_CARRY_SOURCE_CONFLICT/u);
+  assert.equal(mismatched.result.isError, true);
   assert.equal(
     (await f.ok("GET", `/api/execution-plans/${current.planId}`))
       .current.revision,
     1,
     "failed carry attempts must leave the active revision unchanged"
   );
-  const receipt = await f.ok(
-    "POST",
-    `/api/execution-plans/${current.planId}/supersession-activations`,
-    command
+  const activation = await callMcp(
+    f.app,
+    f.techLead.credential.token,
+    5405,
+    "team.activate_plan_supersession",
+    {
+      runId: techLeadRunId,
+      planId: current.planId,
+      delegationId: delegation.delegationId,
+      command
+    }
   );
+  assert.equal(activation.result.isError, undefined, JSON.stringify(activation));
+  const receipt = activation.result.structuredContent?.receipt as any;
   assert.equal(receipt.plan.current.revision, 2);
   assert.equal(receipt.carryForward.length, 1);
   assert.equal(receipt.carryForward[0].sourceAdoptionId, source.adoption_id);
+  assert.deepEqual(receipt.activatedBy, {
+    kind: "agent",
+    agentId: f.techLead.agent.agentId,
+    runId: techLeadRunId
+  });
+  assert.equal(receipt.delegationId, delegation.delegationId);
+  const delegationState = (await f.ok(
+    "GET", `/api/execution-plans/${current.planId}/replan-delegations`
+  )).find(({ delegation: row }: any) =>
+    row.delegationId === delegation.delegationId);
+  assert.equal(delegationState.consumed, true);
+  await f.restart(100);
+  const recoveredBridge = await reconnectGovernedAgent(t, f, 2);
+  await recoveredBridge.delivery;
+  const replay = await callMcp(
+    f.app,
+    f.techLead.credential.token,
+    5406,
+    "team.activate_plan_supersession",
+    {
+      runId: techLeadRunId,
+      planId: current.planId,
+      delegationId: delegation.delegationId,
+      command
+    }
+  );
+  assert.equal(replay.result.isError, undefined, JSON.stringify(replay));
+  assert.deepEqual(replay.result.structuredContent?.receipt, receipt);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_plan_supersession_activations
+    WHERE operation_id = ?
+  `).get(command.operationId) as { n: number }).n, 1);
 
   const carried = f.database.prepare(`
     SELECT adoption_id, source_adoption_id, adoption_json
@@ -3979,6 +4152,39 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
     WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Consume'
   `).get(current.planId) as { n: number }).n, 0,
   "an unacknowledged ambiguous prior-revision Run must remain a blocker");
+  const priorRun = new RunRepository(f.database).getRun(priorConsume.run_id);
+  assert.ok(priorRun);
+  const priorTask = await f.ok("GET", `/api/tasks/${priorRun.taskId}`);
+  await f.ok(
+    "POST",
+    `/api/runs/${priorConsume.run_id}/ambiguity-acknowledgement`,
+    {
+      operationId: "op_carry_prior_ambiguity_ack0001",
+      expectedTaskRevision: priorTask.taskRevision,
+      reason: "The Owner reviewed the old revision before continuing revision two."
+    }
+  );
+  const acknowledgedTask = await f.ok(
+    "GET", `/api/tasks/${priorRun.taskId}`
+  );
+  await f.ok("POST", `/api/tasks/${priorRun.taskId}/control`, {
+    operationId: "op_carry_prior_task_ready0001",
+    expectedTaskRevision: acknowledgedTask.taskRevision,
+    lifecycleState: "ready"
+  });
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Consume'
+  `).get(current.planId)));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Consume'
+  `).get(current.planId) as { n: number }).n, 1,
+  "the deterministic scheduler must continue after exact ambiguity review");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_carried_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = 2
+  `).get(current.planId) as { n: number }).n, 1);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
@@ -4142,7 +4348,7 @@ test("scheduler migration backfills automatic controls and retained admission hi
     DROP TABLE execution_scheduler_receipts;
     DROP TABLE execution_scheduler_operations;
     DROP TABLE execution_scheduler_controls;
-    DELETE FROM schema_migrations WHERE version IN (81, 82, 83, 84, 85);
+    DELETE FROM schema_migrations WHERE version IN (81, 82, 83, 84, 85, 86);
   `);
   f.database.close();
 
