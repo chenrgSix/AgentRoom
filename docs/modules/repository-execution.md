@@ -646,10 +646,11 @@ bounded commands with pass/fail/timeout and forged-receipt negatives;
 I/O and ambiguous external effects before advertising its bounded optional
 remote-observation behavior. Its accepted evidence is recorded in the
 [remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
-`QA-052`, the local portion of `QA-053`, and the future `QA-054`/`QA-055`
-combine the Core with actual Server and Go Bridge processes, browser entry and
-direction auditing. Remote-provider checks remain Optional Extension
-regressions. Delivery state stays in TASKS.
+`QA-052`, the local portion of `QA-053`, and accepted `QA-054` combine the Core
+with actual Server and Go Bridge processes, browser entry and direction
+auditing. `QA-055` is the active final design-to-implementation audit.
+Remote-provider checks remain Optional Extension regressions. Delivery state
+stays in TASKS.
 
 Build/test Server through its existing npm workspace commands. Bridge code uses
 `gofmt`, `go test ./...`, `go test -race` for affected packages and `go vet ./...`.

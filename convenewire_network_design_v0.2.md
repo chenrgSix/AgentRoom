@@ -508,9 +508,10 @@ Owner 本地授权下负责 Repository path、Git remote、Git/SSH credential、
 fetch/pull/push、worktree 和全部 Git command execution。Central approval
 不能替代 Owner 对机器和 Repository 的最终控制。
 
-`EXEC-005` Plan supersession/evidence carry-forward/bounded replanning 和
-`DISC-011` focused participant selection 已完成。当前 Core 主线依次为
-`DISC-012`、`QA-054` 和 `QA-055`。
+`EXEC-005` Plan supersession/evidence carry-forward/bounded replanning、
+`DISC-011` focused participant selection、`DISC-012` read-only quorum 和
+`QA-054` bounded-autonomy 产品验收均已完成。`QA-055` 是当前唯一的 Core
+主线，用当前实现和物理证据完成 EX-01 至 EX-14 最终审计。
 
 ### 13.2 Optional Remote Evidence Extensions
 

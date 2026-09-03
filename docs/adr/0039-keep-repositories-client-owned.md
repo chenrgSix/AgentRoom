@@ -105,8 +105,9 @@ The Core continuation order is:
 4. `QA-054` bounded-autonomy acceptance; and
 5. `QA-055` final Core implementation audit.
 
-`EXEC-005` and `DISC-011` are now accepted; the current continuation starts at
-`DISC-012`. `docs/TASKS.md` remains the sole delivery-state register.
+`EXEC-005`, `DISC-011`, `DISC-012` and `QA-054` are now accepted; `QA-055` is
+the active final Core implementation audit. `docs/TASKS.md` remains the sole
+delivery-state register.
 
 Optional Remote Evidence regressions continue to run because retained code must
 remain safe. They are compatibility/security evidence, not Core exit gates and
