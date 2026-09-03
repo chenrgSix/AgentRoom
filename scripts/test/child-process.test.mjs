@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -15,12 +15,30 @@ async function waitForState(statePath) {
     try {
       return JSON.parse(await readFile(statePath, "utf8"));
     } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+      // A child owns the state file and may be preempted between truncation and
+      // its complete write. Treat that transient snapshot like ENOENT, but
+      // continue to surface every other filesystem or programming error.
+      if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error(`Timed out waiting for ${statePath}`);
 }
+
+test("state polling tolerates an in-progress child write", async (t) => {
+  const resources = await createTestResources(t, "convene-wire-process-state-");
+  const statePath = path.join(resources.directory, "processes.json");
+  await writeFile(statePath, "{");
+  const completedWrite = new Promise((resolve, reject) => {
+    setTimeout(() => {
+      void writeFile(statePath, JSON.stringify({ parentPid: 1, grandchildPid: 2 }))
+        .then(resolve, reject);
+    }, 50);
+  });
+  const state = await waitForState(statePath);
+  await completedWrite;
+  assert.deepEqual(state, { parentPid: 1, grandchildPid: 2 });
+});
 
 async function assertProcessGone(processId) {
   const deadline = Date.now() + 2_000;
