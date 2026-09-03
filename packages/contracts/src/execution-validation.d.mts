@@ -28,7 +28,13 @@ export function remoteInputAttestationDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "discussionPlanProposalDraft" |
     "revisionCommand" |
-    "approvalCommand" | "controlCommand" | "schedulerControl" |
+    "approvalCommand" | "supersessionCandidateCommand" |
+    "supersessionCandidateRecord" | "supersessionActivationCommand" |
+    "supersessionActivationReceipt" | "replanDelegationIssueCommand" |
+    "replanDelegationRecord" | "replanDelegationRevokeCommand" |
+    "replanDelegationRevocationRecord" |
+    "agentSupersessionCandidateCommand" |
+    "agentSupersessionActivationCommand" | "controlCommand" | "schedulerControl" |
     "schedulerModeCommand" | "schedulerModeReceipt" |
     "schedulerManualDispatchCommand" | "schedulerAdvanceCommand" |
     "schedulerDispatchReceipt" | "nodeRetryCommand" |

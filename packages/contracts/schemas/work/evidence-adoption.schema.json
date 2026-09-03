@@ -568,6 +568,80 @@
         }
       }
     },
+    "supersessionAdoptionAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "approvalOperationId",
+        "planDigest",
+        "roomId",
+        "taskId",
+        "definitionRevision",
+        "criteriaRevision",
+        "activatedBy",
+        "sourceAdoptionId",
+        "sourceAdoptionDigest",
+        "sourceReuseContractId",
+        "agentId",
+        "deviceId",
+        "grantId",
+        "grantRevision",
+        "grantDigest"
+      ],
+      "properties": {
+        "service": { "const": "execution_supersession" },
+        "approvalOperationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "definitionRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "activatedBy": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/supersessionActor"
+        },
+        "delegationId": {
+          "oneOf": [
+            {
+              "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/replanDelegationId"
+            },
+            { "type": "null" }
+          ]
+        },
+        "sourceAdoptionId": { "$ref": "#/$defs/adoptionId" },
+        "sourceAdoptionDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "sourceReuseContractId": { "$ref": "#/$defs/reuseContractId" },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "grantId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/grantId"
+        },
+        "grantRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "grantDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
     "adoptionAuthority": {
       "oneOf": [
         {
@@ -575,6 +649,9 @@
         },
         {
           "$ref": "#/$defs/remoteAdoptionAuthority"
+        },
+        {
+          "$ref": "#/$defs/supersessionAdoptionAuthority"
         }
       ]
     },

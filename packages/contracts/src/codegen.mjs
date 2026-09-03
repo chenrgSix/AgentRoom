@@ -302,6 +302,13 @@ function preserveExecutionAuthorityCompatibility(source, language) {
       ")\n\n";
     compatible = compatible.replace(marker, constants + marker);
   }
+  // EvidenceAdoption authority is a closed union. delegationId is required
+  // only by the supersession branch and must stay absent, rather than marshal
+  // as null, for the existing local and remote wire variants.
+  compatible = compatible.replace(
+    /(type \w*Authority struct \{[\s\S]*?DelegationID\s+\*string\s+)`json:"delegationId"`/gu,
+    '$1`json:"delegationId,omitempty"`'
+  );
   return compatible;
 }
 
@@ -478,6 +485,16 @@ function renderExecutionValidators(schemas) {
     discussionPlanProposalDraft: `${EXECUTION_SCHEMA_ID}#/$defs/discussionPlanProposalDraft`,
     revisionCommand: `${EXECUTION_SCHEMA_ID}#/$defs/revisionCommand`,
     approvalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/approvalCommand`,
+    supersessionCandidateCommand: `${EXECUTION_SCHEMA_ID}#/$defs/supersessionCandidateCommand`,
+    supersessionCandidateRecord: `${EXECUTION_SCHEMA_ID}#/$defs/supersessionCandidateRecord`,
+    supersessionActivationCommand: `${EXECUTION_SCHEMA_ID}#/$defs/supersessionActivationCommand`,
+    supersessionActivationReceipt: `${EXECUTION_SCHEMA_ID}#/$defs/supersessionActivationReceipt`,
+    replanDelegationIssueCommand: `${EXECUTION_SCHEMA_ID}#/$defs/replanDelegationIssueCommand`,
+    replanDelegationRecord: `${EXECUTION_SCHEMA_ID}#/$defs/replanDelegationRecord`,
+    replanDelegationRevokeCommand: `${EXECUTION_SCHEMA_ID}#/$defs/replanDelegationRevokeCommand`,
+    replanDelegationRevocationRecord: `${EXECUTION_SCHEMA_ID}#/$defs/replanDelegationRevocationRecord`,
+    agentSupersessionCandidateCommand: `${EXECUTION_SCHEMA_ID}#/$defs/agentSupersessionCandidateCommand`,
+    agentSupersessionActivationCommand: `${EXECUTION_SCHEMA_ID}#/$defs/agentSupersessionActivationCommand`,
     controlCommand: `${EXECUTION_SCHEMA_ID}#/$defs/controlCommand`,
     schedulerControl: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerControl`,
     schedulerModeCommand: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerModeCommand`,
@@ -1511,6 +1528,16 @@ export async function generateContractTypes(packageRoot) {
     ["ExecutionPlanApprovalRecord", "approvalRecord"],
     ["ExecutionPlanApprovalReceipt", "approvalReceipt"],
     ["ExecutionPlanApprovalPage", "approvalPage"],
+    ["ExecutionPlanSupersessionCandidateCommand", "supersessionCandidateCommand"],
+    ["ExecutionPlanSupersessionCandidate", "supersessionCandidateRecord"],
+    ["ExecutionPlanSupersessionActivationCommand", "supersessionActivationCommand"],
+    ["ExecutionPlanSupersessionActivationReceipt", "supersessionActivationReceipt"],
+    ["ExecutionReplanDelegationIssueCommand", "replanDelegationIssueCommand"],
+    ["ExecutionReplanDelegation", "replanDelegationRecord"],
+    ["ExecutionReplanDelegationRevokeCommand", "replanDelegationRevokeCommand"],
+    ["ExecutionReplanDelegationRevocation", "replanDelegationRevocationRecord"],
+    ["ExecutionAgentSupersessionCandidateCommand", "agentSupersessionCandidateCommand"],
+    ["ExecutionAgentSupersessionActivationCommand", "agentSupersessionActivationCommand"],
     ["ExecutionPlanControlCommand", "controlCommand"],
     ["ExecutionSchedulerMode", "schedulerMode"],
     ["ExecutionSchedulerControl", "schedulerControl"],
@@ -1732,7 +1759,17 @@ export async function generateContractTypes(packageRoot) {
           schedulerModeReceipt: "schedulerModeReceipt",
           schedulerManualDispatchCommand: "schedulerManualDispatchCommand",
           schedulerAdvanceCommand: "schedulerAdvanceCommand",
-          schedulerDispatchReceipt: "schedulerDispatchReceipt"
+          schedulerDispatchReceipt: "schedulerDispatchReceipt",
+          supersessionCandidateCommand: "supersessionCandidateCommand",
+          supersessionCandidateRecord: "supersessionCandidateRecord",
+          supersessionActivationCommand: "supersessionActivationCommand",
+          supersessionActivationReceipt: "supersessionActivationReceipt",
+          replanDelegationIssueCommand: "replanDelegationIssueCommand",
+          replanDelegationRecord: "replanDelegationRecord",
+          replanDelegationRevokeCommand: "replanDelegationRevokeCommand",
+          replanDelegationRevocationRecord: "replanDelegationRevocationRecord",
+          agentSupersessionCandidateCommand: "agentSupersessionCandidateCommand",
+          agentSupersessionActivationCommand: "agentSupersessionActivationCommand"
         }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
           dereference(executionSchema.$defs[definition], executionSchema, schemas), false)])),
         ...Object.fromEntries(Object.entries({

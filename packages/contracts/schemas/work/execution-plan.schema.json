@@ -24,6 +24,14 @@
       "type": "string",
       "pattern": "^decision_[A-Za-z0-9_-]{8,128}$"
     },
+    "supersessionCandidateId": {
+      "type": "string",
+      "pattern": "^supersession_[A-Za-z0-9_-]{8,128}$"
+    },
+    "replanDelegationId": {
+      "type": "string",
+      "pattern": "^replan_[A-Za-z0-9_-]{8,128}$"
+    },
     "repositoryId": {
       "type": "string",
       "pattern": "^repo_[A-Za-z0-9_-]{8,128}$"
@@ -889,6 +897,383 @@
       "properties": {
         "approvals": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/approvalRecord" } },
         "nextAfterRevision": { "oneOf": [{ "$ref": "#/$defs/revision" }, { "type": "null" }] }
+      }
+    },
+    "supersessionCarrySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetNodeKey",
+        "gate",
+        "sourceAdoptionId",
+        "sourceAdoptionDigest",
+        "sourceReuseContractId",
+        "sourceNodeReuseContractDigest",
+        "sourceReuseInputEvidenceDigest"
+      ],
+      "properties": {
+        "targetNodeKey": { "$ref": "#/$defs/stableKey" },
+        "gate": {
+          "enum": ["accepted_result", "verified_output", "integrated_commit"]
+        },
+        "sourceAdoptionId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/adoptionId"
+        },
+        "sourceAdoptionDigest": { "$ref": "#/$defs/digest" },
+        "sourceReuseContractId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/reuseContractId"
+        },
+        "sourceNodeReuseContractDigest": { "$ref": "#/$defs/digest" },
+        "sourceReuseInputEvidenceDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "supersessionCandidateCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedCurrentRevision",
+        "expectedCurrentDigest",
+        "expectedControlRevision",
+        "expectedRootTaskRevision",
+        "definition",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedCurrentRevision": { "$ref": "#/$defs/revision" },
+        "expectedCurrentDigest": { "$ref": "#/$defs/digest" },
+        "expectedControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedRootTaskRevision": { "$ref": "#/$defs/revision" },
+        "definition": { "$ref": "#/$defs/planDefinition" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "supersessionCandidateRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "operationId",
+        "planId",
+        "baseRevision",
+        "baseDigest",
+        "baseControlRevision",
+        "rootTaskRevision",
+        "candidateRevision",
+        "candidateDigest",
+        "definition",
+        "author",
+        "reason",
+        "requestDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/supersessionCandidateId" },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planId": { "$ref": "#/$defs/planId" },
+        "baseRevision": { "$ref": "#/$defs/revision" },
+        "baseDigest": { "$ref": "#/$defs/digest" },
+        "baseControlRevision": { "$ref": "#/$defs/revision" },
+        "rootTaskRevision": { "$ref": "#/$defs/revision" },
+        "candidateRevision": { "$ref": "#/$defs/revision" },
+        "candidateDigest": { "$ref": "#/$defs/digest" },
+        "definition": { "$ref": "#/$defs/planDefinition" },
+        "author": { "$ref": "#/$defs/planAuthor" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "supersessionActivationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedCurrentRevision",
+        "expectedCurrentDigest",
+        "expectedControlRevision",
+        "expectedRootTaskRevision",
+        "candidateId",
+        "expectedCandidateRevision",
+        "expectedCandidateDigest",
+        "carryForward",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedCurrentRevision": { "$ref": "#/$defs/revision" },
+        "expectedCurrentDigest": { "$ref": "#/$defs/digest" },
+        "expectedControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedRootTaskRevision": { "$ref": "#/$defs/revision" },
+        "candidateId": { "$ref": "#/$defs/supersessionCandidateId" },
+        "expectedCandidateRevision": { "$ref": "#/$defs/revision" },
+        "expectedCandidateDigest": { "$ref": "#/$defs/digest" },
+        "carryForward": {
+          "type": "array",
+          "maxItems": 192,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/supersessionCarrySelection" }
+        },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "supersessionCarryReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetNodeKey",
+        "gate",
+        "sourceAdoptionId",
+        "sourceAdoptionDigest",
+        "adoptionId",
+        "adoptionDigest",
+        "reuseContractId",
+        "nodeReuseContractDigest",
+        "reuseInputEvidenceDigest"
+      ],
+      "properties": {
+        "targetNodeKey": { "$ref": "#/$defs/stableKey" },
+        "gate": {
+          "enum": ["accepted_result", "verified_output", "integrated_commit"]
+        },
+        "sourceAdoptionId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/adoptionId"
+        },
+        "sourceAdoptionDigest": { "$ref": "#/$defs/digest" },
+        "adoptionId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/adoptionId"
+        },
+        "adoptionDigest": { "$ref": "#/$defs/digest" },
+        "reuseContractId": {
+          "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/reuseContractId"
+        },
+        "nodeReuseContractDigest": { "$ref": "#/$defs/digest" },
+        "reuseInputEvidenceDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "supersessionActor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "memberId"],
+          "properties": {
+            "kind": { "const": "member" },
+            "memberId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "agentId", "runId"],
+          "properties": {
+            "kind": { "const": "agent" },
+            "agentId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+            },
+            "runId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+            }
+          }
+        }
+      ]
+    },
+    "supersessionActivationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "plan",
+        "candidate",
+        "activatedBy",
+        "delegationId",
+        "carryForward",
+        "requestDigest",
+        "operationDigest",
+        "activatedAt"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "plan": { "$ref": "#/$defs/planProjection" },
+        "candidate": { "$ref": "#/$defs/supersessionCandidateRecord" },
+        "activatedBy": { "$ref": "#/$defs/supersessionActor" },
+        "delegationId": {
+          "oneOf": [
+            { "$ref": "#/$defs/replanDelegationId" },
+            { "type": "null" }
+          ]
+        },
+        "carryForward": {
+          "type": "array",
+          "maxItems": 192,
+          "items": { "$ref": "#/$defs/supersessionCarryReceipt" }
+        },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "operationDigest": { "$ref": "#/$defs/digest" },
+        "activatedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "replanDelegationIssueCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedControlRevision",
+        "agentId",
+        "expiresAt",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedPlanRevision": { "$ref": "#/$defs/revision" },
+        "expectedPlanDigest": { "$ref": "#/$defs/digest" },
+        "expectedControlRevision": { "$ref": "#/$defs/revision" },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "replanDelegationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delegationId",
+        "revision",
+        "operationId",
+        "planId",
+        "planRevision",
+        "planDigest",
+        "planControlRevision",
+        "agentId",
+        "issuedByMemberId",
+        "taskIds",
+        "expiresAt",
+        "reason",
+        "delegationDigest",
+        "issuedAt"
+      ],
+      "properties": {
+        "delegationId": { "$ref": "#/$defs/replanDelegationId" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planId": { "$ref": "#/$defs/planId" },
+        "planRevision": { "$ref": "#/$defs/revision" },
+        "planDigest": { "$ref": "#/$defs/digest" },
+        "planControlRevision": { "$ref": "#/$defs/revision" },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "issuedByMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "taskIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+          }
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "delegationDigest": { "$ref": "#/$defs/digest" },
+        "issuedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "replanDelegationRevokeCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "expectedRevision", "expectedDigest", "reason"],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedRevision": { "$ref": "#/$defs/revision" },
+        "expectedDigest": { "$ref": "#/$defs/digest" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "replanDelegationRevocationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "delegationId",
+        "delegationRevision",
+        "delegationDigest",
+        "revokedByMemberId",
+        "reason",
+        "revocationDigest",
+        "revokedAt"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "delegationId": { "$ref": "#/$defs/replanDelegationId" },
+        "delegationRevision": { "$ref": "#/$defs/revision" },
+        "delegationDigest": { "$ref": "#/$defs/digest" },
+        "revokedByMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "revocationDigest": { "$ref": "#/$defs/digest" },
+        "revokedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "agentSupersessionCandidateCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "command"],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "command": { "$ref": "#/$defs/supersessionCandidateCommand" }
+      }
+    },
+    "agentSupersessionActivationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "delegationId", "command"],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "delegationId": { "$ref": "#/$defs/replanDelegationId" },
+        "command": { "$ref": "#/$defs/supersessionActivationCommand" }
       }
     },
     "controlCommand": {
