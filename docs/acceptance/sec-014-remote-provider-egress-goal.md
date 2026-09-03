@@ -103,9 +103,11 @@ Completion requires focused evidence for all of the following:
 6. The existing remote-provider fetch seam must explicitly carry loopback test
    admission. Default Server startup, an unmarked injected fetch, a Team Owner
    and a stored binding cannot enable it.
-7. Credentials, Authorization headers, origins, addresses, proxy values and
-   provider bodies do not appear in thrown errors, HTTP responses, logs,
-   diagnostics, metrics, evidence views or SQLite.
+7. Credentials and Authorization headers do not appear in thrown errors, HTTP
+   responses, logs, diagnostics, metrics, evidence views or SQLite. The
+   existing binding origin remains intentional REPO-003 metadata, while
+   resolved addresses, ambient proxy values and provider bodies do not enter
+   egress failure detail or new persistence.
 8. Concurrent calls resolve and pin independently; restart reconstructs the
    production policy, preserves no stale DNS pin and does not create a bypass.
 9. Existing REPO-003 response-loss, timeout, revocation, replay, bounded-body,
