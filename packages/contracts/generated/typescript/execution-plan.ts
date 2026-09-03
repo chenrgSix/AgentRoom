@@ -1779,13 +1779,109 @@ export interface StickyCompiledTask {
 }
 
 export interface ExecutionPlanControlCommand {
-  action:                  ActionEnum;
+  action:                  ExecutionPlanControlCommandAction;
   expectedControlRevision: number;
   operationId:             string;
   reason:                  string;
 }
 
-export type ActionEnum = "pause" | "resume" | "cancel";
+export type ExecutionPlanControlCommandAction = "pause" | "resume" | "cancel";
+
+export interface ExecutionSchedulerControl {
+  lastOperationId: null | string;
+  mode:            ExecutionSchedulerMode;
+  modeRevision:    number;
+  planId:          string;
+  reason:          string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt:         string;
+  updatedByMemberId: null | string;
+}
+
+export type ExecutionSchedulerMode = "manual" | "supervised" | "automatic";
+
+export interface ExecutionSchedulerModeCommand {
+  expectedModeRevision:        number;
+  expectedPlanControlRevision: number;
+  expectedPlanDigest:          string;
+  expectedPlanRevision:        number;
+  mode:                        ExecutionSchedulerMode;
+  operationId:                 string;
+  reason:                      string;
+}
+
+export interface ExecutionSchedulerModeReceipt {
+  mode:                 ExecutionSchedulerMode;
+  modeRevision:         number;
+  operationDigest:      string;
+  operationId:          string;
+  planControlRevision:  number;
+  planDigest:           string;
+  planId:               string;
+  planRevision:         number;
+  previousMode:         ExecutionSchedulerMode;
+  previousModeRevision: number;
+  reason:               string;
+  requestDigest:        string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt:         string;
+  updatedByMemberId: string;
+}
+
+export interface ExecutionSchedulerManualDispatchCommand {
+  expectedModeRevision:           number;
+  expectedNodeProjectionRevision: number;
+  expectedPlanControlRevision:    number;
+  expectedPlanDigest:             string;
+  expectedPlanRevision:           number;
+  nodeKey:                        string;
+  operationId:                    string;
+  reason:                         string;
+}
+
+export interface ExecutionSchedulerAdvanceCommand {
+  expectedModeRevision:        number;
+  expectedPlanControlRevision: number;
+  expectedPlanDigest:          string;
+  expectedPlanRevision:        number;
+  operationId:                 string;
+  reason:                      string;
+}
+
+export interface ExecutionSchedulerDispatchReceipt {
+  action: ExecutionSchedulerDispatchReceiptAction;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  mode:                ExecutionSchedulerMode;
+  modeRevision:        number;
+  operationDigest:     string;
+  operationId:         string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  reason:              string;
+  requestDigest:       string;
+  requestedByMemberId: string;
+  selection:           Selection | null;
+}
+
+export type ExecutionSchedulerDispatchReceiptAction = "manual_dispatch" | "supervised_advance";
+
+export interface Selection {
+  dispatchIntentId: string;
+  nodeKey:          string;
+  runId:            string;
+}
 
 export interface ExecutionNodeRetryCommand {
   ambiguityAcknowledgementOperationId: null | string;

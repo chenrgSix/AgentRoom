@@ -37,6 +37,8 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
   for _, kind := range []string{"executionManifest", "executionInputBinding", "executionCapability", "repositoryBinding",
     "runtimeAuthorityRequest", "runtimeAuthorityView", "executionGrant", "repositoryOperation", "repositoryReceipt",
     "executionCheckpoint", "verificationReceipt", "sourceEvidence", "gateProofRef", "evidenceAdoption",
+    "schedulerControl", "schedulerModeCommand", "schedulerModeReceipt",
+    "schedulerManualDispatchCommand", "schedulerAdvanceCommand", "schedulerDispatchReceipt",
     "evidenceReuseContract", "remoteProviderBinding", "remoteProviderBindingRevocation",
     "providerCommitObservation", "remoteCommitObservation", "providerCIObservation",
     "remoteCIObservationReceipt", "executionEvidencePage",

@@ -921,6 +921,260 @@
         }
       }
     },
+    "schedulerMode": {
+      "enum": [
+        "manual",
+        "supervised",
+        "automatic"
+      ]
+    },
+    "schedulerControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "mode",
+        "modeRevision",
+        "lastOperationId",
+        "updatedByMemberId",
+        "reason",
+        "updatedAt"
+      ],
+      "properties": {
+        "planId": { "$ref": "#/$defs/planId" },
+        "mode": { "$ref": "#/$defs/schedulerMode" },
+        "modeRevision": { "$ref": "#/$defs/revision" },
+        "lastOperationId": {
+          "oneOf": [
+            {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+            },
+            { "type": "null" }
+          ]
+        },
+        "updatedByMemberId": {
+          "oneOf": [
+            {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+            },
+            { "type": "null" }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "updatedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "schedulerModeCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedPlanControlRevision",
+        "expectedModeRevision",
+        "mode",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedPlanRevision": { "$ref": "#/$defs/revision" },
+        "expectedPlanDigest": { "$ref": "#/$defs/digest" },
+        "expectedPlanControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedModeRevision": { "$ref": "#/$defs/revision" },
+        "mode": { "$ref": "#/$defs/schedulerMode" },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "schedulerModeReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "planId",
+        "planRevision",
+        "planDigest",
+        "planControlRevision",
+        "previousMode",
+        "previousModeRevision",
+        "mode",
+        "modeRevision",
+        "updatedByMemberId",
+        "reason",
+        "requestDigest",
+        "operationDigest",
+        "updatedAt"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planId": { "$ref": "#/$defs/planId" },
+        "planRevision": { "$ref": "#/$defs/revision" },
+        "planDigest": { "$ref": "#/$defs/digest" },
+        "planControlRevision": { "$ref": "#/$defs/revision" },
+        "previousMode": { "$ref": "#/$defs/schedulerMode" },
+        "previousModeRevision": { "$ref": "#/$defs/revision" },
+        "mode": { "$ref": "#/$defs/schedulerMode" },
+        "modeRevision": { "$ref": "#/$defs/revision" },
+        "updatedByMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "operationDigest": { "$ref": "#/$defs/digest" },
+        "updatedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "schedulerManualDispatchCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedPlanControlRevision",
+        "expectedModeRevision",
+        "nodeKey",
+        "expectedNodeProjectionRevision",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedPlanRevision": { "$ref": "#/$defs/revision" },
+        "expectedPlanDigest": { "$ref": "#/$defs/digest" },
+        "expectedPlanControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedModeRevision": { "$ref": "#/$defs/revision" },
+        "nodeKey": { "$ref": "#/$defs/stableKey" },
+        "expectedNodeProjectionRevision": { "$ref": "#/$defs/revision" },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "schedulerAdvanceCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedPlanControlRevision",
+        "expectedModeRevision",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedPlanRevision": { "$ref": "#/$defs/revision" },
+        "expectedPlanDigest": { "$ref": "#/$defs/digest" },
+        "expectedPlanControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedModeRevision": { "$ref": "#/$defs/revision" },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "schedulerDispatchSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeKey",
+        "dispatchIntentId",
+        "runId"
+      ],
+      "properties": {
+        "nodeKey": { "$ref": "#/$defs/stableKey" },
+        "dispatchIntentId": {
+          "type": "string",
+          "pattern": "^dispatch_[A-Za-z0-9_-]{8,128}$"
+        },
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        }
+      }
+    },
+    "schedulerDispatchReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "action",
+        "planId",
+        "planRevision",
+        "planDigest",
+        "planControlRevision",
+        "mode",
+        "modeRevision",
+        "requestedByMemberId",
+        "reason",
+        "selection",
+        "requestDigest",
+        "operationDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "action": {
+          "enum": [
+            "manual_dispatch",
+            "supervised_advance"
+          ]
+        },
+        "planId": { "$ref": "#/$defs/planId" },
+        "planRevision": { "$ref": "#/$defs/revision" },
+        "planDigest": { "$ref": "#/$defs/digest" },
+        "planControlRevision": { "$ref": "#/$defs/revision" },
+        "mode": { "$ref": "#/$defs/schedulerMode" },
+        "modeRevision": { "$ref": "#/$defs/revision" },
+        "requestedByMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "selection": {
+          "oneOf": [
+            { "$ref": "#/$defs/schedulerDispatchSelection" },
+            { "type": "null" }
+          ]
+        },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "operationDigest": { "$ref": "#/$defs/digest" },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
     "nodeRetryCommand": {
       "type": "object",
       "additionalProperties": false,

@@ -1729,10 +1729,96 @@ type StickyCompiledTask struct {
 }
 
 type ExecutionPlanControlCommand struct {
-	Action                  ActionEnum `json:"action"`
-	ExpectedControlRevision int64      `json:"expectedControlRevision"`
-	OperationID             string     `json:"operationId"`
-	Reason                  string     `json:"reason"`
+	Action                  ExecutionPlanControlCommandAction `json:"action"`
+	ExpectedControlRevision int64                             `json:"expectedControlRevision"`
+	OperationID             string                            `json:"operationId"`
+	Reason                  string                            `json:"reason"`
+}
+
+type ExecutionSchedulerControl struct {
+	LastOperationID *string                `json:"lastOperationId"`
+	Mode            ExecutionSchedulerMode `json:"mode"`
+	ModeRevision    int64                  `json:"modeRevision"`
+	PlanID          string                 `json:"planId"`
+	Reason          string                 `json:"reason"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	UpdatedAt         string  `json:"updatedAt"`
+	UpdatedByMemberID *string `json:"updatedByMemberId"`
+}
+
+type ExecutionSchedulerModeCommand struct {
+	ExpectedModeRevision        int64                  `json:"expectedModeRevision"`
+	ExpectedPlanControlRevision int64                  `json:"expectedPlanControlRevision"`
+	ExpectedPlanDigest          string                 `json:"expectedPlanDigest"`
+	ExpectedPlanRevision        int64                  `json:"expectedPlanRevision"`
+	Mode                        ExecutionSchedulerMode `json:"mode"`
+	OperationID                 string                 `json:"operationId"`
+	Reason                      string                 `json:"reason"`
+}
+
+type ExecutionSchedulerModeReceipt struct {
+	Mode                 ExecutionSchedulerMode `json:"mode"`
+	ModeRevision         int64                  `json:"modeRevision"`
+	OperationDigest      string                 `json:"operationDigest"`
+	OperationID          string                 `json:"operationId"`
+	PlanControlRevision  int64                  `json:"planControlRevision"`
+	PlanDigest           string                 `json:"planDigest"`
+	PlanID               string                 `json:"planId"`
+	PlanRevision         int64                  `json:"planRevision"`
+	PreviousMode         ExecutionSchedulerMode `json:"previousMode"`
+	PreviousModeRevision int64                  `json:"previousModeRevision"`
+	Reason               string                 `json:"reason"`
+	RequestDigest        string                 `json:"requestDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	UpdatedAt         string `json:"updatedAt"`
+	UpdatedByMemberID string `json:"updatedByMemberId"`
+}
+
+type ExecutionSchedulerManualDispatchCommand struct {
+	ExpectedModeRevision           int64  `json:"expectedModeRevision"`
+	ExpectedNodeProjectionRevision int64  `json:"expectedNodeProjectionRevision"`
+	ExpectedPlanControlRevision    int64  `json:"expectedPlanControlRevision"`
+	ExpectedPlanDigest             string `json:"expectedPlanDigest"`
+	ExpectedPlanRevision           int64  `json:"expectedPlanRevision"`
+	NodeKey                        string `json:"nodeKey"`
+	OperationID                    string `json:"operationId"`
+	Reason                         string `json:"reason"`
+}
+
+type ExecutionSchedulerAdvanceCommand struct {
+	ExpectedModeRevision        int64  `json:"expectedModeRevision"`
+	ExpectedPlanControlRevision int64  `json:"expectedPlanControlRevision"`
+	ExpectedPlanDigest          string `json:"expectedPlanDigest"`
+	ExpectedPlanRevision        int64  `json:"expectedPlanRevision"`
+	OperationID                 string `json:"operationId"`
+	Reason                      string `json:"reason"`
+}
+
+type ExecutionSchedulerDispatchReceipt struct {
+	Action ExecutionSchedulerDispatchReceiptAction `json:"action"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt           string                 `json:"createdAt"`
+	Mode                ExecutionSchedulerMode `json:"mode"`
+	ModeRevision        int64                  `json:"modeRevision"`
+	OperationDigest     string                 `json:"operationDigest"`
+	OperationID         string                 `json:"operationId"`
+	PlanControlRevision int64                  `json:"planControlRevision"`
+	PlanDigest          string                 `json:"planDigest"`
+	PlanID              string                 `json:"planId"`
+	PlanRevision        int64                  `json:"planRevision"`
+	Reason              string                 `json:"reason"`
+	RequestDigest       string                 `json:"requestDigest"`
+	RequestedByMemberID string                 `json:"requestedByMemberId"`
+	Selection           *Selection             `json:"selection"`
+}
+
+type Selection struct {
+	DispatchIntentID string `json:"dispatchIntentId"`
+	NodeKey          string `json:"nodeKey"`
+	RunID            string `json:"runId"`
 }
 
 type ExecutionNodeRetryCommand struct {
@@ -5610,12 +5696,27 @@ const (
 	Rejected         DecisionEnum = "rejected"
 )
 
-type ActionEnum string
+type ExecutionPlanControlCommandAction string
 
 const (
-	Cancel ActionEnum = "cancel"
-	Pause  ActionEnum = "pause"
-	Resume ActionEnum = "resume"
+	Cancel ExecutionPlanControlCommandAction = "cancel"
+	Pause  ExecutionPlanControlCommandAction = "pause"
+	Resume ExecutionPlanControlCommandAction = "resume"
+)
+
+type ExecutionSchedulerMode string
+
+const (
+	Automatic  ExecutionSchedulerMode = "automatic"
+	Manual     ExecutionSchedulerMode = "manual"
+	Supervised ExecutionSchedulerMode = "supervised"
+)
+
+type ExecutionSchedulerDispatchReceiptAction string
+
+const (
+	ManualDispatch    ExecutionSchedulerDispatchReceiptAction = "manual_dispatch"
+	SupervisedAdvance ExecutionSchedulerDispatchReceiptAction = "supervised_advance"
 )
 
 type PreviousRunState string

@@ -479,6 +479,12 @@ function renderExecutionValidators(schemas) {
     revisionCommand: `${EXECUTION_SCHEMA_ID}#/$defs/revisionCommand`,
     approvalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/approvalCommand`,
     controlCommand: `${EXECUTION_SCHEMA_ID}#/$defs/controlCommand`,
+    schedulerControl: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerControl`,
+    schedulerModeCommand: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerModeCommand`,
+    schedulerModeReceipt: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerModeReceipt`,
+    schedulerManualDispatchCommand: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerManualDispatchCommand`,
+    schedulerAdvanceCommand: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerAdvanceCommand`,
+    schedulerDispatchReceipt: `${EXECUTION_SCHEMA_ID}#/$defs/schedulerDispatchReceipt`,
     nodeRetryCommand: `${EXECUTION_SCHEMA_ID}#/$defs/nodeRetryCommand`,
     nodeRetryAuthorization: `${EXECUTION_SCHEMA_ID}#/$defs/nodeRetryAuthorization`,
     decisionContent: `${EXECUTION_SCHEMA_ID}#/$defs/decisionContent`,
@@ -1504,6 +1510,13 @@ export async function generateContractTypes(packageRoot) {
     ["ExecutionPlanApprovalReceipt", "approvalReceipt"],
     ["ExecutionPlanApprovalPage", "approvalPage"],
     ["ExecutionPlanControlCommand", "controlCommand"],
+    ["ExecutionSchedulerMode", "schedulerMode"],
+    ["ExecutionSchedulerControl", "schedulerControl"],
+    ["ExecutionSchedulerModeCommand", "schedulerModeCommand"],
+    ["ExecutionSchedulerModeReceipt", "schedulerModeReceipt"],
+    ["ExecutionSchedulerManualDispatchCommand", "schedulerManualDispatchCommand"],
+    ["ExecutionSchedulerAdvanceCommand", "schedulerAdvanceCommand"],
+    ["ExecutionSchedulerDispatchReceipt", "schedulerDispatchReceipt"],
     ["ExecutionNodeRetryCommand", "nodeRetryCommand"],
     ["ExecutionNodeRetryAuthorization", "nodeRetryAuthorization"],
     ["ExecutionPlanRevision", "planRevision"],
@@ -1709,6 +1722,15 @@ export async function generateContractTypes(packageRoot) {
           repositoryReceipt: "operationReceipt", executionCheckpoint: "checkpoint", verificationReceipt: "verificationReceipt"
         }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
           dereference(executionRuntimeSchema.$defs[definition], executionRuntimeSchema, schemas), false)])),
+        ...Object.fromEntries(Object.entries({
+          schedulerControl: "schedulerControl",
+          schedulerModeCommand: "schedulerModeCommand",
+          schedulerModeReceipt: "schedulerModeReceipt",
+          schedulerManualDispatchCommand: "schedulerManualDispatchCommand",
+          schedulerAdvanceCommand: "schedulerAdvanceCommand",
+          schedulerDispatchReceipt: "schedulerDispatchReceipt"
+        }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
+          dereference(executionSchema.$defs[definition], executionSchema, schemas), false)])),
         ...Object.fromEntries(Object.entries({
           sourceEvidence: "sourceEvidence", gateProofRef: "gateProofRef",
           evidenceAdoption: "evidenceAdoption",

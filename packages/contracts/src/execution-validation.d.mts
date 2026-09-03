@@ -25,7 +25,10 @@ export function remoteCIObservationReceiptDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "discussionPlanProposalDraft" |
     "revisionCommand" |
-    "approvalCommand" | "controlCommand" | "nodeRetryCommand" |
+    "approvalCommand" | "controlCommand" | "schedulerControl" |
+    "schedulerModeCommand" | "schedulerModeReceipt" |
+    "schedulerManualDispatchCommand" | "schedulerAdvanceCommand" |
+    "schedulerDispatchReceipt" | "nodeRetryCommand" |
     "nodeRetryAuthorization" | "decisionContent" |
     "executionManifest" | "executionInputBinding" | "executionCapability" |
     "runtimeAuthorityRequest" | "runtimeAuthorityView" |

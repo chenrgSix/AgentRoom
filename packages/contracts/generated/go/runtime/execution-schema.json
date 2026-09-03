@@ -3972,6 +3972,424 @@
         }
       }
     },
+    "schedulerControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "mode",
+        "modeRevision",
+        "lastOperationId",
+        "updatedByMemberId",
+        "reason",
+        "updatedAt"
+      ],
+      "properties": {
+        "planId": {
+          "type": "string",
+          "pattern": "^plan_[A-Za-z0-9_-]{8,128}$"
+        },
+        "mode": {
+          "enum": [
+            "manual",
+            "supervised",
+            "automatic"
+          ]
+        },
+        "modeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "lastOperationId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedByMemberId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "updatedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "schedulerModeCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedPlanControlRevision",
+        "expectedModeRevision",
+        "mode",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "expectedPlanRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedPlanDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedPlanControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedModeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "mode": {
+          "enum": [
+            "manual",
+            "supervised",
+            "automatic"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "schedulerModeReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "planId",
+        "planRevision",
+        "planDigest",
+        "planControlRevision",
+        "previousMode",
+        "previousModeRevision",
+        "mode",
+        "modeRevision",
+        "updatedByMemberId",
+        "reason",
+        "requestDigest",
+        "operationDigest",
+        "updatedAt"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "planId": {
+          "type": "string",
+          "pattern": "^plan_[A-Za-z0-9_-]{8,128}$"
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "planDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "planControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "previousMode": {
+          "enum": [
+            "manual",
+            "supervised",
+            "automatic"
+          ]
+        },
+        "previousModeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "mode": {
+          "enum": [
+            "manual",
+            "supervised",
+            "automatic"
+          ]
+        },
+        "modeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "updatedByMemberId": {
+          "type": "string",
+          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "requestDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "operationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "updatedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "schedulerManualDispatchCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedPlanControlRevision",
+        "expectedModeRevision",
+        "nodeKey",
+        "expectedNodeProjectionRevision",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "expectedPlanRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedPlanDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedPlanControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedModeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nodeKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "expectedNodeProjectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "schedulerAdvanceCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedPlanControlRevision",
+        "expectedModeRevision",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "expectedPlanRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedPlanDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedPlanControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedModeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "schedulerDispatchReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "action",
+        "planId",
+        "planRevision",
+        "planDigest",
+        "planControlRevision",
+        "mode",
+        "modeRevision",
+        "requestedByMemberId",
+        "reason",
+        "selection",
+        "requestDigest",
+        "operationDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "action": {
+          "enum": [
+            "manual_dispatch",
+            "supervised_advance"
+          ]
+        },
+        "planId": {
+          "type": "string",
+          "pattern": "^plan_[A-Za-z0-9_-]{8,128}$"
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "planDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "planControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "mode": {
+          "enum": [
+            "manual",
+            "supervised",
+            "automatic"
+          ]
+        },
+        "modeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "requestedByMemberId": {
+          "type": "string",
+          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "selection": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "nodeKey",
+                "dispatchIntentId",
+                "runId"
+              ],
+              "properties": {
+                "nodeKey": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                "dispatchIntentId": {
+                  "type": "string",
+                  "pattern": "^dispatch_[A-Za-z0-9_-]{8,128}$"
+                },
+                "runId": {
+                  "type": "string",
+                  "pattern": "^run_[A-Za-z0-9_-]{8,128}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "operationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "createdAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
     "sourceEvidence": {
       "oneOf": [
         {
