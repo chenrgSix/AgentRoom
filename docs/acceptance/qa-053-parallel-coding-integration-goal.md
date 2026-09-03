@@ -13,9 +13,10 @@ under the sequential QA-052 chain:
 
 ```text
                          /-> Bridge A: BuildA -> verified -> integrated --\
-approved three-node DAG                                             Join
-                         \-> Bridge B: BuildB -> verified -----------/
+approved four-node DAG                                              Join
+                         \-> Bridge B: BuildB -> verified ------------/
                                                \-> integration conflict
+                                                              \-> ConflictSink blocked
 ```
 
 `BuildA` and `BuildB` start in distinct Bridge-owned worktrees from the same
@@ -41,9 +42,10 @@ One owned run root contains:
 - one owner-selected source checkout addressed by two distinct Bridge-local
   bindings, one untouched observer clone, and three Bridge-owned isolated
   attempt worktrees;
-- one approved three-node plan with `maxConcurrency = 2`;
+- one approved four-node plan with `maxConcurrency = 2`;
 - `BuildA -> Join` gated by `integrated_commit` and
-  `BuildB -> Join` gated by `verified_output`; and
+  `BuildB -> Join` gated by `verified_output`, plus
+  `BuildB -> ConflictSink` gated by `integrated_commit`; and
 - one exact integration target whose approved expected commit is the common
   base.
 
@@ -52,10 +54,11 @@ either can finish. Database timestamps alone are supporting evidence, not the
 only proof of overlap. Agent capacity still permits only one active governed
 Run per Agent, so `Join` reuses Bridge A only after `BuildA` is terminal.
 
-Every node has its own immutable Task, grant, DispatchIntent, Run, workspace
-generation, checkpoint, Result and verification receipt. Reusing an Agent,
-binding or verifier profile does not permit reusing a node's grant or attempt
-identity.
+Every executed node has its own immutable Task, grant, DispatchIntent, Run,
+workspace generation, checkpoint, Result and verification receipt. The
+compiled `ConflictSink` never receives a grant, DispatchIntent or Run because
+its required integrated proof never exists. Reusing an Agent, binding or
+verifier profile does not permit reusing a node's grant or attempt identity.
 
 ## Repository And Dependency Evidence
 
