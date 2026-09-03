@@ -11,14 +11,24 @@ import type {
 } from "@convene-wire/contracts/execution-plan";
 import type { FastifyInstance } from "fastify";
 
+import { BridgeConnectionRegistry } from
+  "../../apps/server/src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../../apps/server/src/data/core-repository.js";
 import { openDatabase } from "../../apps/server/src/data/database.js";
+import { DiscussionOrchestrator } from
+  "../../apps/server/src/discussion/discussion-orchestrator.js";
+import { DiscussionRepository } from
+  "../../apps/server/src/discussion/discussion-repository.js";
+import { DiscussionSupplementalEvidenceService } from
+  "../../apps/server/src/discussion/discussion-supplemental-evidence-service.js";
 import { AgentService } from "../../apps/server/src/registry/agent-service.js";
 import { MemberDeviceService } from "../../apps/server/src/registry/member-device-service.js";
+import { DeliveryService } from "../../apps/server/src/run/delivery-service.js";
 import { RunRepository } from "../../apps/server/src/run/run-repository.js";
 import { RunService } from "../../apps/server/src/run/run-service.js";
 import { AuthService } from "../../apps/server/src/security/auth-service.js";
 import { MessageService } from "../../apps/server/src/team-room/message-service.js";
+import { ContextPlanner } from "../../apps/server/src/task/context-planner.js";
 import { AgentTaskRepository } from "../../apps/server/src/task/task-repository.js";
 
 interface SeedOptions {
@@ -148,6 +158,7 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
     runRepository.applyEvent(evidenceRun.runId, { type: "status", sequence: 1, status: "delivered" }, now);
     const credential = auth.issueDeviceCredential(device.deviceId, now);
     const deviceHeaders = { authorization: `Bearer ${credential.secret}` };
+    const devicePrincipal = auth.authenticateDevice(credential.secret, now);
     const nonce = randomUUID().replaceAll("-", "_");
     const lease = await request<{ leaseId: string }>("POST", "/api/bridge/workspace-leases/read-source", {
       runId: evidenceRun.runId, agentId: agent.agentId, workspaceRef, workspaceGeneration,
@@ -192,7 +203,8 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
       "POST", `/api/rooms/${options.roomId}/tasks`, {
         title: "QA · 审查精确执行计划",
         goal: "检查版本差异、依赖门、策略和 digest，再由人类明确决定。",
-        ownerMemberId: options.ownerMemberId
+        ownerMemberId: options.ownerMemberId,
+        assignments: [{ agentId: manual.agent.agentId, role: "primary" }]
       }
     );
     const planMessage = await request<{ message: { messageId: string; sequence: number } }>(
@@ -245,7 +257,7 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
       itemKey: "human_control",
       statement: "Only the exact retained revision may receive human approval."
     });
-    await request(
+    const revisedPlan = await request<ExecutionPlanProjection>(
       "POST", `/api/execution-plans/${firstPlan.planId}/revisions`, {
         operationId: `op_qa_plan_revision_${randomUUID().replaceAll("-", "_")}`,
         expectedRevision: firstPlan.current.revision,
@@ -253,6 +265,170 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
         definition: revisedDefinition
       }
     );
+    const planRootBeforeApproval = await request<TaskProjection>(
+      "GET", `/api/tasks/${planTask.taskId}`
+    );
+    await request(
+      "POST", `/api/execution-plans/${firstPlan.planId}/approvals`, {
+        operationId: `op_qa_plan_approval_${randomUUID().replaceAll("-", "_")}`,
+        expectedRevision: revisedPlan.current.revision,
+        expectedDigest: revisedPlan.current.digest,
+        expectedRootTaskRevision: planRootBeforeApproval.taskRevision,
+        decision: "approved",
+        reason: "QA Owner approves the exact synthetic plan for bounded-replanning browser acceptance."
+      }
+    );
+
+    const quorumAgents = ["QA架构师", "QA安全审查", "QA最终评审"].map((name) => {
+      const initial = new AgentService(core, auth).publishAgent(principal, {
+        teamId: options.teamId,
+        deviceId: device.deviceId,
+        name,
+        role: name === "QA最终评审" ? "Reviewer" : "Contributor",
+        integrationMode: "managed",
+        capabilities: {
+          supportsHandoff: true,
+          supportsInterrupt: true,
+          supportsResume: false,
+          supportsStart: true,
+          supportsStreaming: true
+        },
+        runtimePolicy: { filesystemAccess: "read-only" },
+        now
+      });
+      return new AgentService(core, auth).publishDeviceAgent(devicePrincipal, {
+        agentId: initial.agentId,
+        name: initial.name,
+        role: initial.role,
+        capabilities: {
+          ...initial.capabilities,
+          supportsDiscussionSupplementalEvidence: true
+        },
+        runtimePolicy: { filesystemAccess: "read-only" },
+        now
+      });
+    });
+    const quorumTask = await request<TaskProjection>(
+      "POST", `/api/rooms/${options.roomId}/tasks`, {
+        title: "QA · 审计只读 Quorum 与迟到证据",
+        goal: "检查冻结参与者、封存回复和未进入决策的迟到证据。",
+        ownerMemberId: options.ownerMemberId,
+        assignments: quorumAgents.map(({ agentId }) => ({
+          agentId,
+          role: "contributor"
+        }))
+      }
+    );
+    const discussionClock = { value: now };
+    const discussionRepository = new DiscussionRepository(database);
+    const discussionDelivery = new DeliveryService(
+      database,
+      core,
+      runRepository,
+      new ContextPlanner(database, core, taskRepository),
+      new BridgeConnectionRegistry(),
+      () => discussionClock.value
+    );
+    const orchestrator = new DiscussionOrchestrator(
+      core,
+      new MessageService(core, auth),
+      discussionRepository,
+      runRepository,
+      auth,
+      taskRepository,
+      () => discussionClock.value
+    );
+    let quorum = orchestrator.create(principal, {
+      roomId: options.roomId,
+      taskId: quorumTask.taskId,
+      goal: "以只读 quorum 审查候选方案；迟到回复只保留为独立补充证据。",
+      participantAgentIds: quorumAgents.map(({ agentId }) => agentId),
+      mode: "review",
+      policy: {
+        allowAutomaticFinish: false,
+        requireReviewer: true,
+        participantSelectionMode: "question_focused",
+        focusedParticipantLimit: 3,
+        waveCompletionMode: "read_only_quorum",
+        quorumMinimumCompleted: 2,
+        quorumSoftDeadlineSeconds: 30
+      }
+    });
+    assert.equal(quorum.scheduledRuns.length, 3);
+    const deliveries = new Map(quorum.scheduledRuns.map((run) => [
+      run.runId,
+      discussionDelivery.dispatch(run.runId)
+    ]));
+    const [acceptedContributor, lateContributor, acceptedReviewer] =
+      quorum.scheduledRuns;
+    assert.ok(acceptedContributor && lateContributor && acceptedReviewer);
+    const applyReply = (runId: string, contentValue: string,
+      assessment: Record<string, unknown>, terminal: boolean) => {
+      runRepository.applyEvent(runId, {
+        type: "status", sequence: 1, status: "working"
+      }, now);
+      runRepository.applyReply(runId, {
+        type: "reply", sequence: 2, content: contentValue, assessment
+      }, now);
+      if (terminal) {
+        runRepository.applyEvent(runId, {
+          type: "status", sequence: 3, status: "completed"
+        }, now);
+      }
+    };
+    applyReply(
+      lateContributor.runId,
+      "QA 迟到回复：此内容保留在普通消息事实中，不得进入已封存 quorum。",
+      { newInformationAdded: true, recommendation: "continue" },
+      false
+    );
+    applyReply(
+      acceptedContributor.runId,
+      "QA 已接纳的架构证据。",
+      { newInformationAdded: true, recommendation: "continue" },
+      true
+    );
+    applyReply(
+      acceptedReviewer.runId,
+      "QA 已接纳的独立评审证据。",
+      { newInformationAdded: true, recommendation: "continue", reviewerApproved: true },
+      true
+    );
+    discussionClock.value = new Date(Date.parse(now) + 31_000).toISOString();
+    orchestrator.sweepDueWaves();
+    const sealedDiscussion = orchestrator.get(
+      principal,
+      quorum.discussion.discussionId
+    );
+    assert.equal(sealedDiscussion.seals.length, 1);
+    runRepository.applyEvent(lateContributor.runId, {
+      type: "status", sequence: 3, status: "completed"
+    }, discussionClock.value);
+    quorum = orchestrator.onRunTerminal(lateContributor.runId)!;
+    const lateOffer = deliveries.get(lateContributor.runId)?.payload
+      .discussionSupplementalEvidence;
+    assert.ok(lateOffer);
+    const retained = new DiscussionSupplementalEvidenceService(
+      core,
+      discussionRepository,
+      runRepository,
+      discussionDelivery,
+      taskRepository
+    ).submit(devicePrincipal, {
+      operationId: lateOffer.operationId,
+      discussionId: lateOffer.discussionId,
+      waveId: lateOffer.waveId,
+      turnId: lateOffer.turnId,
+      runId: lateContributor.runId,
+      traceId: lateContributor.traceId,
+      agentId: lateContributor.targetAgentId,
+      sourceReplySequence: 2
+    }, discussionClock.value);
+    assert.equal(retained.state, "retained");
+    assert.equal(orchestrator.get(
+      principal,
+      quorum.discussion.discussionId
+    ).supplementalEvidence.length, 1);
   } finally {
     database.close();
   }

@@ -85,7 +85,33 @@ for (const mode of ["local", "trusted-team"] as const) test(`product experience 
     headers
   });
   assert.equal(approvals.statusCode, 200);
-  assert.equal(approvals.json().approvals.length, 0);
+  assert.equal(approvals.json().approvals.length, 1);
+  assert.equal(approvals.json().approvals[0].decision, "approved");
+  assert.ok(["approved", "running"].includes(plan.state));
+  const supersessionControl = await app.inject({
+    method: "GET",
+    url: `/api/execution-plans/${plan.planId}/supersession-control`,
+    headers
+  });
+  assert.equal(supersessionControl.statusCode, 200);
+  assert.equal(supersessionControl.json().candidate, null);
+
+  const quorumTask = taskList.find(({ title }) =>
+    title === "QA · 审计只读 Quorum 与迟到证据");
+  assert.ok(quorumTask);
+  const discussions = await app.inject({
+    method: "GET",
+    url: `/api/rooms/${options.roomId}/discussions`,
+    headers
+  });
+  assert.equal(discussions.statusCode, 200);
+  const quorum = discussions.json().find(({ discussion }: {
+    discussion: { taskId: string };
+  }) => discussion.taskId === quorumTask.taskId);
+  assert.ok(quorum);
+  assert.equal(quorum.discussion.policy.waveCompletionMode, "read_only_quorum");
+  assert.equal(quorum.seals.length, 1);
+  assert.equal(quorum.supplementalEvidence.length, 1);
   assert.equal(preview.json().integrity, "verified");
   assert.equal(preview.json().trust, "untrusted");
   assert.match(preview.json().text as string, /<script>window.qaUnsafeExecuted = true<\/script>/u);
