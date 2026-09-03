@@ -397,7 +397,7 @@ func (r *coordinatorRig) Check(_ context.Context, spec RuntimeAdmissionSpec) (Ru
 	}
 	view := RuntimeAuthorityView{Version: 1, RunID: spec.RunID, LeaseID: spec.LeaseID,
 		ManifestDigest: spec.ManifestDigest, WorkspaceRef: spec.WorkspaceRef, WorkspaceGeneration: spec.WorkspaceGeneration,
-		State: execution.Active, LeaseRevision: 1, CheckedAt: profileTime(runtimeFenceNow), ExpiresAt: spec.WorkspaceExpiresAt}
+		State: "active", LeaseRevision: 1, CheckedAt: profileTime(runtimeFenceNow), ExpiresAt: spec.WorkspaceExpiresAt}
 	if r.changeAuthority {
 		view.RunID = "run_foreign0001"
 	}
