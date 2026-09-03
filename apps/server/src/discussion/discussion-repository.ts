@@ -1,7 +1,10 @@
 import type Database from "better-sqlite3";
+import { canonicalExecutionJSON } from
+  "@convene-wire/contracts/execution-validation";
 import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
 import { assertDiscussionWaveSelection } from
   "./discussion-participant-selector.js";
+import { assertDiscussionWaveSeal } from "./discussion-quorum.js";
 
 import {
   defaultDiscussionPolicy,
@@ -15,8 +18,10 @@ import {
   type DiscussionRecord,
   type DiscussionState,
   type DiscussionStateReason,
+  type DiscussionSupplementalEvidence,
   type DiscussionTurn,
   type DiscussionWave,
+  type DiscussionWaveSeal,
   type DiscussionWaveSelection,
   type DiscussionWaveState,
   type ProgressSnapshot
@@ -116,6 +121,36 @@ interface BudgetEventRow {
   created_at: string;
 }
 
+interface WaveSealRow {
+  seal_id: string;
+  discussion_id: string;
+  wave_id: string;
+  soft_deadline_at: string;
+  minimum_completed: number;
+  required_roles_json: string;
+  accepted_members_json: string;
+  seal_digest: string;
+  sealed_at: string;
+}
+
+interface SupplementalEvidenceRow {
+  evidence_id: string;
+  operation_id: string;
+  seal_id: string;
+  discussion_id: string;
+  wave_id: string;
+  turn_id: string;
+  run_id: string;
+  agent_id: string;
+  device_id: string;
+  source_reply_sequence: number;
+  source_message_id: string;
+  source_message_sequence: number;
+  reply_hash: string;
+  evidence_digest: string;
+  submitted_at: string;
+}
+
 function mapDiscussion(row: DiscussionRow): DiscussionRecord {
   const policy = JSON.parse(row.policy_json) as Partial<DiscussionPolicy>;
   const budget = JSON.parse(row.budget_json) as Partial<BudgetSnapshot> & {
@@ -192,6 +227,43 @@ function mapWave(row: WaveRow): DiscussionWave {
     selection: row.selection_json
       ? JSON.parse(row.selection_json) as DiscussionWaveSelection
       : null
+  };
+}
+
+function mapWaveSeal(row: WaveSealRow): DiscussionWaveSeal {
+  return {
+    sealId: row.seal_id,
+    discussionId: row.discussion_id,
+    waveId: row.wave_id,
+    softDeadlineAt: row.soft_deadline_at,
+    minimumCompleted: row.minimum_completed,
+    requiredRoles: JSON.parse(row.required_roles_json) as Array<"reviewer">,
+    acceptedMembers: JSON.parse(row.accepted_members_json) as
+      DiscussionWaveSeal["acceptedMembers"],
+    sealDigest: row.seal_digest,
+    sealedAt: row.sealed_at
+  };
+}
+
+function mapSupplementalEvidence(
+  row: SupplementalEvidenceRow
+): DiscussionSupplementalEvidence {
+  return {
+    evidenceId: row.evidence_id,
+    operationId: row.operation_id,
+    sealId: row.seal_id,
+    discussionId: row.discussion_id,
+    waveId: row.wave_id,
+    turnId: row.turn_id,
+    runId: row.run_id,
+    agentId: row.agent_id,
+    deviceId: row.device_id,
+    sourceReplySequence: row.source_reply_sequence,
+    sourceMessageId: row.source_message_id,
+    sourceMessageSequence: row.source_message_sequence,
+    replyHash: row.reply_hash,
+    evidenceDigest: row.evidence_digest,
+    submittedAt: row.submitted_at
   };
 }
 
@@ -499,6 +571,76 @@ export class DiscussionRepository {
     `).all(waveId) as TurnRow[]).map(mapTurn);
   }
 
+  public getWaveSeal(waveId: string): DiscussionWaveSeal | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM discussion_wave_seals WHERE wave_id = ?
+    `).get(waveId) as WaveSealRow | undefined;
+    const seal = row && mapWaveSeal(row);
+    if (seal) assertDiscussionWaveSeal(seal);
+    return seal;
+  }
+
+  public listWaveSeals(discussionId: string): DiscussionWaveSeal[] {
+    return (this.database.prepare(`
+      SELECT * FROM discussion_wave_seals
+      WHERE discussion_id = ? ORDER BY sealed_at, seal_id
+    `).all(discussionId) as WaveSealRow[]).map((row) => {
+      const seal = mapWaveSeal(row);
+      assertDiscussionWaveSeal(seal);
+      return seal;
+    });
+  }
+
+  public getSupplementalEvidenceByOperation(
+    operationId: string
+  ): DiscussionSupplementalEvidence | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM discussion_supplemental_evidence WHERE operation_id = ?
+    `).get(operationId) as SupplementalEvidenceRow | undefined;
+    return row && mapSupplementalEvidence(row);
+  }
+
+  public listSupplementalEvidence(
+    discussionId: string
+  ): DiscussionSupplementalEvidence[] {
+    return (this.database.prepare(`
+      SELECT * FROM discussion_supplemental_evidence
+      WHERE discussion_id = ? ORDER BY submitted_at, evidence_id
+    `).all(discussionId) as SupplementalEvidenceRow[])
+      .map(mapSupplementalEvidence);
+  }
+
+  public retainSupplementalEvidence(
+    evidence: DiscussionSupplementalEvidence
+  ): DiscussionSupplementalEvidence {
+    const existing = this.getSupplementalEvidenceByOperation(
+      evidence.operationId
+    );
+    if (existing) {
+      if (!this.sameSupplementalOperation(existing, evidence)) {
+        throw new Error("Supplemental evidence operation identity was reused");
+      }
+      return existing;
+    }
+    this.database.prepare(`
+      INSERT INTO discussion_supplemental_evidence (
+        evidence_id, operation_id, seal_id, discussion_id, wave_id, turn_id,
+        run_id, agent_id, device_id, source_reply_sequence, source_message_id,
+        source_message_sequence, reply_hash, evidence_digest, submitted_at
+      ) VALUES (
+        @evidenceId, @operationId, @sealId, @discussionId, @waveId, @turnId,
+        @runId, @agentId, @deviceId, @sourceReplySequence, @sourceMessageId,
+        @sourceMessageSequence, @replyHash, @evidenceDigest, @submittedAt
+      )
+      ON CONFLICT(operation_id) DO NOTHING
+    `).run(evidence);
+    const retained = this.getSupplementalEvidenceByOperation(evidence.operationId);
+    if (!retained || !this.sameSupplementalOperation(retained, evidence)) {
+      throw new Error("Supplemental evidence operation identity was reused");
+    }
+    return retained;
+  }
+
   public recordDecisionAndUpdate(input: {
     decision: DiscussionDecision;
     expectedVersion: number;
@@ -741,11 +883,22 @@ export class DiscussionRepository {
       wave: DiscussionWave;
       turns: DiscussionTurn[];
     };
+    seal?: DiscussionWaveSeal;
   }): ApplyDiscussionWaveResult {
     if (input.nextWave) {
       this.validateWavePlan(input.nextWave.wave, input.nextWave.turns);
       if (input.nextWave.wave.discussionId !== input.decision.discussionId) {
         throw new Error("Next Discussion Wave targets another Discussion");
+      }
+    }
+    if (input.seal) {
+      assertDiscussionWaveSeal(input.seal);
+      if (
+        input.seal.waveId !== input.waveId ||
+        input.seal.discussionId !== input.decision.discussionId ||
+        input.closeState !== "partial"
+      ) {
+        throw new Error("Discussion Wave seal targets another transition");
       }
     }
     const applied = this.database.transaction(() => {
@@ -771,11 +924,13 @@ export class DiscussionRepository {
         discussionId: input.decision.discussionId,
         state: input.closeState,
         closedAt: input.closedAt,
-        expectedVersion: input.expectedWaveVersion
+        expectedVersion: input.expectedWaveVersion,
+        allowNonterminal: input.seal !== undefined
       });
       if (!closed) {
         return false;
       }
+      if (input.seal) this.insertWaveSeal(input.seal);
       this.insertDecision(input.decision);
       const nextCurrentTurn = input.nextWave
         ? Math.max(...input.nextWave.turns.map(({ ordinal }) => ordinal))
@@ -994,6 +1149,7 @@ export class DiscussionRepository {
     state: ClosedDiscussionWaveState;
     closedAt: string;
     expectedVersion?: number;
+    allowNonterminal?: boolean;
   }): boolean {
     const updated = this.database.prepare(`
       UPDATE discussion_waves
@@ -1004,11 +1160,11 @@ export class DiscussionRepository {
           SELECT count(*) FROM discussion_turns
           WHERE wave_id = discussion_waves.wave_id
         )
-        AND NOT EXISTS (
+        AND (? = 1 OR NOT EXISTS (
           SELECT 1 FROM discussion_turns
           WHERE wave_id = discussion_waves.wave_id
             AND state NOT IN ('completed', 'failed', 'canceled')
-        )
+        ))
     `).run(
       input.state,
       input.closedAt,
@@ -1016,7 +1172,8 @@ export class DiscussionRepository {
       input.waveId,
       input.discussionId,
       input.expectedVersion ?? null,
-      input.expectedVersion ?? null
+      input.expectedVersion ?? null,
+      input.allowNonterminal ? 1 : 0
     );
     return updated.changes === 1;
   }
@@ -1031,6 +1188,54 @@ export class DiscussionRepository {
         @action, @reason, @nextAgentId, @outputMode, @createdAt
       )
     `).run(decision);
+  }
+
+  private sameSupplementalOperation(
+    left: DiscussionSupplementalEvidence,
+    right: DiscussionSupplementalEvidence
+  ): boolean {
+    return left.operationId === right.operationId &&
+      left.sealId === right.sealId &&
+      left.discussionId === right.discussionId &&
+      left.waveId === right.waveId && left.turnId === right.turnId &&
+      left.runId === right.runId && left.agentId === right.agentId &&
+      left.deviceId === right.deviceId &&
+      left.sourceReplySequence === right.sourceReplySequence &&
+      left.sourceMessageId === right.sourceMessageId &&
+      left.sourceMessageSequence === right.sourceMessageSequence &&
+      left.replyHash === right.replyHash;
+  }
+
+  private insertWaveSeal(seal: DiscussionWaveSeal): void {
+    const turns = new Map(
+      this.listTurnsForWave(seal.waveId).map((turn) => [turn.turnId, turn])
+    );
+    for (const member of seal.acceptedMembers) {
+      const turn = turns.get(member.turnId);
+      if (
+        !turn || turn.discussionId !== seal.discussionId ||
+        turn.speakerAgentId !== member.agentId ||
+        turn.waveMemberOrdinal !== member.waveMemberOrdinal ||
+        turn.runId !== member.runId ||
+        turn.outputMessageId !== member.outputMessageId ||
+        turn.replyHash !== member.replyHash || turn.state !== "completed"
+      ) {
+        throw new Error("Discussion Wave seal member does not match its Turn");
+      }
+    }
+    this.database.prepare(`
+      INSERT INTO discussion_wave_seals (
+        seal_id, discussion_id, wave_id, soft_deadline_at, minimum_completed,
+        required_roles_json, accepted_members_json, seal_digest, sealed_at
+      ) VALUES (
+        @sealId, @discussionId, @waveId, @softDeadlineAt, @minimumCompleted,
+        @requiredRolesJson, @acceptedMembersJson, @sealDigest, @sealedAt
+      )
+    `).run({
+      ...seal,
+      requiredRolesJson: canonicalExecutionJSON(seal.requiredRoles),
+      acceptedMembersJson: canonicalExecutionJSON(seal.acceptedMembers)
+    });
   }
 
   private insertWave(wave: DiscussionWave): void {

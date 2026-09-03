@@ -26,6 +26,7 @@ type BridgeRejectionCategory =
   | "run_activity_rejected"
   | "run_output_rejected"
   | "run_reply_rejected"
+  | "discussion_supplemental_rejected"
   | "hello_required";
 
 const bridgeTraceIdPattern = /^trace_[A-Za-z0-9_-]{8,128}$/u;
@@ -41,7 +42,8 @@ const bridgeLogMessageTypes = new Set([
   "run.status",
   "run.activity",
   "run.output_delta",
-  "run.reply"
+  "run.reply",
+  "discussion.supplemental_evidence"
 ]);
 const filesystemAccessPolicies = new Set<AgentRuntimePolicy["filesystemAccess"]>([
   "read-only",
@@ -100,6 +102,8 @@ export function registerBridgeSocketRoutes({
   cancellations,
   clock,
   delivery,
+  discussionRepository,
+  discussionSupplementalEvidence,
   pauseDiscussionForInput,
   presence,
   routeAgentReplyMentions,
@@ -369,7 +373,9 @@ export function registerBridgeSocketRoutes({
                 supportsArtifactPublication:
                   capabilities.supportsArtifactPublication === true,
                 supportsArtifactMaterialization:
-                  capabilities.supportsArtifactMaterialization === true
+                  capabilities.supportsArtifactMaterialization === true,
+                supportsDiscussionSupplementalEvidence:
+                  capabilities.supportsDiscussionSupplementalEvidence === true
               },
               ...(typeof publicationPayload.workspaceRef === "string"
                 ? { workspaceRef: publicationPayload.workspaceRef }
@@ -688,6 +694,55 @@ export function registerBridgeSocketRoutes({
           }
           return;
         }
+        if (
+          message.type === "discussion.supplemental_evidence" &&
+          registeredEpoch !== undefined
+        ) {
+          const payload = message.payload;
+          if (
+            typeof payload.operationId !== "string" ||
+            typeof payload.discussionId !== "string" ||
+            typeof payload.waveId !== "string" ||
+            typeof payload.turnId !== "string" ||
+            typeof payload.runId !== "string" ||
+            typeof payload.agentId !== "string" ||
+            !Number.isSafeInteger(payload.sourceReplySequence) ||
+            !isBridgeTraceId(payload.traceId)
+          ) {
+            rejectMessage("discussion_supplemental_rejected");
+            return;
+          }
+          const result = discussionSupplementalEvidence.submit(
+            devicePrincipal,
+            {
+              operationId: payload.operationId,
+              discussionId: payload.discussionId,
+              waveId: payload.waveId,
+              turnId: payload.turnId,
+              runId: payload.runId,
+              traceId: payload.traceId,
+              agentId: payload.agentId,
+              sourceReplySequence: payload.sourceReplySequence as number
+            },
+            clock()
+          );
+          app.log.info({
+            event: "discussion.supplemental_evidence.processed",
+            runId: payload.runId,
+            agentId: payload.agentId,
+            state: result.state
+          }, "Discussion supplemental evidence processed");
+          if (result.state === "retained") {
+            const roomId = discussionRepository.get(
+              result.evidence.discussionId
+            )?.roomId;
+            if (roomId) teamChanges.notify(devicePrincipal.teamId, {
+              kind: "room",
+              roomId
+            });
+          }
+          return;
+        }
         if (message.type === "run.activity" && registeredEpoch !== undefined) {
           if (
             typeof message.payload.runId !== "string" ||
@@ -783,6 +838,8 @@ export function registerBridgeSocketRoutes({
               ? "run_output_rejected"
             : message.type === "run.reply"
               ? "run_reply_rejected"
+            : message.type === "discussion.supplemental_evidence"
+              ? "discussion_supplemental_rejected"
               : message.type === "agent.provision.result"
                 ? "agent_provision_result_rejected"
               : message.type === "agent.status"

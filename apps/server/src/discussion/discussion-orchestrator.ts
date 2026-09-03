@@ -34,8 +34,10 @@ import {
   type DiscussionParticipant,
   type DiscussionPolicy,
   type DiscussionRecord,
+  type DiscussionSupplementalEvidence,
   type DiscussionTurn,
   type DiscussionWave,
+  type DiscussionWaveSeal,
   type ProgressSnapshot
 } from "./discussion-types.js";
 import {
@@ -56,6 +58,10 @@ import { DiscussionEvidenceService } from "./discussion-evidence-service.js";
 import type { DiscussionPlanProposalService } from
   "./discussion-plan-proposal-service.js";
 import { WaveSettlementService } from "./wave-settlement-service.js";
+import {
+  createDiscussionWaveSeal,
+  quorumSoftDeadline
+} from "./discussion-quorum.js";
 
 const maximumParticipants = 5;
 
@@ -65,6 +71,8 @@ export interface DiscussionView {
   waves: DiscussionWave[];
   turns: DiscussionTurn[];
   decisions: DiscussionDecision[];
+  seals: DiscussionWaveSeal[];
+  supplementalEvidence: DiscussionSupplementalEvidence[];
 }
 
 export interface DiscussionMutationResult extends DiscussionView {
@@ -89,6 +97,8 @@ function resolvePolicy(overrides?: Partial<DiscussionPolicy>): DiscussionPolicy 
   if (
     typeof policy.requireReviewer !== "boolean" ||
     typeof policy.allowAutomaticFinish !== "boolean" ||
+    !new Set(["all_settled", "read_only_quorum"])
+      .has(policy.waveCompletionMode) ||
     !new Set(["all_eligible", "question_focused"])
       .has(policy.participantSelectionMode)
   ) {
@@ -107,6 +117,27 @@ function resolvePolicy(overrides?: Partial<DiscussionPolicy>): DiscussionPolicy 
     2,
     maximumParticipants
   );
+  if (policy.waveCompletionMode === "all_settled") {
+    policy.quorumMinimumCompleted = defaultDiscussionPolicy.quorumMinimumCompleted;
+    policy.quorumSoftDeadlineSeconds =
+      defaultDiscussionPolicy.quorumSoftDeadlineSeconds;
+  } else {
+    requiredInteger(
+      policy.quorumMinimumCompleted,
+      "quorumMinimumCompleted",
+      2,
+      maximumParticipants
+    );
+    requiredInteger(
+      policy.quorumSoftDeadlineSeconds,
+      "quorumSoftDeadlineSeconds",
+      1,
+      7_199
+    );
+    if (policy.quorumSoftDeadlineSeconds >= policy.waveTimeoutSeconds) {
+      throw new Error("Quorum soft deadline must precede the Wave timeout");
+    }
+  }
   if (
     policy.initialLeaseTurns > policy.automaticMaxTurns ||
     policy.automaticMaxTurns >= policy.hardMaxTurns ||
@@ -231,6 +262,17 @@ export class DiscussionOrchestrator {
     }
     if (policy.requireReviewer && mode !== "review") {
       throw new Error("Reviewer-required Discussion policy requires review mode");
+    }
+    if (
+      policy.waveCompletionMode === "read_only_quorum" &&
+      (
+        policy.quorumMinimumCompleted > participantAgents.length ||
+        participantAgents.some((agent) => !this.isQuorumCapableAgent(agent))
+      )
+    ) {
+      throw new Error(
+        "Read-only quorum requires managed supplemental-capable read-only participants"
+      );
     }
     if (!new Set([
       "none", "summary", "final_answer", "artifact", "decision_record",
@@ -483,10 +525,28 @@ export class DiscussionOrchestrator {
     if (!settlement.wave || settlement.wave.state !== "open") {
       return this.mutationResult(discussion.discussionId);
     }
-    if (!settlement.ready) {
-      return this.mutationResult(settlement.discussionId);
+    const turns = discussion.policy.waveCompletionMode === "read_only_quorum"
+      ? this.reconcileTerminalWaveTurns(settlement.wave, settlement.turns)
+      : settlement.turns;
+    if (turns.every(({ state }) => terminalTurnStates.has(state))) {
+      return this.advanceReadyWave(discussion, settlement.wave, turns);
     }
-    return this.advanceReadyWave(discussion, settlement.wave, settlement.turns);
+    const seal = this.quorumSealIfReady(
+      discussion,
+      settlement.wave,
+      turns
+    );
+    if (!seal) return this.mutationResult(settlement.discussionId);
+    const acceptedTurnIds = new Set(
+      seal.acceptedMembers.map(({ turnId }) => turnId)
+    );
+    return this.advanceSettledWave(
+      discussion,
+      settlement.wave,
+      settlement.turns.filter(({ turnId }) => acceptedTurnIds.has(turnId)),
+      settlement.turns,
+      seal
+    );
   }
 
   private advanceReadyWave(
@@ -534,7 +594,7 @@ export class DiscussionOrchestrator {
       }
       return this.mutationResult(discussion.discussionId);
     }
-    return this.advanceSettledWave(discussion, wave, turns);
+    return this.advanceSettledWave(discussion, wave, turns, turns);
   }
 
   public onRunInputRequired(runId: string): DiscussionMutationResult | null {
@@ -559,6 +619,27 @@ export class DiscussionOrchestrator {
     this.planProposals?.reconcileAllTerminal();
     const scheduled = new Map<string, RunRecord>();
     this.recovery.closeCanceledWaves((runId) => this.onRunTerminal(runId));
+    const now = Date.parse(this.clock());
+    for (const wave of this.repository.listOpenWaves()) {
+      const discussion = this.repository.get(wave.discussionId);
+      if (
+        discussion?.policy.waveCompletionMode !== "read_only_quorum" ||
+        Date.parse(quorumSoftDeadline(
+          wave.createdAt,
+          discussion.policy.quorumSoftDeadlineSeconds
+        )) > now
+      ) continue;
+      for (const turn of this.repository.listTurnsForWave(wave.waveId)) {
+        if (!turn.runId) continue;
+        const run = this.runs.getRun(turn.runId);
+        if (!run || !terminalRunStates.has(run.state)) continue;
+        const result = this.onRunTerminal(run.runId);
+        for (const next of result?.scheduledRuns ?? []) {
+          scheduled.set(next.runId, next);
+        }
+        if (this.repository.getWave(wave.waveId)?.state !== "open") break;
+      }
+    }
     for (const run of this.expireDueWaves()) {
       scheduled.set(run.runId, run);
     }
@@ -590,7 +671,6 @@ export class DiscussionOrchestrator {
         }
       }
     }
-    const now = Date.parse(this.clock());
     return [...scheduled.values()].filter((run) => {
       if (run.state !== "queued") return false;
       const turn = this.repository.findTurnByRun(run.runId);
@@ -732,14 +812,20 @@ export class DiscussionOrchestrator {
   private advanceSettledWave(
     discussion: DiscussionRecord,
     wave: DiscussionWave,
-    turns: DiscussionTurn[]
+    projectionTurns: DiscussionTurn[],
+    allTurns: DiscussionTurn[],
+    seal?: DiscussionWaveSeal
   ): DiscussionMutationResult {
     const participants = this.repository.listParticipants(discussion.discussionId);
-    const eligibleParticipants = this.eligibleParticipants(discussion, participants);
+    const eligibleParticipants = this.eligibleParticipantsForNextWave(
+      discussion,
+      participants,
+      wave.ordinal
+    );
     const participantByAgent = new Map(
       participants.map((participant) => [participant.agentId, participant])
     );
-    const successfulResults = turns.flatMap((turn) => {
+    const successfulResults = projectionTurns.flatMap((turn) => {
       if (turn.state !== "completed" || !turn.outputMessageId) return [];
       const output = this.core.getMessage(turn.outputMessageId);
       if (!output) return [];
@@ -758,7 +844,7 @@ export class DiscussionOrchestrator {
     const nextInputMessageId = this.evidence.ensureWaveResultAnchor(
       discussion,
       wave,
-      turns,
+      projectionTurns,
       this.clock()
     );
     let budget = recordTurnUsage({
@@ -767,11 +853,13 @@ export class DiscussionOrchestrator {
       discussionStartedAt: discussion.createdAt,
       now: this.clock()
     });
-    const closeState = waveCloseState(turns);
+    const closeState = seal ? "partial" as const : waveCloseState(allTurns);
     const outcomeCounts = {
-      completed: turns.filter(({ state }) => state === "completed").length,
-      failed: turns.filter(({ state }) => state === "failed").length,
-      canceled: turns.filter(({ state }) => state === "canceled").length
+      completed: allTurns.filter(({ state }) => state === "completed").length,
+      failed: allTurns.filter(({ state }) => state === "failed").length,
+      canceled: allTurns.filter(({ state }) => state === "canceled").length,
+      live: allTurns.filter(({ state }) => !terminalTurnStates.has(state)).length,
+      quorumSealId: seal?.sealId ?? null
     };
     const budgetEvents = [this.newBudgetEvent(discussion, "turn_recorded", {
       turns: 1,
@@ -792,7 +880,7 @@ export class DiscussionOrchestrator {
       policy: discussion.policy,
       requestedOutputMode: discussion.outputMode,
       userIntent: discussion.requestedAction,
-      runtimeInputRequired: turns.some(
+      runtimeInputRequired: projectionTurns.some(
         ({ terminalReason }) => terminalReason === "input_required"
       ),
       runtimeFailed: successfulResults.length === 0
@@ -911,7 +999,8 @@ export class DiscussionOrchestrator {
         ? now
         : null,
       budgetEvents,
-      ...(nextWave ? { nextWave } : {})
+      ...(nextWave ? { nextWave } : {}),
+      ...(seal ? { seal } : {})
     });
     if (!persisted.applied) {
       return this.mutationResult(discussion.discussionId);
@@ -926,9 +1015,10 @@ export class DiscussionOrchestrator {
     discussion: DiscussionRecord,
     budgetEvent: DiscussionBudgetEvent | null
   ): RunRecord[] {
-    const participants = this.eligibleParticipants(
+    const participants = this.eligibleParticipantsForNextWave(
       discussion,
-      this.repository.listParticipants(discussion.discussionId)
+      this.repository.listParticipants(discussion.discussionId),
+      discussion.currentWave ?? 0
     );
     if (participants.length === 0) {
       const decision: PolicyDecision = {
@@ -986,9 +1076,10 @@ export class DiscussionOrchestrator {
     decision: PolicyDecision,
     usageEvents: DiscussionBudgetEvent[]
   ): RunRecord[] {
-    const participants = this.eligibleParticipants(
+    const participants = this.eligibleParticipantsForNextWave(
       discussion,
-      this.repository.listParticipants(discussion.discussionId)
+      this.repository.listParticipants(discussion.discussionId),
+      discussion.currentWave ?? 0
     );
     if (participants.length === 0) {
       this.evidence.appendFallbackConclusion(
@@ -1245,9 +1336,122 @@ export class DiscussionOrchestrator {
         this.core.isRoomAgent(room.roomId, agentId) &&
         (task.isDefault || task.assignments.some((assignment) =>
           assignment.agentId === agentId
-        ))
+        )) &&
+        (discussion.policy.waveCompletionMode !== "read_only_quorum" ||
+          this.isQuorumCapableAgent(agent))
       );
     });
+  }
+
+  private eligibleParticipantsForNextWave(
+    discussion: DiscussionRecord,
+    participants: DiscussionParticipant[],
+    throughWaveOrdinal: number
+  ): DiscussionParticipant[] {
+    const waves = new Map(
+      this.repository.listWaves(discussion.discussionId)
+        .map((wave) => [wave.waveId, wave.ordinal])
+    );
+    const liveAgents = new Set(
+      this.repository.listTurns(discussion.discussionId)
+        .filter((turn) =>
+          !terminalTurnStates.has(turn.state) &&
+          (turn.waveId ? (waves.get(turn.waveId) ?? 0) : 0) <= throughWaveOrdinal
+        )
+        .map(({ speakerAgentId }) => speakerAgentId)
+    );
+    return this.eligibleParticipants(discussion, participants)
+      .filter(({ agentId }) => !liveAgents.has(agentId));
+  }
+
+  private isQuorumCapableAgent(
+    agent: ReturnType<CoreRepository["getAgent"]>
+  ): boolean {
+    return Boolean(
+      agent?.enabled && agent.integrationMode === "managed" && agent.deviceId &&
+      agent.runtimePolicy?.filesystemAccess === "read-only" &&
+      agent.capabilities.supportsDiscussionSupplementalEvidence === true &&
+      this.core.getDevice(agent.deviceId)?.status === "active"
+    );
+  }
+
+  private quorumSealIfReady(
+    discussion: DiscussionRecord,
+    wave: DiscussionWave,
+    turns: DiscussionTurn[]
+  ): DiscussionWaveSeal | null {
+    if (
+      discussion.policy.waveCompletionMode !== "read_only_quorum" ||
+      wave.phase === "finalization" || wave.state !== "open" ||
+      Date.parse(this.clock()) < Date.parse(quorumSoftDeadline(
+        wave.createdAt,
+        discussion.policy.quorumSoftDeadlineSeconds
+      ))
+    ) return null;
+    const participants = new Map(
+      this.repository.listParticipants(discussion.discussionId)
+        .map((participant) => [participant.agentId, participant])
+    );
+    const acceptedMembers = turns.flatMap((turn) => {
+      if (
+        turn.state !== "completed" || !turn.runId || !turn.outputMessageId ||
+        !turn.replyHash || turn.waveMemberOrdinal === null ||
+        turn.waveMemberOrdinal === undefined
+      ) return [];
+      const message = this.core.getMessage(turn.outputMessageId);
+      const reply = this.runs.listEvents(turn.runId)
+        .filter(({ event }) => event.type === "reply")
+        .find(({ sequence }) =>
+          this.runs.getReplyMessageProjection(turn.runId!, sequence)?.messageId ===
+            turn.outputMessageId
+        );
+      const role = participants.get(turn.speakerAgentId)?.role;
+      if (!message || !reply || !role) return [];
+      return [{
+        turnId: turn.turnId,
+        waveMemberOrdinal: turn.waveMemberOrdinal,
+        agentId: turn.speakerAgentId,
+        role,
+        runId: turn.runId,
+        sourceReplySequence: reply.sequence,
+        outputMessageId: message.messageId,
+        sourceMessageSequence: message.sequence,
+        replyHash: turn.replyHash
+      }];
+    }).sort((left, right) => left.waveMemberOrdinal - right.waveMemberOrdinal);
+    const requiredRoles = wave.selection?.requiredRoles ?? [];
+    if (
+      acceptedMembers.length < discussion.policy.quorumMinimumCompleted ||
+      requiredRoles.some((role) =>
+        !acceptedMembers.some((member) => member.role === role)
+      )
+    ) return null;
+    return createDiscussionWaveSeal({
+      sealId: createOpaqueId("seal"),
+      discussionId: discussion.discussionId,
+      waveId: wave.waveId,
+      softDeadlineAt: quorumSoftDeadline(
+        wave.createdAt,
+        discussion.policy.quorumSoftDeadlineSeconds
+      ),
+      minimumCompleted: discussion.policy.quorumMinimumCompleted,
+      requiredRoles,
+      acceptedMembers,
+      sealedAt: this.clock()
+    });
+  }
+
+  private reconcileTerminalWaveTurns(
+    wave: DiscussionWave,
+    turns: DiscussionTurn[]
+  ): DiscussionTurn[] {
+    for (const turn of turns) {
+      if (terminalTurnStates.has(turn.state) || !turn.runId) continue;
+      const run = this.runs.getRun(turn.runId);
+      if (!run || !terminalRunStates.has(run.state)) continue;
+      this.settlement.settle(run.runId, this.clock());
+    }
+    return this.repository.listTurnsForWave(wave.waveId);
   }
 
   private selectParticipants(
@@ -1371,7 +1575,9 @@ export class DiscussionOrchestrator {
       participants: this.repository.listParticipants(discussionId),
       waves: this.repository.listWaves(discussionId),
       turns: this.repository.listTurns(discussionId),
-      decisions: this.repository.listDecisions(discussionId)
+      decisions: this.repository.listDecisions(discussionId),
+      seals: this.repository.listWaveSeals(discussionId),
+      supplementalEvidence: this.repository.listSupplementalEvidence(discussionId)
     };
   }
 

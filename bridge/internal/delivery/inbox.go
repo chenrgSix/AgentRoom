@@ -102,6 +102,71 @@ func (i *Inbox) AppendEvent(
 	return record, nil
 }
 
+func (i *Inbox) AppendSupplementalEvidence(
+	runID string,
+	value contracts.DiscussionSupplementalEvidenceMessage,
+	now time.Time,
+) (Record, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	path := i.path(runID)
+	record, err := i.load(path)
+	if err != nil {
+		return Record{}, err
+	}
+	offer := record.Request.DiscussionSupplementalEvidence
+	if offer == nil || record.State != StateCompleted ||
+		value.Type != contracts.DiscussionSupplementalEvidence ||
+		value.Payload.OperationID != offer.OperationID ||
+		value.Payload.DiscussionID != offer.DiscussionID ||
+		value.Payload.WaveID != offer.WaveID ||
+		value.Payload.TurnID != offer.TurnID ||
+		value.Payload.RunID != record.RunID ||
+		value.Payload.TraceID != record.Request.TraceID ||
+		value.Payload.AgentID != record.Request.TargetAgentID ||
+		value.Payload.SourceReplySequence < 1 {
+		return Record{}, fmt.Errorf("supplemental evidence does not match its frozen offer")
+	}
+	foundReply := false
+	for _, source := range record.Events {
+		var envelope struct {
+			Type    string `json:"type"`
+			Payload struct {
+				OperationID string `json:"operationId"`
+				Sequence    int64  `json:"sequence"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(source, &envelope) != nil {
+			continue
+		}
+		if envelope.Type == string(contracts.RunReply) &&
+			envelope.Payload.Sequence == value.Payload.SourceReplySequence {
+			foundReply = true
+		}
+		if envelope.Type == string(contracts.DiscussionSupplementalEvidence) &&
+			envelope.Payload.OperationID == value.Payload.OperationID {
+			var existing contracts.DiscussionSupplementalEvidenceMessage
+			if json.Unmarshal(source, &existing) != nil || existing.Payload != value.Payload {
+				return Record{}, fmt.Errorf("supplemental evidence operation identity was reused")
+			}
+			return record, nil
+		}
+	}
+	if !foundReply {
+		return Record{}, fmt.Errorf("supplemental evidence reply was not persisted")
+	}
+	source, err := json.Marshal(value)
+	if err != nil {
+		return Record{}, err
+	}
+	record.UpdatedAt = now.UTC()
+	record.Events = append(record.Events, json.RawMessage(source))
+	if err := replace(path, record); err != nil {
+		return Record{}, err
+	}
+	return record, nil
+}
+
 func (i *Inbox) List() ([]Record, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()

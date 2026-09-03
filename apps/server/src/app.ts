@@ -142,6 +142,8 @@ import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "./discussion/discussion-repository.js";
+import { DiscussionSupplementalEvidenceService } from
+  "./discussion/discussion-supplemental-evidence-service.js";
 import { DiscussionPlanProposalService } from
   "./discussion/discussion-plan-proposal-service.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
@@ -716,6 +718,14 @@ export async function createServerApp(
   );
   deviceRevocation.recover();
   const discussionRepository = new DiscussionRepository(database);
+  const discussionSupplementalEvidence =
+    new DiscussionSupplementalEvidenceService(
+      core,
+      discussionRepository,
+      runRepository,
+      delivery,
+      taskRepository
+    );
   const discussionPlanProposals = new DiscussionPlanProposalService(
     transactions,
     core,
@@ -1172,6 +1182,7 @@ export async function createServerApp(
     clientAccess,
     discussions,
     discussionRepository,
+    discussionSupplementalEvidence,
     dispatchRun,
     dispatchDiscussionRuns,
     executor,

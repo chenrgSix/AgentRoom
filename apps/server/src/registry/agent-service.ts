@@ -205,9 +205,12 @@ export class AgentService {
   ): AgentRecord {
     const member = this.auth.requireTeamMember(principal, input.teamId);
     validateCapabilities(input);
-    if (input.capabilities.governedExecution !== undefined) {
+    if (
+      input.capabilities.governedExecution !== undefined ||
+      input.capabilities.supportsDiscussionSupplementalEvidence === true
+    ) {
       throw new Error(
-        "Governed execution capability is published only by the owning Bridge"
+        "Bridge Runtime capabilities are published only by the owning Bridge"
       );
     }
     const roomIds = explicitHostedRoomIds(input);

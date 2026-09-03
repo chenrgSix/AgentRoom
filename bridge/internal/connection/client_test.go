@@ -177,6 +177,9 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	if capabilities["supportsArtifactMaterialization"] != true {
 		t.Fatalf("Artifact materialization capability was not published: %#v", publication)
 	}
+	if capabilities["supportsDiscussionSupplementalEvidence"] != true {
+		t.Fatalf("Discussion supplemental evidence capability was not published: %#v", publication)
+	}
 	runtimePolicy, ok := payload["runtimePolicy"].(map[string]any)
 	if !ok || len(runtimePolicy) != 1 || runtimePolicy["filesystemAccess"] != "local-policy" {
 		t.Fatalf("safe Runtime policy summary was not published: %#v", publication)

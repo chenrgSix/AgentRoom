@@ -86,6 +86,7 @@ func (e RuntimeExecutor) executeAdapter(ctx context.Context, record Record,
 		return e.emitUnknown(ctx, record, send, "RUNTIME_ADAPTER_MISSING")
 	}
 	sequence := record.LastSequence
+	var lastReplySequence int64
 	currentState := record.State
 	err := adapter.Execute(ctx, bridgeruntime.Request{
 		Run: record.Request, Artifacts: artifacts,
@@ -133,6 +134,19 @@ func (e RuntimeExecutor) executeAdapter(ctx context.Context, record Record,
 			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
 				return err
 			}
+			var supplemental *contracts.DiscussionSupplementalEvidenceMessage
+			if currentState == StateCompleted && lastReplySequence > 0 &&
+				record.Request.DiscussionSupplementalEvidence != nil {
+				value := discussionSupplementalEvidenceMessage(
+					record, lastReplySequence, now,
+				)
+				if _, err := e.Inbox.AppendSupplementalEvidence(
+					record.RunID, value, now,
+				); err != nil {
+					return err
+				}
+				supplemental = &value
+			}
 			sendContext := eventContext
 			cancelSend := func() {}
 			if isTerminalState(currentState) && eventContext.Err() != nil {
@@ -141,7 +155,13 @@ func (e RuntimeExecutor) executeAdapter(ctx context.Context, record Record,
 				)
 			}
 			defer cancelSend()
-			return send(sendContext, message)
+			if err := send(sendContext, message); err != nil {
+				return err
+			}
+			if supplemental != nil {
+				return send(sendContext, *supplemental)
+			}
+			return nil
 		}
 		if event.Activity != nil {
 			activity := event.Activity
@@ -228,6 +248,7 @@ func (e RuntimeExecutor) executeAdapter(ctx context.Context, record Record,
 		if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
 			return err
 		}
+		lastReplySequence = sequence
 		return send(eventContext, message)
 	})
 	if err != nil {
@@ -254,6 +275,25 @@ func (e RuntimeExecutor) now() time.Time {
 		return e.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func discussionSupplementalEvidenceMessage(
+	record Record,
+	lastReplySequence int64,
+	now time.Time,
+) contracts.DiscussionSupplementalEvidenceMessage {
+	offer := record.Request.DiscussionSupplementalEvidence
+	return contracts.DiscussionSupplementalEvidenceMessage{
+		ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+		Type: contracts.DiscussionSupplementalEvidence,
+		Payload: contracts.DiscussionSupplementalEvidencePayload{
+			OperationID: offer.OperationID, DiscussionID: offer.DiscussionID,
+			WaveID: offer.WaveID, TurnID: offer.TurnID,
+			RunID: record.RunID, TraceID: record.Request.TraceID,
+			AgentID:             record.Request.TargetAgentID,
+			SourceReplySequence: lastReplySequence,
+		},
+	}
 }
 
 func isTerminalState(state State) bool {
@@ -780,6 +820,20 @@ func (e RuntimeExecutor) recover(ctx context.Context, send Sender, governedAlrea
 		if record.State == StatePreparing {
 			continue
 		}
+		if record.State == StateCompleted &&
+			record.Request.DiscussionSupplementalEvidence != nil {
+			if replySequence := latestPersistedReplySequence(record); replySequence > 0 {
+				value := discussionSupplementalEvidenceMessage(
+					record, replySequence, e.now(),
+				)
+				record, err = e.Inbox.AppendSupplementalEvidence(
+					record.RunID, value, e.now(),
+				)
+				if err != nil {
+					return err
+				}
+			}
+		}
 		var materializations []contracts.VerifiedArtifactMaterializationReceipt
 		var prepareErr error
 		if hasPersistedMaterializationFailure(record) {
@@ -865,6 +919,24 @@ func hasPersistedMaterializationFailure(record Record) bool {
 	return false
 }
 
+func latestPersistedReplySequence(record Record) int64 {
+	var latest int64
+	for _, source := range record.Events {
+		var envelope struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Sequence int64 `json:"sequence"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(source, &envelope) == nil &&
+			envelope.Type == string(contracts.RunReply) &&
+			envelope.Payload.Sequence > latest {
+			latest = envelope.Payload.Sequence
+		}
+	}
+	return latest
+}
+
 func validateRecoveryRecord(record Record) error {
 	if !isContractRunID(record.RunID) || record.Request.RunID != record.RunID {
 		return fmt.Errorf("request Run identity does not match inbox record")
@@ -885,6 +957,7 @@ func validateRecoveryRecord(record Record) error {
 			string(contracts.RunActivity),
 			string(contracts.RunOutputDelta),
 			string(contracts.RunReply),
+			string(contracts.DiscussionSupplementalEvidence),
 			string(contracts.RunHandoffRequested):
 		default:
 			return fmt.Errorf("persisted Run event %d has unsupported type", index)

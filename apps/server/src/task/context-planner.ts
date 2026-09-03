@@ -189,6 +189,7 @@ export class ContextPlanner {
       triggerMessageId: string;
       resultEvidenceAfterRevision?: number;
       contextFence?: RunContextFence;
+      excludedMessageIds?: readonly string[];
     },
     now: string
   ): PlannedRuntimeContext {
@@ -222,16 +223,17 @@ export class ContextPlanner {
         }
       : task;
 
+    const excludedMessageIds = new Set(input.excludedMessageIds ?? []);
     const recentRoom = this.core.listMessagesThrough(
       input.roomId,
       input.throughSequence,
       recentRoomMessageLimit
-    );
+    ).filter(({ messageId }) => !excludedMessageIds.has(messageId));
     const recentTask = this.core.listTaskMessagesThrough(
       input.taskId,
       input.throughSequence,
       recentTaskMessageLimit
-    );
+    ).filter(({ messageId }) => !excludedMessageIds.has(messageId));
     const contextMessages = this.mergeRecentMessages(recentRoom, recentTask);
     const roomSourceCursor = this.projectionCursor(
       recentRoom,
@@ -267,7 +269,8 @@ export class ContextPlanner {
       input.roomId,
       input.throughSequence,
       input.triggerMessageId,
-      historicalFence?.capturedAt
+      historicalFence?.capturedAt,
+      excludedMessageIds
     );
     return {
       contextPlan: {
@@ -275,13 +278,15 @@ export class ContextPlanner {
           room.roomId,
           room.name,
           roomSourceCursor,
-          now
+          now,
+          excludedMessageIds
         ),
         taskMemory: this.projectTask(
           contextTask,
           taskSourceCursor,
           now,
-          historicalFence?.taskSummaryRevision
+          historicalFence?.taskSummaryRevision,
+          excludedMessageIds
         ),
         ...(resultEvidence ? { resultEvidence } : {}),
         ...(roomLongTermMemory || taskLongTermMemory
@@ -306,8 +311,12 @@ export class ContextPlanner {
     roomId: string,
     targetThroughSequence: number,
     requestMessageId: string,
-    checkpointCreatedAtOrBefore?: string
+    checkpointCreatedAtOrBefore?: string,
+    excludedMessageIds: ReadonlySet<string> = new Set()
   ): PlannedRoomContextBundle | undefined {
+    // A Room bundle proves one contiguous interval. A sealed Discussion may
+    // reject a reply inside that interval, so it must use filtered context.
+    if (excludedMessageIds.size > 0) return undefined;
     const state = this.rollingRoomMemory.getState(roomId);
     if (state?.mode !== "ready") return undefined;
     const priorContextThroughSequence = targetThroughSequence - 1;
@@ -396,13 +405,14 @@ export class ContextPlanner {
     roomId: string,
     roomName: string,
     sourceCursor: number,
-    now: string
+    now: string,
+    excludedMessageIds: ReadonlySet<string> = new Set()
   ): ContextMemoryProjection {
     const messages = this.core.listMessagesThrough(
       roomId,
       sourceCursor,
       projectionMessageLimit
-    );
+    ).filter(({ messageId }) => !excludedMessageIds.has(messageId));
     const summary = boundedSummary([
       `Room: ${normalizedExcerpt(roomName)}`,
       ...(messages.length > 0 ? ["Earlier Room evidence:"] : []),
@@ -414,6 +424,18 @@ export class ContextPlanner {
       sourceCursor,
       sourceMessageIds
     });
+    if (excludedMessageIds.size > 0) {
+      const current = this.database.prepare(`
+        SELECT revision FROM room_memory_projections WHERE room_id = ?
+      `).get(roomId) as { revision: number } | undefined;
+      return {
+        summary,
+        sourceCursor,
+        revision: current?.revision ?? 1,
+        sourceMessageIds,
+        projectionKind: "historical"
+      };
+    }
     this.database.prepare(`
       INSERT INTO room_memory_projections (
         room_id, summary, source_sequence, revision, provenance_json,
@@ -463,13 +485,14 @@ export class ContextPlanner {
     task: AgentTaskRecord,
     sourceCursor: number,
     now: string,
-    historicalRevision?: number
+    historicalRevision?: number,
+    excludedMessageIds: ReadonlySet<string> = new Set()
   ): ContextMemoryProjection {
     const messages = this.core.listTaskMessagesThrough(
       task.taskId,
       sourceCursor,
       projectionMessageLimit
-    );
+    ).filter(({ messageId }) => !excludedMessageIds.has(messageId));
     const summary = boundedSummary([
       `Task: ${normalizedExcerpt(task.title)}`,
       `Goal: ${normalizedExcerpt(task.goal)}`,
@@ -483,11 +506,11 @@ export class ContextPlanner {
       sourceCursor,
       sourceMessageIds
     });
-    if (historicalRevision !== undefined) {
+    if (historicalRevision !== undefined || excludedMessageIds.size > 0) {
       return {
         summary,
         sourceCursor,
-        revision: Math.max(1, historicalRevision),
+        revision: Math.max(1, historicalRevision ?? task.summaryRevision),
         sourceMessageIds,
         projectionKind: "historical"
       };

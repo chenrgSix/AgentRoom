@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -313,6 +314,86 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	if !ok || json.Unmarshal(rawOutput, &replayEnvelope) != nil ||
 		replayEnvelope.Type != string(contracts.RunActivity) {
 		t.Fatalf("replay omitted activity: %#v", replayed)
+	}
+}
+
+func TestRuntimeExecutorPersistsSupplementalEvidenceBeforeTerminalDelivery(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	request := contracts.RunRequestedPayload{
+		RunID: "run_discussion_late_12345678", TraceID: "trace_discussion_late_12345678",
+		TargetAgentID:     "agent_discussion_late_12345678",
+		DeliveryAttemptID: "delivery_discussion_late_12345678",
+		IdempotencyKey:    "idem_discussion_late_12345678",
+		DiscussionSupplementalEvidence: &contracts.DiscussionSupplementalEvidenceClass{
+			Version: 1, OperationID: "op_discussion_late_12345678",
+			DiscussionID: "discussion_late_12345678", WaveID: "wave_late_12345678",
+			TurnID: "turn_late_12345678",
+		},
+	}
+	record, _, err := inbox.Accept(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	working, completed := contracts.Working, contracts.Completed
+	adapter := &bridgeruntime.FakeAdapter{}
+	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
+		{Status: &working}, {Reply: "late but retained"}, {Status: &completed},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	deliveryFailed := errors.New("terminal delivery failed")
+	executor := RuntimeExecutor{
+		Inbox: inbox, Now: func() time.Time { return now },
+		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+	}
+	if err := executor.Execute(context.Background(), record, func(_ context.Context, value any) error {
+		if _, ok := value.(contracts.RunStatusMessage); ok {
+			message := value.(contracts.RunStatusMessage)
+			if message.Payload.Status == contracts.Completed {
+				return deliveryFailed
+			}
+		}
+		return nil
+	}); !errors.Is(err, deliveryFailed) {
+		t.Fatalf("terminal delivery failure was not returned: %v", err)
+	}
+	latest, err := inbox.Get(request.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.State != StateCompleted || len(latest.Events) != 4 {
+		t.Fatalf("terminal proof chain was not retained: %#v", latest)
+	}
+	var supplemental contracts.DiscussionSupplementalEvidenceMessage
+	if err := json.Unmarshal(latest.Events[3], &supplemental); err != nil {
+		t.Fatal(err)
+	}
+	if supplemental.Type != contracts.DiscussionSupplementalEvidence ||
+		supplemental.Payload.OperationID != request.DiscussionSupplementalEvidence.OperationID ||
+		supplemental.Payload.SourceReplySequence != 3 {
+		t.Fatalf("unexpected supplemental evidence: %#v", supplemental)
+	}
+	var replayed []any
+	if err := executor.Recover(context.Background(), func(_ context.Context, value any) error {
+		replayed = append(replayed, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(replayed) != 5 {
+		t.Fatalf("replayed %d messages, want accepted plus four durable events", len(replayed))
+	}
+	var replayEnvelope struct {
+		Type string `json:"type"`
+	}
+	raw, ok := replayed[4].(json.RawMessage)
+	if !ok || json.Unmarshal(raw, &replayEnvelope) != nil ||
+		replayEnvelope.Type != string(contracts.DiscussionSupplementalEvidence) {
+		t.Fatalf("supplemental evidence was not replayed last: %#v", replayed[4])
 	}
 }
 

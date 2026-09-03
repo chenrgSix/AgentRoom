@@ -6,6 +6,8 @@ import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import type Database from "better-sqlite3";
 
+import { BridgeConnectionRegistry } from
+  "../src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
@@ -14,14 +16,22 @@ import {
   type DiscussionMutationResult
 } from "../src/discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
+import { DiscussionSupplementalEvidenceService } from
+  "../src/discussion/discussion-supplemental-evidence-service.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
+import { DeliveryService } from "../src/run/delivery-service.js";
 import { RunRepository, type RunRecord } from "../src/run/run-repository.js";
-import { AuthService, type WebPrincipal } from "../src/security/auth-service.js";
+import {
+  AuthService,
+  type DevicePrincipal,
+  type WebPrincipal
+} from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 import { AgentTaskService } from "../src/task/agent-task-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
+import { ContextPlanner } from "../src/task/context-planner.js";
 
 const now = "2026-08-23T10:00:00.000Z";
 
@@ -30,6 +40,8 @@ interface OrchestratorFixture {
   clock: { value: string };
   core: CoreRepository;
   database: Database.Database;
+  delivery: DeliveryService;
+  devicePrincipal: DevicePrincipal;
   discussions: DiscussionRepository;
   orchestrator: DiscussionOrchestrator;
   restart(): DiscussionOrchestrator;
@@ -37,12 +49,14 @@ interface OrchestratorFixture {
   roomId: string;
   agentIds: string[];
   runs: RunRepository;
+  supplementalEvidence: DiscussionSupplementalEvidenceService;
 }
 
 async function fixture(
   t: TestContext,
   clock: { value: string } = { value: now },
-  agentNames: string[] = ["Coder", "Reviewer"]
+  agentNames: string[] = ["Coder", "Reviewer"],
+  options: { readOnlyQuorumAgents?: boolean } = {}
 ): Promise<OrchestratorFixture> {
   const resources = await createTestResources(t, "convene-wire-orchestrator-");
   const directory = resources.directory;
@@ -77,21 +91,49 @@ async function fixture(
     "Test Bridge",
     now
   );
-  const agentIds = agentNames.map((name) => agents.publishAgent(principal, {
-    teamId: created.team.teamId,
-    deviceId: device.deviceId,
-    name,
-    role: name,
-    integrationMode: "fake",
-    capabilities: {
-      supportsHandoff: true,
-      supportsInterrupt: true,
-      supportsResume: false,
-      supportsStart: true,
-      supportsStreaming: true
-    },
-    now
-  }).agentId);
+  const credential = auth.issueDeviceCredential(device.deviceId, now);
+  const devicePrincipal = auth.authenticateDevice(credential.secret, now);
+  const agentIds = agentNames.map((name) => {
+    const agent = agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      name,
+      role: name,
+      integrationMode: options.readOnlyQuorumAgents ? "managed" : "fake",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      ...(options.readOnlyQuorumAgents
+        ? { runtimePolicy: { filesystemAccess: "read-only" as const } }
+        : {}),
+      now
+    });
+    if (!options.readOnlyQuorumAgents) return agent.agentId;
+    return agents.publishDeviceAgent(devicePrincipal, {
+      agentId: agent.agentId,
+      name: agent.name,
+      role: agent.role,
+      capabilities: {
+        ...agent.capabilities,
+        supportsDiscussionSupplementalEvidence: true
+      },
+      runtimePolicy: { filesystemAccess: "read-only" },
+      now
+    }).agentId;
+  });
+  const taskRepository = new AgentTaskRepository(database);
+  const delivery = new DeliveryService(
+    database,
+    core,
+    runs,
+    new ContextPlanner(database, core, taskRepository),
+    new BridgeConnectionRegistry(),
+    () => clock.value
+  );
   let closed = false;
   const close = (): void => {
     if (closed) return;
@@ -107,10 +149,12 @@ async function fixture(
     clock,
     core,
     database,
+    delivery,
+    devicePrincipal,
     discussions,
     orchestrator: new DiscussionOrchestrator(
       core, messages, discussions, runs, auth,
-      new AgentTaskRepository(database), () => clock.value
+      taskRepository, () => clock.value
     ),
     restart: () => {
       const restartedDatabase = openDatabase(databasePath);
@@ -130,7 +174,14 @@ async function fixture(
     principal,
     roomId: room.roomId,
     agentIds,
-    runs
+    runs,
+    supplementalEvidence: new DiscussionSupplementalEvidenceService(
+      core,
+      discussions,
+      runs,
+      delivery,
+      taskRepository
+    )
   };
 }
 
@@ -264,8 +315,48 @@ test("invalid focused and Reviewer policies roll back before Discussion creation
       participantAgentIds: value.agentIds,
       policy: { participantSelectionMode: "model_selected" as never }
     }), /policy fields are invalid/u);
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Reject an undersized quorum.",
+      participantAgentIds: value.agentIds,
+      policy: {
+        waveCompletionMode: "read_only_quorum",
+        quorumMinimumCompleted: 1
+      }
+    }), /quorumMinimumCompleted must be between 2 and 5/u);
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Reject a quorum deadline that reaches the Wave timeout.",
+      participantAgentIds: value.agentIds,
+      policy: {
+        waveCompletionMode: "read_only_quorum",
+        quorumSoftDeadlineSeconds: 300
+      }
+    }), /soft deadline must precede the Wave timeout/u);
     assert.equal(value.discussions.listForRoom(value.roomId).length, 0);
     assert.equal(value.core.listMessagesAfter(value.roomId, 0, 100).length, 0);
+  } finally {
+    value.close();
+  }
+});
+
+test("all-settled Discussions normalize and ignore quorum-only fields", async (t) => {
+  const value = await fixture(t);
+  try {
+    const result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Preserve the compatibility barrier.",
+      participantAgentIds: value.agentIds,
+      policy: {
+        waveCompletionMode: "all_settled",
+        quorumMinimumCompleted: 1,
+        quorumSoftDeadlineSeconds: 10_000
+      }
+    });
+    assert.equal(result.discussion.policy.waveCompletionMode, "all_settled");
+    assert.equal(result.discussion.policy.quorumMinimumCompleted, 2);
+    assert.equal(result.discussion.policy.quorumSoftDeadlineSeconds, 60);
+    assert.equal(result.seals.length, 0);
   } finally {
     value.close();
   }
@@ -613,6 +704,358 @@ test("create fans one Wave out to every participant and advances only after its 
     );
   } finally {
     value.close();
+  }
+});
+
+test("read-only quorum seals exact replies and retains excluded late evidence", async (t) => {
+  const clock = { value: now };
+  const value = await fixture(
+    t,
+    clock,
+    ["Coder", "Security", "Reviewer"],
+    { readOnlyQuorumAgents: true }
+  );
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Seal a bounded review quorum without trusting late replies.",
+      participantAgentIds: value.agentIds,
+      mode: "review",
+      policy: {
+        allowAutomaticFinish: false,
+        requireReviewer: true,
+        waveCompletionMode: "read_only_quorum",
+        quorumMinimumCompleted: 2,
+        quorumSoftDeadlineSeconds: 30
+      }
+    });
+    assert.equal(result.scheduledRuns.length, 3);
+    const deliveries = new Map(result.scheduledRuns.map((run) => {
+      const delivery = value.delivery.dispatch(run.runId);
+      assert.ok(delivery?.payload.discussionSupplementalEvidence);
+      return [run.runId, delivery];
+    }));
+    const [coder, lateSecurity, reviewer] = result.scheduledRuns;
+    assert.ok(coder);
+    assert.ok(lateSecurity);
+    assert.ok(reviewer);
+    stageRunReply({
+      core: value.core,
+      runs: value.runs,
+      run: lateSecurity,
+      content: "LATE-UNADOPTED-SECURITY-CLAIM",
+      assessment: { newInformationAdded: true, recommendation: "continue" }
+    });
+    const lateOffer = deliveries.get(lateSecurity.runId)?.payload
+      .discussionSupplementalEvidence;
+    assert.ok(lateOffer);
+    const lateSubmission = {
+      operationId: lateOffer.operationId,
+      discussionId: lateOffer.discussionId,
+      waveId: lateOffer.waveId,
+      turnId: lateOffer.turnId,
+      runId: lateSecurity.runId,
+      traceId: lateSecurity.traceId,
+      agentId: lateSecurity.targetAgentId,
+      sourceReplySequence: 2
+    };
+    assert.deepEqual(value.supplementalEvidence.submit(
+      value.devicePrincipal,
+      lateSubmission,
+      clock.value
+    ), { state: "not_late", reason: "wave_open" });
+    for (const [run, content, reviewerApproved] of [
+      [reviewer, "Accepted reviewer evidence.", true],
+      [coder, "Accepted implementation evidence.", false]
+    ] as const) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content,
+        assessment: {
+          newInformationAdded: true,
+          recommendation: "continue",
+          ...(reviewerApproved ? { reviewerApproved: true } : {})
+        }
+      });
+    }
+    const beforeRecovery = value.orchestrator.get(
+      value.principal,
+      result.discussion.discussionId
+    );
+    assert.equal(beforeRecovery.seals.length, 0);
+
+    clock.value = "2026-08-23T10:00:31.000Z";
+    const restarted = value.restart();
+    value.database.exec(`
+      CREATE TRIGGER test_quorum_decision_failure
+      BEFORE INSERT ON discussion_decisions
+      BEGIN SELECT RAISE(ABORT, 'injected quorum decision failure'); END;
+    `);
+    assert.throws(() => restarted.recover(), /injected quorum decision failure/u);
+    assert.equal(value.discussions.listWaveSeals(result.discussion.discussionId).length, 0);
+    assert.equal(value.discussions.getWave(result.waves[0]!.waveId)?.state, "open");
+    assert.equal(value.discussions.get(result.discussion.discussionId)?.progress.version, 0);
+    value.database.exec("DROP TRIGGER test_quorum_decision_failure");
+    const recovered = restarted.recover();
+    const recoveredView = restarted.get(
+      value.principal,
+      result.discussion.discussionId
+    );
+    const seal = recoveredView.seals[0];
+    assert.ok(seal);
+    assert.equal(recoveredView.waves[0]?.state, "partial");
+    assert.deepEqual(
+      seal.acceptedMembers.map(({ agentId }) => agentId),
+      [value.agentIds[0], value.agentIds[2]]
+    );
+    assert.deepEqual(seal.requiredRoles, ["reviewer"]);
+    assert.equal(recoveredView.discussion.progress.replyHashes.length, 2);
+    assert.deepEqual(
+      recovered.map(({ targetAgentId }) => targetAgentId).sort(),
+      [value.agentIds[0], value.agentIds[2]].sort()
+    );
+    assert.equal(value.runs.getRun(lateSecurity.runId)?.state, "working");
+    assert.ok(recovered.every(({ targetAgentId }) =>
+      targetAgentId !== lateSecurity.targetAgentId
+    ));
+    assert.deepEqual(
+      sortedRunIds(restarted.recover()),
+      sortedRunIds(recovered)
+    );
+    const duplicate = value.orchestrator.onRunTerminal(coder.runId);
+    assert.equal(duplicate?.seals.length, 1);
+    assert.deepEqual(
+      sortedRunIds(restarted.recover()),
+      sortedRunIds(recovered)
+    );
+    const acceptedOffer = deliveries.get(coder.runId)?.payload
+      .discussionSupplementalEvidence;
+    assert.ok(acceptedOffer);
+    assert.deepEqual(value.supplementalEvidence.submit(
+      value.devicePrincipal,
+      {
+        operationId: acceptedOffer.operationId,
+        discussionId: acceptedOffer.discussionId,
+        waveId: acceptedOffer.waveId,
+        turnId: acceptedOffer.turnId,
+        runId: coder.runId,
+        traceId: coder.traceId,
+        agentId: coder.targetAgentId,
+        sourceReplySequence: 2
+      },
+      clock.value
+    ), { state: "not_late", reason: "accepted_member" });
+
+    finishStagedRun(value.runs, lateSecurity);
+    result = requireTerminalResult(
+      value.orchestrator.onRunTerminal(lateSecurity.runId)
+    );
+    assert.equal(result.seals.length, 1);
+    assert.equal(result.discussion.progress.replyHashes.length, 2);
+    const offer = lateOffer;
+    const submission = lateSubmission;
+    const retained = value.supplementalEvidence.submit(
+      value.devicePrincipal,
+      submission,
+      clock.value
+    );
+    assert.equal(retained.state, "retained");
+    const replay = value.supplementalEvidence.submit(
+      value.devicePrincipal,
+      submission,
+      clock.value
+    );
+    assert.deepEqual(replay, retained);
+    const reopenedAudit = value.restart().get(
+      value.principal,
+      result.discussion.discussionId
+    );
+    assert.deepEqual(reopenedAudit.seals, [seal]);
+    assert.equal(reopenedAudit.supplementalEvidence.length, 1);
+    assert.deepEqual(reopenedAudit.supplementalEvidence[0],
+      retained.state === "retained" ? retained.evidence : undefined);
+    assert.match(
+      reopenedAudit.supplementalEvidence[0]!.evidenceDigest,
+      /^[a-f0-9]{64}$/u
+    );
+    assert.equal(
+      reopenedAudit.supplementalEvidence[0]!.sourceReplySequence,
+      submission.sourceReplySequence
+    );
+    assert.throws(() => value.supplementalEvidence.submit(
+      value.devicePrincipal,
+      { ...submission, sourceReplySequence: 4 },
+      clock.value
+    ), /operation identity was reused/u);
+
+    const nextDelivery = value.delivery.dispatch(recovered[0]!.runId);
+    assert.ok(nextDelivery);
+    const deliveredContext = JSON.stringify(nextDelivery.payload);
+    assert.doesNotMatch(deliveredContext, /LATE-UNADOPTED-SECURITY-CLAIM/u);
+    assert.equal(nextDelivery.payload.roomContextBundle, undefined);
+    assert.throws(() => value.database.prepare(`
+      UPDATE discussion_wave_seals SET sealed_at = ? WHERE seal_id = ?
+    `).run(now, seal.sealId), /seal is immutable/u);
+    assert.throws(() => value.database.prepare(`
+      DELETE FROM discussion_supplemental_evidence WHERE operation_id = ?
+    `).run(offer.operationId), /supplemental evidence is immutable/u);
+    const participants = value.core.getRoomParticipants(value.roomId);
+    const room = value.core.getRoom(value.roomId);
+    assert.ok(room);
+    value.core.replaceRoomSettings(
+      value.roomId,
+      {
+        ...participants,
+        agentIds: participants.agentIds.filter((agentId) =>
+          agentId !== lateSecurity.targetAgentId
+        )
+      },
+      room.collaborationPolicy,
+      room.settingsRevision,
+      clock.value
+    );
+    assert.throws(() => value.supplementalEvidence.submit(
+      value.devicePrincipal,
+      submission,
+      clock.value
+    ), /authority is no longer current/u);
+  } finally {
+    value.close();
+  }
+});
+
+test("read-only quorum waits below threshold and without its required Reviewer", async (t) => {
+  const clock = { value: now };
+  const value = await fixture(
+    t,
+    clock,
+    ["Coder", "Security", "Reviewer"],
+    { readOnlyQuorumAgents: true }
+  );
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Do not count participants as a substitute for Reviewer authority.",
+      participantAgentIds: value.agentIds,
+      mode: "review",
+      policy: {
+        allowAutomaticFinish: false,
+        requireReviewer: true,
+        waveCompletionMode: "read_only_quorum",
+        quorumMinimumCompleted: 2,
+        quorumSoftDeadlineSeconds: 30
+      }
+    });
+    const participants = result.scheduledRuns.slice(0, 2);
+    completeRun({
+      core: value.core,
+      runs: value.runs,
+      run: participants[0]!,
+      content: "One participant is below threshold.",
+      assessment: { newInformationAdded: true, recommendation: "continue" }
+    });
+    result = requireTerminalResult(
+      value.orchestrator.onRunTerminal(participants[0]!.runId)
+    );
+    clock.value = "2026-08-23T10:00:31.000Z";
+    assert.equal(value.orchestrator.recover().length, 2);
+    assert.equal(result.seals.length, 0);
+    assert.equal(value.discussions.getWave(result.waves[0]!.waveId)?.state, "open");
+    completeRun({
+      core: value.core,
+      runs: value.runs,
+      run: participants[1]!,
+      content: "Two participants still cannot replace the Reviewer.",
+      assessment: { newInformationAdded: true, recommendation: "continue" }
+    });
+    result = requireTerminalResult(
+      value.orchestrator.onRunTerminal(participants[1]!.runId)
+    );
+    assert.equal(result.seals.length, 0);
+    assert.equal(result.waves[0]?.state, "open");
+    assert.equal(result.discussion.progress.version, 0);
+  } finally {
+    value.close();
+  }
+});
+
+test("read-only quorum rejects non-Bridge participants without side effects", async (t) => {
+  const value = await fixture(t);
+  try {
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Do not turn fake participants into quorum authority.",
+      participantAgentIds: value.agentIds,
+      policy: { waveCompletionMode: "read_only_quorum" }
+    }), /requires managed supplemental-capable read-only participants/u);
+    assert.deepEqual(value.discussions.listForRoom(value.roomId), []);
+  } finally {
+    value.close();
+  }
+});
+
+test("read-only quorum rejects mutable or unsupported managed Runtimes", async (t) => {
+  const cases = [
+    {
+      name: "missing policy",
+      mutate: (agent: NonNullable<ReturnType<CoreRepository["getAgent"]>>) => ({
+        ...agent,
+        runtimePolicy: undefined
+      })
+    },
+    {
+      name: "local policy",
+      mutate: (agent: NonNullable<ReturnType<CoreRepository["getAgent"]>>) => ({
+        ...agent,
+        runtimePolicy: { filesystemAccess: "local-policy" as const }
+      })
+    },
+    {
+      name: "workspace write",
+      mutate: (agent: NonNullable<ReturnType<CoreRepository["getAgent"]>>) => ({
+        ...agent,
+        runtimePolicy: { filesystemAccess: "workspace-write" as const }
+      })
+    },
+    {
+      name: "missing capability",
+      mutate: (agent: NonNullable<ReturnType<CoreRepository["getAgent"]>>) => ({
+        ...agent,
+        capabilities: {
+          ...agent.capabilities,
+          supportsDiscussionSupplementalEvidence: false
+        }
+      })
+    }
+  ];
+  for (const entry of cases) {
+    await t.test(entry.name, async (subtest) => {
+      const value = await fixture(
+        subtest,
+        { value: now },
+        ["Coder", "Reviewer"],
+        { readOnlyQuorumAgents: true }
+      );
+      try {
+        const agent = value.core.getAgent(value.agentIds[0]!);
+        assert.ok(agent);
+        value.core.updateAgentPublication({
+          ...entry.mutate(agent),
+          updatedAt: now
+        });
+        assert.throws(() => value.orchestrator.create(value.principal, {
+          roomId: value.roomId,
+          goal: `Reject ${entry.name} quorum authority.`,
+          participantAgentIds: value.agentIds,
+          policy: { waveCompletionMode: "read_only_quorum" }
+        }), /requires managed supplemental-capable read-only participants/u);
+        assert.deepEqual(value.discussions.listForRoom(value.roomId), []);
+      } finally {
+        value.close();
+      }
+    });
   }
 });
 

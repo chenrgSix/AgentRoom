@@ -128,7 +128,8 @@ test("execution capability handshake rejects unknown and ambiguous declarations 
       supportsInterrupt: true,
       supportsResume: false,
       supportsStart: true,
-      supportsStreaming: false
+      supportsStreaming: false,
+      supportsDiscussionSupplementalEvidence: true
     },
     deviceId: fixture.deviceId,
     name: "Governed Protocol Agent",
@@ -402,6 +403,34 @@ test("Bridge trace validation accepts every contract-valid base64url prefix", ()
   assert.equal(isBridgeTraceId("trace__1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), true);
   assert.equal(isBridgeTraceId("trace_/1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), false);
   assert.equal(isBridgeTraceId("trace_short"), false);
+});
+
+test("Bridge rejects forged Discussion supplemental evidence on its own boundary", async (t) => {
+  const logs: CapturedLog[] = [];
+  const fixture = await createFixture(t, capturingLogger(logs));
+  try {
+    const closed = nextClose(fixture.socket);
+    send(fixture.socket, envelope("discussion.supplemental_evidence", {
+      operationId: "op_forged_supplement_12345678",
+      discussionId: "discussion_forged_12345678",
+      waveId: "wave_forged_12345678",
+      turnId: "turn_forged_12345678",
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sourceReplySequence: 1
+    }));
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: discussion_supplemental_rejected"
+    });
+    assert.equal(logs.some((entry) =>
+      entry.event === "bridge.message.processing_failed" &&
+      entry.errorCategory === "discussion_supplemental_rejected"
+    ), true);
+  } finally {
+    await closeFixture(fixture);
+  }
 });
 
 test("one committed Bridge Run event advances the Team cursor once", async (t) => {

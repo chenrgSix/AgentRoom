@@ -52,6 +52,7 @@ function assertHostedAgentBoundary(agent: AgentRecord): void {
     agent.capabilities.supportsWorkspaceLeases === true ||
     agent.capabilities.supportsArtifactPublication === true ||
     agent.capabilities.supportsArtifactMaterialization === true ||
+    agent.capabilities.supportsDiscussionSupplementalEvidence === true ||
     agent.capabilities.governedExecution !== undefined
   ) {
     throw new Error(

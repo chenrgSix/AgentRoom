@@ -227,6 +227,23 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
     }), /requires a managed Device Agent/u);
     assert.throws(() => agents.publishAgent(principal, {
       teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      name: "Forged Quorum Runtime",
+      role: "Managed",
+      integrationMode: "managed",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false,
+        supportsDiscussionSupplementalEvidence: true
+      },
+      runtimePolicy: { filesystemAccess: "read-only" },
+      now
+    }), /published only by the owning Bridge/u);
+    assert.throws(() => agents.publishAgent(principal, {
+      teamId: created.team.teamId,
       deviceId: null,
       name: "Unsafe Manual Policy",
       role: "Manual",

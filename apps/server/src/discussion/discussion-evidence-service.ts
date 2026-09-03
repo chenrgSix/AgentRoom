@@ -216,6 +216,13 @@ export class DiscussionEvidenceService {
       this.repository.listWaves(discussion.discussionId)
         .map((wave) => [wave.waveId, wave.ordinal])
     );
+    const sealedAcceptedTurns = new Map(
+      this.repository.listWaveSeals(discussion.discussionId)
+        .map((seal) => [
+          seal.waveId,
+          new Set(seal.acceptedMembers.map(({ turnId }) => turnId))
+        ])
+    );
     const messages: MessageRecord[] = [];
     const root = this.core.getMessage(discussion.rootMessageId);
     if (root) messages.push(root);
@@ -223,7 +230,9 @@ export class DiscussionEvidenceService {
       const waveOrdinal = turn.waveId ? waves.get(turn.waveId) : undefined;
       if (
         waveOrdinal === undefined || waveOrdinal >= currentWave.ordinal ||
-        !turn.outputMessageId
+        !turn.outputMessageId ||
+        (sealedAcceptedTurns.has(turn.waveId!) &&
+          !sealedAcceptedTurns.get(turn.waveId!)!.has(turn.turnId))
       ) {
         continue;
       }

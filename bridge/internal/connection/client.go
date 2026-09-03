@@ -378,6 +378,9 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		supportsArtifactMaterialization :=
 			c.ArtifactMaterializationAgentNames[configured.Name]
 		capabilities.SupportsArtifactMaterialization = &supportsArtifactMaterialization
+		supportsDiscussionSupplementalEvidence := true
+		capabilities.SupportsDiscussionSupplementalEvidence =
+			&supportsDiscussionSupplementalEvidence
 		runtimePolicy := publishedRuntimePolicy(configured)
 		workspaceAlias := configured.ResolvedWorkspaceAlias()
 		publication := contracts.AgentPublishMessage{

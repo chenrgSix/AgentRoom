@@ -69,6 +69,7 @@ export interface AgentCapabilities {
   supportsWorkspaceLeases?: boolean;
   supportsArtifactPublication?: boolean;
   supportsArtifactMaterialization?: boolean;
+  supportsDiscussionSupplementalEvidence?: boolean;
 }
 
 export interface AgentRuntimePolicy {

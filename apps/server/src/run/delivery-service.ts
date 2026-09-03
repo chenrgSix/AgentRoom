@@ -22,7 +22,15 @@ import type {
   RunRepository
 } from "./run-repository.js";
 
-interface DeliveryPayload {
+export interface DiscussionSupplementalEvidenceOffer {
+  version: 1;
+  operationId: string;
+  discussionId: string;
+  waveId: string;
+  turnId: string;
+}
+
+export interface DeliveryPayload {
   runId: string;
   traceId: string;
   roomId: string;
@@ -77,6 +85,7 @@ interface DeliveryPayload {
     };
   };
   routingAgents?: Array<{ agentId: string; name: string }>;
+  discussionSupplementalEvidence?: DiscussionSupplementalEvidenceOffer;
   deadline: string;
 }
 
@@ -413,6 +422,8 @@ export class DeliveryService {
     if (!contextManifest) {
       throw new Error("Run delivery requires a frozen Context Manifest");
     }
+    const excludedDiscussionMessageIds =
+      this.discussionExcludedMessageIds(run.runId);
     const plannedContext = this.contextPlanner.plan({
       roomId: run.roomId,
       taskId: run.taskId,
@@ -421,7 +432,10 @@ export class DeliveryService {
       ...(evidenceAfterRevision !== undefined
         ? { resultEvidenceAfterRevision: evidenceAfterRevision }
         : {}),
-      ...(contextFence ? { contextFence } : {})
+      ...(contextFence ? { contextFence } : {}),
+      ...(excludedDiscussionMessageIds.length > 0
+        ? { excludedMessageIds: excludedDiscussionMessageIds }
+        : {})
     }, this.clock());
     const roomContextBundle = agent.capabilities.supportsRoomContextCoverage
       ? plannedContext.roomContextBundle
@@ -441,6 +455,8 @@ export class DeliveryService {
               }
             : {})
         };
+    const discussionSupplementalEvidence =
+      this.discussionSupplementalEvidenceOffer(run.runId, agent);
     const payload: DeliveryPayload = {
       runId: run.runId,
       traceId: run.traceId,
@@ -498,6 +514,9 @@ export class DeliveryService {
             name: candidate.name
           }))
         : [],
+      ...(discussionSupplementalEvidence
+        ? { discussionSupplementalEvidence }
+        : {}),
       deadline: run.deadlineAt
     };
     const payloadJson = JSON.stringify(payload);
@@ -518,6 +537,75 @@ export class DeliveryService {
       this.clock()
     );
     return this.getByRun(runId);
+  }
+
+  private discussionSupplementalEvidenceOffer(
+    runId: string,
+    agent: NonNullable<ReturnType<CoreRepository["getAgent"]>>
+  ): DiscussionSupplementalEvidenceOffer | undefined {
+    if (
+      agent.integrationMode !== "managed" ||
+      agent.runtimePolicy?.filesystemAccess !== "read-only" ||
+      agent.capabilities.supportsDiscussionSupplementalEvidence !== true
+    ) return undefined;
+    const row = this.database.prepare(`
+      SELECT turn.turn_id, turn.discussion_id, turn.wave_id, discussion.policy_json
+      FROM discussion_turns turn
+      JOIN discussion_waves wave ON wave.wave_id = turn.wave_id
+      JOIN discussions discussion
+        ON discussion.discussion_id = turn.discussion_id
+      WHERE turn.run_id = ? AND wave.state = 'open'
+    `).get(runId) as {
+      turn_id: string;
+      discussion_id: string;
+      wave_id: string;
+      policy_json: string;
+    } | undefined;
+    if (!row) return undefined;
+    const policy = JSON.parse(row.policy_json) as { waveCompletionMode?: string };
+    if (policy.waveCompletionMode !== "read_only_quorum") return undefined;
+    return {
+      version: 1,
+      operationId: createOpaqueId("op"),
+      discussionId: row.discussion_id,
+      waveId: row.wave_id,
+      turnId: row.turn_id
+    };
+  }
+
+  private discussionExcludedMessageIds(runId: string): string[] {
+    const rows = this.database.prepare(`
+      SELECT
+        rejected.turn_id,
+        seal.accepted_members_json,
+        projection.message_id
+      FROM discussion_turns current_turn
+      JOIN discussion_waves current_wave
+        ON current_wave.wave_id = current_turn.wave_id
+      JOIN discussion_wave_seals seal
+        ON seal.discussion_id = current_turn.discussion_id
+      JOIN discussion_waves sealed_wave
+        ON sealed_wave.wave_id = seal.wave_id
+      JOIN discussion_turns rejected
+        ON rejected.wave_id = sealed_wave.wave_id
+      JOIN run_reply_message_projections projection
+        ON projection.run_id = rejected.run_id
+      WHERE current_turn.run_id = ?
+        AND sealed_wave.ordinal < current_wave.ordinal
+      ORDER BY sealed_wave.ordinal, rejected.wave_member_ordinal,
+        projection.reply_sequence
+    `).all(runId) as Array<{
+      turn_id: string;
+      accepted_members_json: string;
+      message_id: string;
+    }>;
+    return [...new Set(rows.flatMap((row) => {
+      const acceptedTurnIds = new Set(
+        (JSON.parse(row.accepted_members_json) as Array<{ turnId: string }>)
+          .map(({ turnId }) => turnId)
+      );
+      return acceptedTurnIds.has(row.turn_id) ? [] : [row.message_id];
+    }))];
   }
 
   private contextMessage(message: {

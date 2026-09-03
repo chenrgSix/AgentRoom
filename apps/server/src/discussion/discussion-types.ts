@@ -54,6 +54,9 @@ export interface DiscussionPolicy {
   allowAutomaticFinish: boolean;
   participantSelectionMode: DiscussionParticipantSelectionMode;
   focusedParticipantLimit: number;
+  waveCompletionMode: "all_settled" | "read_only_quorum";
+  quorumMinimumCompleted: number;
+  quorumSoftDeadlineSeconds: number;
 }
 
 export type DiscussionParticipantSelectionMode =
@@ -192,6 +195,48 @@ export interface DiscussionWaveSelection {
   selectionDigest: string;
 }
 
+export interface DiscussionWaveSealMember {
+  turnId: string;
+  waveMemberOrdinal: number;
+  agentId: string;
+  role: "participant" | "reviewer";
+  runId: string;
+  sourceReplySequence: number;
+  outputMessageId: string;
+  sourceMessageSequence: number;
+  replyHash: string;
+}
+
+export interface DiscussionWaveSeal {
+  sealId: string;
+  discussionId: string;
+  waveId: string;
+  softDeadlineAt: string;
+  minimumCompleted: number;
+  requiredRoles: Array<"reviewer">;
+  acceptedMembers: DiscussionWaveSealMember[];
+  sealDigest: string;
+  sealedAt: string;
+}
+
+export interface DiscussionSupplementalEvidence {
+  evidenceId: string;
+  operationId: string;
+  sealId: string;
+  discussionId: string;
+  waveId: string;
+  turnId: string;
+  runId: string;
+  agentId: string;
+  deviceId: string;
+  sourceReplySequence: number;
+  sourceMessageId: string;
+  sourceMessageSequence: number;
+  replyHash: string;
+  evidenceDigest: string;
+  submittedAt: string;
+}
+
 export interface DiscussionDecision {
   decisionId: string;
   discussionId: string;
@@ -233,7 +278,10 @@ export const defaultDiscussionPolicy: DiscussionPolicy = {
   requireReviewer: false,
   allowAutomaticFinish: true,
   participantSelectionMode: "question_focused",
-  focusedParticipantLimit: 3
+  focusedParticipantLimit: 3,
+  waveCompletionMode: "all_settled",
+  quorumMinimumCompleted: 2,
+  quorumSoftDeadlineSeconds: 60
 };
 
 export const emptyProgressSnapshot = (): ProgressSnapshot => ({

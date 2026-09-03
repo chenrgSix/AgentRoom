@@ -31,6 +31,8 @@ import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-regis
 import type { CoreRepository } from "../data/core-repository.js";
 import type { DiscussionOrchestrator } from "../discussion/discussion-orchestrator.js";
 import type { DiscussionRepository } from "../discussion/discussion-repository.js";
+import type { DiscussionSupplementalEvidenceService } from
+  "../discussion/discussion-supplemental-evidence-service.js";
 import type { HostedAgentConfigurationService } from
   "../hosted/hosted-agent-configuration-service.js";
 import type { TeamWaitService } from "../mcp/team-wait-service.js";
@@ -110,6 +112,7 @@ export interface ServerRouteContext {
   clientAccess: ClientAccessService;
   discussions: DiscussionOrchestrator;
   discussionRepository: DiscussionRepository;
+  discussionSupplementalEvidence: DiscussionSupplementalEvidenceService;
   dispatchRun: (run: PersistedRun) => Promise<PersistedRun>;
   dispatchDiscussionRuns: (runs: PersistedRun[]) => Promise<void>;
   executor: InProcessRunExecutor;
