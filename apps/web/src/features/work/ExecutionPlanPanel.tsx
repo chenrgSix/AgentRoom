@@ -29,6 +29,7 @@ import {
   type PendingPlanReviewCommand,
   type PlanReviewReceiptScope
 } from "./plan-review-receipt.js";
+import { PlanSupersessionPanel } from "./PlanSupersessionPanel.js";
 
 interface ExecutionPlanPanelProps {
   agentNames: ReadonlyMap<string, string>;
@@ -487,6 +488,17 @@ export function ExecutionPlanPanel({
         : diffs.length === 0 ? <p>{t("结构化定义没有变化。", "The structured definition is unchanged.", locale)}</p>
         : <ol>{diffs.map((entry, index) => <li key={`${entry.path}:${index}`}><strong>{display(entry.kind)}</strong><code>{entry.path}</code>{entry.kind !== "added" && <del>{displayPlanDiffValue(entry.before)}</del>}{entry.kind !== "removed" && <ins>{displayPlanDiffValue(entry.after)}</ins>}</li>)}</ol>}
     </section>
+
+    {canManage && currentMember && ["approved", "running", "paused", "review"].includes(selected.state) && <PlanSupersessionPanel
+      agentNames={agentNames}
+      currentMember={currentMember}
+      key={`${selected.planId}:${selected.current.revision}:${selected.controlRevision}`}
+      locale={locale}
+      onChanged={async () => { await loadPlans(); onChanged(); }}
+      plan={selected}
+      task={task}
+      token={token}
+    />}
 
     {canManage && selected.state === "draft" && <section className="work-plan-editor">
       <h5>{t("修订完整定义", "Revise complete definition", locale)}</h5>

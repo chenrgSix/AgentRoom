@@ -63,6 +63,34 @@
 .work-plan-receipts header, .work-plan-latest-receipt { grid-template-columns: minmax(0, 1fr) auto; }
 .work-plan-receipts header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 .work-plan-receipts header span, .work-plan-latest-receipt span { overflow-wrap: anywhere; color: #9eaa95; font-size: 11px; }
+.work-plan-supersession { display: grid; min-width: 0; gap: 14px; padding: 16px; border: 1px solid #526344; border-radius: 12px; background: #1a2117; }
+.work-plan-supersession > header { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
+.work-plan-supersession > header > div { min-width: 0; }
+.work-plan-supersession > header h5, .work-plan-supersession > header p { margin: 0; }
+.work-plan-supersession > header p, .work-plan-supersession-command p, .work-plan-delegations > p, .work-plan-authority-note { color: #aab6a1; font-size: 11px; line-height: 1.55; }
+.work-plan-supersession-pins { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 12px; border-radius: 9px; background: #141a12; }
+.work-plan-supersession-command, .work-plan-supersession-candidate, .work-plan-delegations { display: grid; min-width: 0; gap: 10px; padding: 14px; border: 1px solid #394533; border-radius: 10px; background: #20271d; }
+.work-plan-supersession h6 { margin: 0; color: #dce8d3; font-size: 12px; }
+.work-plan-supersession label { display: grid; gap: 6px; color: #b7c5ad; font-size: 11px; font-weight: 700; }
+.work-plan-supersession textarea, .work-plan-supersession input, .work-plan-supersession select { box-sizing: border-box; min-width: 0; padding: 9px 10px; border: 1px solid #4b5841; border-radius: 8px; background: #151a12; color: #e1ead9; font: inherit; }
+.work-plan-supersession textarea { min-height: 78px; resize: vertical; }
+.work-plan-supersession textarea.work-plan-json { min-height: 360px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.work-plan-supersession-command > div, .work-plan-delegation-revoke { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.work-plan-supersession-candidate > dl { padding: 10px; border-radius: 8px; background: #171d14; }
+.work-plan-supersession-diff, .work-plan-carry, .work-plan-delegations > ol { display: grid; gap: 8px; padding: 0; list-style: none; }
+.work-plan-supersession-diff li { display: grid; grid-template-columns: auto minmax(140px, .7fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.work-plan-supersession-diff code, .work-plan-supersession-diff del, .work-plan-supersession-diff ins { min-width: 0; padding: 5px 7px; overflow-wrap: anywhere; border-radius: 5px; background: #11150f; color: #cbd6c2; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: none; }
+.work-plan-supersession-diff del { background: #361f1d; color: #f0bab4; }
+.work-plan-supersession-diff ins { background: #1d3320; color: #bfe3b6; }
+.work-plan-carry li { display: grid; gap: 3px; padding: 9px; border-left: 3px solid #82975b; background: #171d14; }
+.work-plan-carry span { overflow-wrap: anywhere; color: #9eaa95; font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.work-plan-delegation-form { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(220px, 1fr); gap: 10px; }
+.work-plan-delegation-form label:last-of-type { grid-column: 1 / -1; }
+.work-plan-delegations > ol > li { display: grid; gap: 8px; padding: 11px; border: 1px solid #35402f; border-radius: 8px; background: #171d14; }
+.work-plan-delegations > ol header { display: flex; justify-content: space-between; gap: 10px; }
+.work-plan-delegations > ol header span { color: #aab6a1; font-size: 10px; }
+.work-plan-delegation-revoke label { flex: 1 1 280px; }
+.work-plan-authority-note { margin: 0; padding-top: 2px; }
 .work-evidence-surface { display: grid; min-width: 0; gap: 16px; }
 .work-evidence-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto; align-items: end; gap: 14px; }
 .work-evidence-toolbar > div, .work-evidence-toolbar label { display: grid; min-width: 0; gap: 6px; }
@@ -109,6 +137,10 @@
 :root[data-theme="light"] .work-plan-blockers, :root[data-theme="light"] .work-plan-pending { background: #fffbea; }
 :root[data-theme="light"] .work-plan-graph article, :root[data-theme="light"] .work-plan-receipts > ol > li, :root[data-theme="light"] .work-plan-latest-receipt { background: #f2f7ed; }
 :root[data-theme="light"] .work-plan-editor textarea, :root[data-theme="light"] .work-plan-review textarea { border-color: #b9c9ac; background: #fff; color: #27331e; }
+:root[data-theme="light"] .work-plan-supersession { border-color: #b8caa8; background: #fbfdf8; }
+:root[data-theme="light"] .work-plan-supersession-pins, :root[data-theme="light"] .work-plan-supersession-command, :root[data-theme="light"] .work-plan-supersession-candidate, :root[data-theme="light"] .work-plan-delegations, :root[data-theme="light"] .work-plan-delegations > ol > li, :root[data-theme="light"] .work-plan-supersession-candidate > dl, :root[data-theme="light"] .work-plan-carry li { border-color: #d1ddc6; background: #f2f7ed; }
+:root[data-theme="light"] .work-plan-supersession textarea, :root[data-theme="light"] .work-plan-supersession input, :root[data-theme="light"] .work-plan-supersession select { border-color: #b9c9ac; background: #fff; color: #27331e; }
+:root[data-theme="light"] .work-plan-supersession h6 { color: #354827; }
 :root[data-theme="light"] .work-evidence-toolbar label, :root[data-theme="light"] .work-evidence-plan-identity dt, :root[data-theme="light"] .work-evidence-grid dt { color: #607254; }
 :root[data-theme="light"] .work-evidence-toolbar select, :root[data-theme="light"] .work-evidence-toolbar button, :root[data-theme="light"] .work-evidence-command button { border-color: #bacba9; background: #f5f8ef; color: #354827; }
 :root[data-theme="light"] .work-evidence-plan-identity > div, :root[data-theme="light"] .work-evidence-node, :root[data-theme="light"] .work-evidence-error, :root[data-theme="light"] .work-evidence-warning { border-color: #cad7be; background: #fbfdf8; }
@@ -142,4 +174,10 @@
   .work-plan-diff del, .work-plan-diff ins { grid-column: 1 / -1; }
   .work-plan-surface dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .work-plan-editor textarea { min-height: 280px; }
+  .work-plan-supersession > header { align-items: start; flex-direction: column; }
+  .work-plan-supersession-pins, .work-plan-delegation-form { grid-template-columns: minmax(0, 1fr); }
+  .work-plan-delegation-form label:last-of-type { grid-column: auto; }
+  .work-plan-supersession-diff li { grid-template-columns: auto minmax(0, 1fr); }
+  .work-plan-supersession-diff del, .work-plan-supersession-diff ins { grid-column: 1 / -1; }
+  .work-plan-supersession textarea.work-plan-json { min-height: 280px; }
 }
