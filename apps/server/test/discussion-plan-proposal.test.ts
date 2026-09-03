@@ -7,6 +7,8 @@ import type {
   ExecutionPlanDefinition
 } from "@convene-wire/contracts/execution-plan";
 
+import { BridgeConnectionRegistry } from
+  "../src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { SqliteTransactionBoundary } from
@@ -19,17 +21,23 @@ import { DiscussionPlanProposalService } from
   "../src/discussion/discussion-plan-proposal-service.js";
 import { DiscussionRepository } from
   "../src/discussion/discussion-repository.js";
+import { DiscussionSupplementalEvidenceService } from
+  "../src/discussion/discussion-supplemental-evidence-service.js";
 import { ExecutionPlanDraftWriter } from
   "../src/execution/execution-plan-draft-writer.js";
 import { ExecutionPlanRepository } from
   "../src/execution/execution-plan-repository.js";
 import { ExecutionSourceRepository } from
   "../src/execution/execution-source-repository.js";
+import { AgentService } from "../src/registry/agent-service.js";
+import { MemberDeviceService } from "../src/registry/member-device-service.js";
+import { DeliveryService } from "../src/run/delivery-service.js";
 import { RunRepository, type RunRecord } from
   "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
+import { ContextPlanner } from "../src/task/context-planner.js";
 import {
   fixture as executionFixture,
   now
@@ -183,6 +191,171 @@ function completeRun(
   }, now);
 }
 
+function stageRun(
+  runs: RunRepository,
+  run: RunRecord,
+  content: string,
+  assessment?: Record<string, unknown>
+): void {
+  runs.applyEvent(run.runId, {
+    type: "status", sequence: 1, status: "working"
+  }, now);
+  runs.applyReply(run.runId, {
+    type: "reply",
+    sequence: 2,
+    content,
+    ...(assessment ? { assessment } : {})
+  }, now);
+}
+
+function finishStagedRun(runs: RunRepository, run: RunRecord): void {
+  runs.applyEvent(run.runId, {
+    type: "status", sequence: 3, status: "completed"
+  }, now);
+}
+
+async function quorumProposalFixture(t: TestContext) {
+  const environment = await executionFixture(t);
+  const clock = { value: now };
+  const database = environment.database;
+  const core = new CoreRepository(database);
+  const auth = new AuthService(database);
+  const principal = auth.authenticateWebSession(
+    environment.authorization.slice("Bearer ".length),
+    now
+  );
+  const devices = new MemberDeviceService(core, auth);
+  const device = devices.registerOwnDevice(
+    principal,
+    environment.teamId,
+    "Read-only discussion Bridge",
+    now
+  );
+  const devicePrincipal = auth.authenticateDevice(
+    auth.issueDeviceCredential(device.deviceId, now).secret,
+    now
+  );
+  const agents = new AgentService(core, auth);
+  const agentIds = ["Coder", "Security", "Reviewer"].map((name) => {
+    const agent = agents.publishAgent(principal, {
+      teamId: environment.teamId,
+      deviceId: device.deviceId,
+      name: `Quorum ${name}`,
+      role: name,
+      integrationMode: "managed",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      runtimePolicy: { filesystemAccess: "read-only" },
+      now
+    });
+    return agents.publishDeviceAgent(devicePrincipal, {
+      agentId: agent.agentId,
+      name: agent.name,
+      role: agent.role,
+      capabilities: {
+        ...agent.capabilities,
+        supportsDiscussionSupplementalEvidence: true
+      },
+      runtimePolicy: { filesystemAccess: "read-only" },
+      now
+    }).agentId;
+  });
+  await environment.ok("PUT", `/api/rooms/${environment.roomId}/participants`, {
+    memberIds: [environment.ownerMemberId],
+    agentIds
+  });
+  let root = await environment.ok(
+    "GET", `/api/tasks/${environment.root.taskId}`
+  );
+  root = await environment.ok("PUT", `/api/tasks/${root.taskId}/definition`, {
+    operationId: "op_qa054_assign_quorum_agents0001",
+    expectedTaskRevision: root.taskRevision,
+    title: root.title,
+    goal: root.goal,
+    ownerMemberId: root.ownerMemberId,
+    completionPolicy: root.completionPolicy,
+    priority: root.priority,
+    dueAt: root.dueAt,
+    criteria: root.criteria,
+    assignments: [
+      { agentId: agentIds[0], role: "primary" },
+      { agentId: agentIds[1], role: "contributor" },
+      { agentId: agentIds[2], role: "reviewer" }
+    ],
+    budgetPolicy: root.budgetPolicy
+  });
+  const tasks = new AgentTaskRepository(database);
+  const discussions = new DiscussionRepository(database);
+  const runs = new RunRepository(database);
+  const transactions = new SqliteTransactionBoundary(database);
+  const plans = new ExecutionPlanRepository(database);
+  const drafts = new ExecutionPlanDraftWriter(
+    transactions,
+    plans,
+    new ExecutionSourceRepository(database),
+    tasks,
+    core,
+    () => undefined
+  );
+  const proposalService = new DiscussionPlanProposalService(
+    transactions,
+    core,
+    discussions,
+    drafts,
+    tasks
+  );
+  const delivery = new DeliveryService(
+    database,
+    core,
+    runs,
+    new ContextPlanner(database, core, tasks),
+    new BridgeConnectionRegistry(),
+    () => clock.value
+  );
+  const orchestrator = new DiscussionOrchestrator(
+    core,
+    new MessageService(core, auth),
+    discussions,
+    runs,
+    auth,
+    tasks,
+    () => clock.value,
+    proposalService
+  );
+  const definition = structuredClone(environment.command().definition);
+  for (const node of definition.nodes) {
+    node.agentId = agentIds[0]!;
+    node.task.ownerMemberId = environment.ownerMemberId;
+  }
+  return {
+    ...environment,
+    agentIds,
+    clock,
+    core,
+    delivery,
+    devicePrincipal,
+    discussions,
+    draft: proposalDraft(definition),
+    orchestrator,
+    plans,
+    principal,
+    root,
+    runs,
+    supplemental: new DiscussionSupplementalEvidenceService(
+      core,
+      discussions,
+      runs,
+      delivery,
+      tasks
+    )
+  };
+}
+
 function count(database: ReturnType<typeof openDatabase>, table: string): number {
   return (database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as {
     n: number;
@@ -280,6 +453,132 @@ test("decision finalization atomically retains one immutable unapproved draft", 
   ).reconcileTerminal(terminal.discussion.discussionId);
   assert.equal(replay?.planId, planId);
   assert.equal(count(restartedDatabase, "execution_plans"), 1);
+});
+
+test("read-only focused quorum produces an unapproved Plan and separate late evidence", {
+  timeout: 30_000
+}, async (t) => {
+  const value = await quorumProposalFixture(t);
+  let result = value.orchestrator.create(value.principal, {
+    roomId: value.roomId,
+    taskId: value.root.taskId,
+    goal: "Produce a bounded implementation plan after focused review.",
+    participantAgentIds: value.agentIds,
+    mode: "review",
+    outputMode: "decision_record",
+    policy: {
+      focusedParticipantLimit: 2,
+      requireReviewer: true,
+      waveCompletionMode: "read_only_quorum",
+      quorumMinimumCompleted: 2,
+      quorumSoftDeadlineSeconds: 30
+    }
+  });
+  assert.equal(result.scheduledRuns.length, 3);
+  const offers = new Map(result.scheduledRuns.map((run) => {
+    const delivery = value.delivery.dispatch(run.runId);
+    assert.ok(delivery?.payload.discussionSupplementalEvidence);
+    return [run.runId, delivery!.payload.discussionSupplementalEvidence!];
+  }));
+  const [coder, lateSecurity, reviewer] = result.scheduledRuns;
+  assert.ok(coder && lateSecurity && reviewer);
+  stageRun(
+    value.runs,
+    lateSecurity,
+    "LATE-SECURITY-EVIDENCE-MUST-NOT-ENTER-THE-PLAN",
+    { newInformationAdded: true, recommendation: "continue" }
+  );
+  completeRun(value.runs, coder, "Open the exact security question.", {
+    newInformationAdded: true,
+    openQuestions: [{
+      id: "question:qa054-security",
+      question: "Which boundary keeps execution authority human-governed?",
+      importance: "high"
+    }],
+    recommendation: "continue"
+  });
+  value.orchestrator.onRunTerminal(coder.runId);
+  completeRun(value.runs, reviewer, "Review the bounded authority model.", {
+    newInformationAdded: true,
+    reviewerApproved: true,
+    recommendation: "continue"
+  });
+  value.orchestrator.onRunTerminal(reviewer.runId);
+
+  value.clock.value = "2026-08-31T12:00:31.000Z";
+  const focusedRuns = value.orchestrator.sweepDueWaves();
+  assert.equal(focusedRuns.length, 2);
+  const afterSeal = value.orchestrator.get(
+    value.principal,
+    result.discussion.discussionId
+  );
+  assert.equal(afterSeal.seals.length, 1);
+  assert.equal(afterSeal.waves[0]?.state, "partial");
+  assert.equal(afterSeal.waves[1]?.selection?.strategy, "question_focused");
+  assert.deepEqual(afterSeal.waves[1]?.selection?.selectedAgentIds, [
+    value.agentIds[0],
+    value.agentIds[2]
+  ]);
+  assert.equal(value.runs.getRun(lateSecurity.runId)?.state, "working");
+
+  for (const run of focusedRuns) {
+    const reviewerRun = run.targetAgentId === value.agentIds[2];
+    completeRun(value.runs, run, "Resolve the focused authority question.", {
+      goalSatisfied: true,
+      confidence: 0.99,
+      newInformationAdded: true,
+      resolvedQuestionIds: ["question:qa054-security"],
+      disagreementRemaining: "none",
+      recommendation: "finish",
+      ...(reviewerRun ? { reviewerApproved: true } : {})
+    });
+    result = value.orchestrator.onRunTerminal(run.runId)!;
+  }
+  assert.equal(result.discussion.state, "finalizing");
+  const finalRun = result.scheduledRuns[0];
+  assert.ok(finalRun);
+  completeRun(
+    value.runs,
+    finalRun,
+    `Human-readable conclusion.\n${envelope(value.draft)}`
+  );
+  result = value.orchestrator.onRunTerminal(finalRun.runId)!;
+  assert.equal(result.discussion.state, "completed");
+  const plan = value.plans.listForRootTask(value.root.taskId, "", 10).plans[0];
+  assert.ok(plan);
+  assert.equal(plan.state, "draft");
+  assert.deepEqual(plan.current.author, {
+    kind: "discussion",
+    discussionId: result.discussion.discussionId
+  });
+  assert.equal(count(value.database, "execution_plan_approvals"), 0);
+  assert.equal(count(value.database, "execution_plan_nodes"), 0);
+  assert.equal(count(value.database, "execution_dispatch_intents"), 0);
+
+  finishStagedRun(value.runs, lateSecurity);
+  value.orchestrator.onRunTerminal(lateSecurity.runId);
+  const offer = offers.get(lateSecurity.runId)!;
+  const retained = value.supplemental.submit(value.devicePrincipal, {
+    operationId: offer.operationId,
+    discussionId: offer.discussionId,
+    waveId: offer.waveId,
+    turnId: offer.turnId,
+    runId: lateSecurity.runId,
+    traceId: lateSecurity.traceId,
+    agentId: lateSecurity.targetAgentId,
+    sourceReplySequence: 2
+  }, value.clock.value);
+  assert.equal(retained.state, "retained");
+  const audit = value.orchestrator.get(
+    value.principal,
+    result.discussion.discussionId
+  );
+  assert.equal(audit.seals.length, 1);
+  assert.equal(audit.supplementalEvidence.length, 1);
+  assert.equal(count(value.database, "execution_plan_approvals"), 0,
+    "late evidence and quorum never approve the Plan");
+  assert.equal(count(value.database, "execution_evidence_adoptions"), 0,
+    "Discussion facts never satisfy execution proof gates");
 });
 
 test("missing and domain-invalid envelopes finish visibly without a plan", async (t) => {

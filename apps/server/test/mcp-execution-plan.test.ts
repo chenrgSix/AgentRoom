@@ -570,6 +570,24 @@ test("delegated replan rejects budget expansion without consuming authority", as
   );
   assert.equal(candidateResult.result.isError, undefined);
   const candidate = candidateResult.result.structuredContent?.candidate as any;
+  const sideEffectTables = [
+    "execution_plans",
+    "execution_plan_approvals",
+    "execution_plan_task_claims",
+    "execution_plan_supersession_activations",
+    "execution_replan_delegation_consumptions",
+    "execution_carried_evidence_adoptions",
+    "execution_evidence_adoptions",
+    "execution_dispatch_intents",
+    "isolated_workspace_leases",
+    "repository_capture_operations",
+    "repository_verification_operations",
+    "repository_integration_operations",
+    "runs"
+  ];
+  const beforeDenied = Object.fromEntries(sideEffectTables.map((table) =>
+    [table, count(value.database, table)]
+  ));
   const denied = await value.call("team.activate_plan_supersession", {
     runId,
     planId: approved.planId,
@@ -588,6 +606,14 @@ test("delegated replan rejects budget expansion without consuming authority", as
     }
   });
   assert.equal(denied.result.isError, true);
+  assert.match(JSON.stringify(denied), /EXECUTION_HUMAN_REVIEW_REQUIRED/u);
+  assert.deepEqual(
+    Object.fromEntries(sideEffectTables.map((table) =>
+      [table, count(value.database, table)]
+    )),
+    beforeDenied,
+    "rejected delegated expansion must have no authority or execution side effects"
+  );
   assert.equal(
     (await value.ok("GET", `/api/execution-plans/${approved.planId}`))
       .current.revision,
