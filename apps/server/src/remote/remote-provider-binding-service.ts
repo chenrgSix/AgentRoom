@@ -61,7 +61,8 @@ function canonicalOrigin(value: unknown): string {
 export class RemoteProviderBindingService {
   public constructor(
     private readonly repository: RemoteProviderBindingRepository,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly allowTestLoopbackOrigin = false
   ) {}
 
   public create(
@@ -82,6 +83,13 @@ export class RemoteProviderBindingService {
     canonicalExecutionJSON(input);
     const command = input as unknown as CreateRemoteProviderBindingCommand;
     const origin = canonicalOrigin(command.providerOrigin);
+    const parsedOrigin = new URL(origin);
+    const testLoopbackHTTP = parsedOrigin.protocol === "http:" &&
+      (parsedOrigin.hostname === "127.0.0.1" || parsedOrigin.hostname === "[::1]");
+    if (parsedOrigin.protocol !== "https:" &&
+      !(this.allowTestLoopbackOrigin && testLoopbackHTTP)) {
+      return fail("REMOTE_PROVIDER_BINDING_INVALID", 400);
+    }
     const requestDigest = executionOperationDigest({
       ...command,
       providerOrigin: origin,

@@ -333,14 +333,27 @@ cannot enter Result, Task-completion, ambiguity-acknowledgement, Member, Device,
 or MCP authority paths.
 
 REPO-003's remote evidence credential remains a Server-operator runtime value;
-a Team Owner cannot submit or persist it. That current deployment boundary
-limits, but does not solve, outbound request risk. Before a Web-configured
-credential or live forge adapter is accepted, `SEC-014` must add a shared
-outbound egress policy: resolve and pin the destination per connection, reject
-private, loopback, link-local, metadata, multicast, unspecified and
-IPv4-mapped bypass addresses, preserve hostname TLS/SNI, ignore ambient proxy
-routing and reject redirects or DNS rebinding. Explicit loopback HTTP remains
-available only to isolated tests. An HTTPS URL alone is not SSRF admission.
+a Team Owner cannot submit or persist it. That deployment boundary limits, but
+does not solve, outbound request risk. `SEC-014` implements the remaining policy in
+the [remote-provider egress goal](../acceptance/sec-014-remote-provider-egress-goal.md):
+resolve once and pin the destination for every direct connection, reject the
+whole answer set when any private, loopback, link-local, metadata, multicast,
+unspecified, mapped or other non-public address is present, preserve hostname
+TLS/SNI and certificate validation, recheck the actual peer before HTTP bytes,
+and reject redirects, ambient proxies and DNS rebinding. Explicit loopback is
+carried only by the marked injected test transport, never binding metadata or a
+Team Owner command. An HTTPS URL alone is not SSRF admission.
+
+The production remote-evidence client now constructs a fresh direct socket for
+every lookup, create and bundle request. It validates the whole final DNS answer
+set, pins one public address, compares the connected peer, and completes
+hostname-based TLS authentication before constructing HTTP. It overwrites Host
+with the original authority, never consults ambient proxy variables, never
+follows redirects and never pools a connection. The only loopback exception is
+an in-memory marker on the injected deterministic test transport; default or
+unmarked startup, Team commands and persisted bindings cannot recreate it.
+The accepted evidence and explicit live-network/platform limits are recorded in
+the [SEC-014 acceptance](../acceptance/sec-014-remote-provider-egress-goal.md).
 
 `CON-012` defines the additive ADR-0021 pairing-session contract. `SEC-008`
 implements its state machine in migration 0041 and the dedicated pairing

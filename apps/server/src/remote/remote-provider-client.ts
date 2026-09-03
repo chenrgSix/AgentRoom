@@ -8,6 +8,10 @@ import {
   assertExecutionCommand,
   canonicalExecutionJSON
 } from "@convene-wire/contracts/execution-validation";
+import {
+  createRemoteProviderEgressFetch,
+  RemoteProviderEgressError
+} from "./remote-provider-egress-policy.js";
 
 const jsonLimit = 128 * 1024;
 const bundleLimit = 4 * 1024 * 1024;
@@ -116,7 +120,7 @@ async function parseJSON<T>(
 export class RemoteProviderClient {
   public constructor(
     private readonly resolveCredential: RemoteProviderCredentialResolver,
-    private readonly providerFetch: typeof fetch = fetch,
+    private readonly providerFetch: typeof fetch = createRemoteProviderEgressFetch(),
     private readonly timeoutMilliseconds = defaultTimeoutMilliseconds
   ) {
     if (!Number.isSafeInteger(timeoutMilliseconds) ||
@@ -239,9 +243,12 @@ export class RemoteProviderClient {
           ...(init.body ? { "content-type": "application/json" } : {})
         }
       });
-    } catch {
+    } catch (error) {
       if (signal.aborted) {
         throw new RemoteProviderClientError("REMOTE_PROVIDER_TIMEOUT");
+      }
+      if (error instanceof RemoteProviderEgressError) {
+        throw new RemoteProviderClientError(error.code);
       }
       throw new RemoteProviderClientError("REMOTE_PROVIDER_UNAVAILABLE");
     }
