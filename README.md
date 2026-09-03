@@ -47,6 +47,17 @@ Current unreleased source also includes
 Use an updated Central, Web and Bridge together; v0.4.2 packages do not include
 this flow.
 
+## Repository Ownership
+
+Your repository stays on the client machine and remains under its owner's
+control. The local Bridge, not Central, owns repository paths, Git remotes,
+Git/SSH credentials, fetch/pull/push, worktrees and every Git command. Central
+governs Plans, scheduling, bounded authorization, evidence adoption and
+operation receipts; it cannot browse a checkout, obtain Git credentials or run
+repository commands by itself. Remote Provider support is an optional,
+credential-free-by-default evidence extension, not a Core requirement or a
+grant of repository authority.
+
 ## Client Owner Entry
 
 In **设备 → 配对新设备**, keep **同时确认成员归属并启用客户端入口**

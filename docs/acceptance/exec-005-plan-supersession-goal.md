@@ -1,8 +1,8 @@
 # EXEC-005 Plan Supersession and Evidence Carry-Forward Goal
 
-Status: frozen for implementation on 2026-09-03. This document is the
-implementation and acceptance authority for `EXEC-005`; `docs/TASKS.md`
-remains the sole delivery-state register.
+Status: accepted on 2026-09-03. This document was frozen before implementation
+and remains the implementation and acceptance authority for `EXEC-005`;
+`docs/TASKS.md` remains the sole delivery-state register.
 
 ## Goal
 
@@ -200,3 +200,79 @@ evidence proves all of the following:
 A passing supersession unit test alone is not acceptance. Final evidence must
 include exact revision/claim/adoption rows, immutable prior-run snapshots,
 restart/concurrency results and physical temporary-directory snapshots.
+
+## Accepted Implementation
+
+Migration 0083 retains immutable candidate, activation, delegation,
+revocation, consumption, carry adoption/reuse and response receipt facts. It
+permits Task claims and the Plan current revision to move only while the exact
+same activation transaction contains the matching candidate, compilation and
+approval. Existing plan/revision, approval, claim and adoption invariants stay
+closed; the generalized adopted-materialization view still requires Remote
+reuse/input-attestation companions and now also requires every carried reuse
+companion.
+
+`ExecutionPlanSupersessionService` separates proposal from activation. Proposal
+freezes sources and the fixed existing-Task set but cannot advance Plan control,
+claims, Runs or adoptions. Activation rechecks current Plan/root/control,
+source, Task, Agent and local Bridge grant/profile authority, performs the
+fixed-set compilation and claim transfer, advances Plan revision/control, and
+retains carry and delegation consumption in one immediate transaction. Exact
+response-loss replay returns the original sealed receipt.
+
+Carry-forward re-reads the retained local SourceEvidence, proof refs,
+EvidenceAdoption and EvidenceReuseContract. It rejects omitted gates, duplicate
+selections, Remote Evidence, substituted pins, unavailable local authority and
+changed logical inputs. The target revision receives a new adoption and reuse
+companion; accepted, verified and integrated gates all release their matching
+dependency reader without dispatching the carried source node again.
+
+The Tech Lead MCP tools can propose only from a current assigned primary
+Agent's exact working root Run. Delegated activation additionally requires the
+latest monotonically revisioned, unexpired, unrevoked, unused Owner delegation
+and deterministic no-broadening comparison. A stale, expired or revoked
+delegation and a Plan-budget expansion all fail without consuming authority or
+advancing the Plan.
+
+## Acceptance Evidence
+
+The accepted implementation is commits `bdbb967` and `53a4727` on `main`.
+The following evidence was run from an isolated private temporary base on
+2026-09-03:
+
+- `npm run validate` validated 14 schemas and 258 fixtures; `npm run build`
+  built Server, Web and current generated TypeScript/Go contracts.
+- `npm test` passed 569 Server, 268 Web and 99 Contract tests, plus Bridge UI,
+  QA evidence, local/trusted product-experience, site and 24 temporary-lifecycle
+  checks. The outer run root and every nested fixture root were removed.
+- `npm run test:e2e` passed nine deterministic scenarios and explicitly skipped
+  only the opt-in live-Runtime scenario. Physical scenarios included two
+  Bridges, exact integrated dependency bytes, response-loss/restart recovery,
+  parallel CAS winner/conflict and fan-in.
+- `npm run test:bridge` passed every Go Bridge package, including the long
+  repository suite. E2E and Bridge ran concurrently under distinct owned run
+  IDs and each removed only its own root.
+- Three additional consecutive `npm run test:temp-lifecycle` invocations each
+  passed 24 checks covering success, assertion/process failure, spawn failure,
+  timeout, `SIGINT`, `SIGTERM`, nested ownership and parallel isolation.
+- Physical snapshots before the acceptance run and after all workspace, E2E,
+  Bridge and three lifecycle rounds found zero directories named
+  `agentroom-*`, `agent-room-*`, `convenewire-*` or `convene-wire-*` inside the
+  isolated base, and zero total entries remained in its run-root directory.
+
+Focused SQLite/service evidence additionally proves candidate immutability and
+inertness, one concurrent activation winner, restart replay, full injected
+rollback, byte-preserved old history, active and unacknowledged ambiguous
+prior-revision admission fences, three-gate carry, missing-gate and forged-digest
+rollback, delegation revision/revocation/expiry/one-shot behavior and
+human-review escalation on budget expansion. Contract semantic-drift tests
+change criteria, base, scope, output, verifier, integration target, Agent,
+grant/profile and Artifact digest and show that the reusable node digest changes.
+
+## Retained Boundaries
+
+`EXEC-005` does not create or remove Tasks, automatically retry or replan,
+carry Optional Remote Evidence, edit the graph in Web, execute Git, or grant
+repository authority to Central. Repository and Git remain client-owned as
+stated in ADR-0039. The next Core tasks are `DISC-011`, `DISC-012`, `QA-054`
+and `QA-055`.

@@ -429,8 +429,9 @@ equivalence without changing the version-1 `EvidenceAdoption`. The companion
 semantic `nodeReuseContractDigest`. The exact formulas, additive migration and
 negative evidence are frozen in
 [`evidence-reuse-digest-separation-goal.md`](../acceptance/evidence-reuse-digest-separation-goal.md).
-`EXEC-005` may later consume only the new reuse digests for explicit
-carry-forward admission; no current scheduler or dependency reader infers reuse.
+`EXEC-005` consumes only the new reuse digests for explicit carry-forward
+admission. The scheduler and dependency reader consume the resulting
+revision-local adoption and never infer reuse from a companion contract alone.
 Migration 0076 now retains one immutable reuse companion per local adoption,
 backfills only when that migration is first applied and dual-writes accepted,
 verified and integrated companions inside the existing materialization
