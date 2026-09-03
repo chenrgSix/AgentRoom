@@ -187,6 +187,30 @@ Accepted on 2026-09-03 with the frozen boundary unchanged:
   REPO-005-owned test root and dependency-cache directory was physically absent
   afterward.
 
-No live public provider, second physical computer, provider credential or
-production egress policy was exercised. Those remain the non-claims above and
-SEC-014 remains the production credential gate.
+No live public provider, second physical computer or provider credential was
+exercised. Those remain the non-claims above. SEC-014 now closes the
+deterministic outbound transport gate separately; it does not turn this local
+provider seam into live-provider acceptance.
+
+## Mainline Integration Revalidation
+
+After local merge commits `efa9ca8` and `7b3d30b`, the shared
+`RemoteProviderClient` was constructed once with SEC-014's pinned transport and
+used by both commit/CI observation and input-attestation calls. This preserves
+REPO-005 lookup-before-create and unknown-outcome recovery while preventing an
+attestation call from bypassing the production egress policy.
+
+The merged `main` passed 16 cross-feature provider tests, 14-schema/258-fixture
+validation, all builds, 563 Server tests, 268 Web tests, 97 Contract tests, nine
+deterministic E2Es with only the explicit live Codex/Pi scenario skipped, and
+every Go Bridge package; the repository package took 241.594 seconds. Docs lint
+covered 345 files with zero findings. Three further private lifecycle rounds
+each passed 24 tests with `owned_entries=0`, and their exact
+`/private/tmp/repo005-sec014-acceptance.qPvFyK` base was physically absent at
+the end.
+
+Read-only global counts stayed `3/3` in `/private/tmp` and `212/212` in the
+macOS user temporary directory throughout those three rounds. Two finished
+SEC-014-owned dependency caches totaling 122 MiB were then removed by exact
+path. The remaining historical `/private/tmp/convene-wire-test-run-2B7HI3`
+was not touched because two older Node processes still hold files there.

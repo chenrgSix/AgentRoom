@@ -183,3 +183,26 @@ packet-level routing or proxy appliances, a deployed container/network policy,
 Linux/Windows sockets, native CA stores, NAT64 infrastructure or a physical
 second machine. No provider credential, production database, deployment,
 Bridge binary, remote repository or Release was changed.
+
+## Mainline Integration Revalidation
+
+After local merge commits `efa9ca8` and `7b3d30b`, one SEC-014 pinned transport
+backs the shared `RemoteProviderClient` used by REPO-003 observations and
+REPO-005 input attestations. This removes the branch-local fallback to global
+`fetch` without duplicating credentials, DNS authority or retry state. The
+combined provider suite passed 16 tests, including attestation response loss,
+timeout and exact retry lookup through the governed test seam.
+
+The merged `main` also passed 14-schema/258-fixture validation, all builds, 563
+Server tests, 268 Web tests, 97 Contract tests, nine deterministic E2Es with
+only the explicit live Codex/Pi scenario skipped, every Go Bridge package and
+345-file docs lint. The Bridge repository package took 241.594 seconds and all
+top-level test roots were removed. Three additional private lifecycle rounds
+each passed 24 tests with zero entries after every round; the exact owning base
+was physically absent afterward.
+
+The three-round global observation stayed `/private/tmp=3/3` and macOS user
+temporary directory `=212/212`. Two completed SEC-014-owned npm/node-gyp cache
+directories totaling 122 MiB were then removed by exact path. The only
+remaining `/private/tmp` match is an older unowned test root still held open by
+two Node processes, so this integration did not delete it.
