@@ -1,6 +1,6 @@
 # EXEC-010 Governed Scheduler Modes and Durable Fairness Goal
 
-Status: frozen on 2026-09-03. This document is the implementation and
+Status: accepted on 2026-09-03. This document is the implementation and
 acceptance authority for `EXEC-010`; `docs/TASKS.md` remains the sole
 delivery-state register.
 
@@ -63,11 +63,12 @@ The three modes are exclusive for scheduler-selected generation-1 admission:
   compatibility path rather than scheduler authority; it does not make a
   `manual` or `supervised` Plan background-runnable.
 
-Manual and supervised commands use the authenticated Task Owner or Team Owner
-as the requester. Automatic admission continues to use the exact human Plan
-approval authority. All three paths recheck current Plan, Task, Agent,
-capability, grant, dependency, input, budget and capacity facts in the same
-admission transaction. Scheduler operations never authorize generation 2.
+Manual and supervised command operations retain the authenticated Task Owner
+or Team Owner as their actor. The admitted Run remains Plan-owned and keeps the
+exact approval reviewer as its requester, just like automatic admission. All
+three paths recheck current Plan, Task, Agent, capability, grant, dependency,
+input, budget and capacity facts in the same admission transaction. Scheduler
+operations never authorize generation 2.
 
 ## Durable Shared-Agent Rotation
 
@@ -163,3 +164,94 @@ proves all of the following:
 A passing scheduler unit test alone is not acceptance. Final evidence must
 include the exact database rows, restart/concurrency outcomes and physical
 temporary-directory snapshots.
+
+## Implementation Checkpoint
+
+The closed scheduler contracts now expose one named
+`ExecutionSchedulerMode` plus exact control, mode-transition, manual-dispatch,
+supervised-advance and immutable receipt shapes. The same roots are compiled
+into the TypeScript validator, generated TypeScript/Go types and the actual Go
+Runtime validator. Unknown fields, invalid revisions, unsupported modes and
+ambiguous selections fail before service admission.
+
+Migration `0081_governed_scheduler_modes.sql` additively retains:
+
+- one automatic revision-1 control for every existing and new Plan;
+- immutable scheduler operations and receipts with Plan, mode, actor and node
+  scope triggers;
+- the owning scheduler operation on manual/supervised DispatchIntents; and
+- immutable per-Agent fairness history plus a CAS-protected latest cursor.
+
+The populated migration regression physically removes and reapplies only
+migration 0081, then proves that the Plan control revision is unchanged, the
+old automatic DispatchIntent is reconstructed as cursor revision 1, every
+foreign key is valid and a second migration run is idempotent. Runtime startup
+does not backfill or heal these authority facts.
+
+`ExecutionSchedulerControlService` now provides authenticated GET,
+mode-transition, exact manual-dispatch and supervised-advance HTTP boundaries.
+Mode commands reject stale Plan revision, digest, Plan control revision and
+mode revision, preserve operation replay across restart and allow one winner
+under competing transitions. Direct SQL cannot manufacture a non-owner
+operation or mutate retained operations, receipts, fairness history or the
+current cursor.
+
+Automatic sweeps query only automatic Plans. Supervised sweeps are Plan-local
+and admit at most one candidate for one operation; manual admission names one
+exact node projection and never substitutes another candidate. Real timer
+tests prove that both manual and supervised Plans remain undispatched until
+their correct owner command. A supervised no-progress receipt stays empty
+after a previously active Run becomes terminal, while a fresh operation can
+then select the next deterministic node.
+
+Every newly created automatic, supervised, manual, member-Message and
+generation-2 retry admission writes its truthful fairness source in the same
+transaction as the DispatchIntent, Run authority, frozen inputs and workspace
+lease. Rollback and exact replay leave cursor counts unchanged. A physical
+two-Plan shared-Agent test fails the first selected Run, restarts the Server and
+proves that the next sweep selects the other Plan at cursor revision 2. Two
+concurrent Server schedulers retain one generation-1 winner, one history row
+and one cursor advance per actual admission without duplicate Messages, Runs,
+inputs or workspaces.
+
+## Final Acceptance
+
+The final 2026-09-03 acceptance ran from commits `9273fc8` and `c4b86ea` and
+recorded these independent gates:
+
+- `npm run validate`: 14 schemas and 258 fixtures passed;
+- `npm run build`: strict Server TypeScript, the Web production bundle and
+  generated TypeScript/Go contracts passed;
+- `npm test`: all registered workspace, Bridge UI, QA evidence, product,
+  site and lifecycle suites passed, including 96 Contracts, 555 Server and
+  268 Web tests, and the top-level owned root was removed;
+- `npm run test:e2e`: nine deterministic scenarios passed, including physical
+  two-Bridge handoff, `integrated_commit`, concurrent CAS conflict and fan-in;
+  only the explicitly credentialed live Codex/Pi scenario was skipped, and the
+  E2E root was removed;
+- `npm run test:bridge`: every Go Bridge package passed, including the
+  209-second repository package, and its cache-bearing run root was removed;
+- `npm run lint:docs`: 343 maintained Markdown files had zero issues; and
+- `git diff --check`: passed before each implementation commit.
+
+The required cleanup acceptance used the newly owned private base
+`/private/tmp/exec010-owned-base.pblVwa` through
+`CONVENE_WIRE_TEST_RUN_BASE`. Three consecutive
+`npm run test:temp-lifecycle` invocations each passed 24 tests covering normal
+success, assertion failure, spawn failure, timeout, SIGINT, SIGTERM, nested and
+parallel ownership. Physical total-entry snapshots were `before=0`,
+`after-1=0`, `after-2=0` and `after-3=0`; every child root and the private base
+itself were then absent.
+
+A separate read-only global observation found one pre-existing
+`/private/tmp/convene-wire-test-run-*` directory and 212 pre-existing
+`convene-wire-*` directories in the macOS user temporary directory. Their
+latest modification time was 2026-09-02, before this acceptance. The counts
+remained exactly `1` and `212` after all current gates, proving no new global
+prefix leak. They were deliberately not deleted because this process did not
+create or own them.
+
+This accepts `EXEC-010` for explicit persisted scheduler modes and durable
+cross-sweep shared-Agent fairness. It does not claim automatic retry, Plan
+supersession, evidence carry-forward, remote input attestation, outbound
+provider egress policy or multi-computer physical acceptance.

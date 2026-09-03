@@ -380,7 +380,7 @@ the full build, deterministic E2E, Bridge and three-run cleanup gates recorded
 in its frozen goal. Here, two-plan fairness means bounded rotation inside one
 frozen sweep only; `EXEC-010` owns durable cross-sweep fairness.
 
-The frozen `EXEC-010` target is
+The accepted `EXEC-010` boundary is
 [`exec-010-governed-scheduler-modes-goal.md`](../acceptance/exec-010-governed-scheduler-modes-goal.md).
 Scheduler autonomy is a separate Plan-local CAS: `manual` admits only an exact
 owner-pinned node, `supervised` admits at most one deterministic candidate per
@@ -392,6 +392,17 @@ history row in the same transaction as its Run/DispatchIntent; only shared-Agent
 Plan order rotates, while independent Agents retain the EXEC-008 base tuple.
 Restart, competing Servers, failed readiness and duplicate replay cannot invent
 or reset a cursor.
+
+Migration 0081 and the scheduler control HTTP service now implement that
+boundary. Existing/new Plans start automatic without changing Plan control
+identity; exact Owner operations govern mode, manual node selection and one-
+candidate supervised advances. Automatic timer selection excludes the other
+two modes. The generated TypeScript and Go Runtime contracts are closed, and
+physical SQLite tests retain truthful automatic/supervised/manual/Message/retry
+cursor history in the admission transaction. Restart rotation, competing-
+Server uniqueness, rollback, replay and three private zero-residue lifecycle
+runs are accepted by the linked record; no retry, proof or repository authority
+was broadened.
 
 QA-053 composes this scheduler with existing proof and repository authorities
 under physical parallel coding. Two Bridge-owned root Runs overlap from one
