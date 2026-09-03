@@ -162,3 +162,31 @@ compromised configured provider, multiple physical computers or production
 egress policy. It does not support external Result inputs for remote producers;
 those remain fail closed until a later contract gives their independent review
 authority an equally explicit attestation representation.
+
+## Completion Evidence
+
+Accepted on 2026-09-03 with the frozen boundary unchanged:
+
+- contract validation covered 14 schemas and 258 fixtures; 97 contract tests,
+  generated TypeScript checks and the Go contract suite passed, including
+  ordering, substitution and digest negatives;
+- the Server suite passed 556 tests, including physical SQLite migration,
+  immutable/CAS/replay/rollback/restart checks, a real loopback authenticated
+  provider fault seam, physical Artifact byte verification and downstream
+  adoption-first delivery;
+- `npm run validate`, `npm run build` and the complete `npm test` workspace gate
+  passed, including Web, Bridge UI, QA evidence, product experience and site
+  checks;
+- deterministic `npm run test:e2e` passed nine scenarios; the separately named
+  live Codex/Pi scenario remained intentionally skipped and is not claimed as
+  acceptance evidence;
+- `npm run test:bridge` passed every Go Bridge package, including repository,
+  Runtime, verification and Workspace packages; and
+- three independently owned `npm run test:temp-lifecycle` rounds each passed
+  24 tests, including three consecutive four-prefix cleanup probes, and every
+  REPO-005-owned test root and dependency-cache directory was physically absent
+  afterward.
+
+No live public provider, second physical computer, provider credential or
+production egress policy was exercised. Those remain the non-claims above and
+SEC-014 remains the production credential gate.
