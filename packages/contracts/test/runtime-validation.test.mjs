@@ -89,6 +89,25 @@ function agentPublish(name, role) {
   };
 }
 
+function supplementalEvidence() {
+  return {
+    protocolVersion: "1.0",
+    messageId: "msg_discussion_evidence_12345678",
+    timestamp: "2026-09-03T00:00:00Z",
+    type: "discussion.supplemental_evidence",
+    payload: {
+      operationId: "op_discussion_evidence_12345678",
+      discussionId: "discussion_evidence_12345678",
+      waveId: "wave_discussion_evidence_12345678",
+      turnId: "turn_discussion_evidence_12345678",
+      runId: "run_discussion_evidence_12345678",
+      traceId: "trace_discussion_evidence_12345678",
+      agentId: "agent_discussion_evidence_12345678",
+      sourceReplySequence: 3
+    }
+  };
+}
+
 async function rawWireCases() {
   const suite = JSON.parse(await readFile(
     new URL(
@@ -157,6 +176,71 @@ test("standalone validation closes the envelope but retains payload extensions",
       futureOptionalAssessmentHint: true
     }
   }), true);
+});
+
+test("quorum supplemental evidence is content-free and exact", () => {
+  const message = supplementalEvidence();
+  assert.equal(validateBridgeMessage(message), true);
+  for (const field of [
+    "operationId", "discussionId", "waveId", "turnId", "runId", "traceId",
+    "agentId", "sourceReplySequence"
+  ]) {
+    const invalid = structuredClone(message);
+    delete invalid.payload[field];
+    assert.equal(validateBridgeMessage(invalid), false, field);
+  }
+  assert.equal(validateBridgeMessage({
+    ...message,
+    payload: { ...message.payload, content: "replacement reply" }
+  }), false);
+  assert.equal(validateBridgeMessage({
+    ...message,
+    payload: { ...message.payload, sourceReplySequence: 0 }
+  }), false);
+});
+
+test("quorum delivery offer and capability remain additive", () => {
+  const published = agentPublish("Reader", "Analyst");
+  published.payload.runtimePolicy = { filesystemAccess: "read-only" };
+  published.payload.capabilities.supportsDiscussionSupplementalEvidence = true;
+  assert.equal(validateBridgeMessage(published), true);
+
+  const suite = {
+    ...runReply(),
+    type: "run.requested",
+    payload: {
+      runId: "run_quorum_offer_12345678",
+      traceId: "trace_quorum_offer_12345678",
+      roomId: "room_quorum_offer_12345678",
+      taskId: "task_quorum_offer_12345678",
+      triggerMessageId: "msg_quorum_offer_12345678",
+      requesterMemberId: "member_quorum_offer_12345678",
+      targetAgentId: "agent_quorum_offer_12345678",
+      deliveryAttemptId: "delivery_quorum_offer_12345678",
+      idempotencyKey: "quorum_offer_12345678",
+      instruction: "Read-only discussion contribution",
+      contextMessages: [],
+      discussionSupplementalEvidence: {
+        version: 1,
+        operationId: "op_quorum_offer_12345678",
+        discussionId: "discussion_quorum_offer_12345678",
+        waveId: "wave_quorum_offer_12345678",
+        turnId: "turn_quorum_offer_12345678"
+      },
+      deadline: "2026-09-03T00:05:00Z"
+    }
+  };
+  assert.equal(validateBridgeMessage(suite), true);
+  assert.equal(validateBridgeMessage({
+    ...suite,
+    payload: {
+      ...suite.payload,
+      discussionSupplementalEvidence: {
+        ...suite.payload.discussionSupplementalEvidence,
+        version: 2
+      }
+    }
+  }), false);
 });
 
 test("standalone validation enforces reply and error bounds", () => {

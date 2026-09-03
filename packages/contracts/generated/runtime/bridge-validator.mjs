@@ -29,6 +29,30 @@ const canonicalPropertyTrees = {
       }
     }
   },
+  "discussion.supplemental_evidence": {
+    "p": {
+      "protocolVersion": {},
+      "messageId": {},
+      "timestamp": {},
+      "type": {},
+      "payload": {
+        "p": {
+          "operationId": {},
+          "discussionId": {},
+          "waveId": {},
+          "turnId": {},
+          "runId": {},
+          "traceId": {},
+          "agentId": {},
+          "sourceReplySequence": {
+            "n": true,
+            "l": "1",
+            "u": "9007199254740991"
+          }
+        }
+      }
+    }
+  },
   "run.output_delta": {
     "p": {
       "protocolVersion": {},
@@ -295,7 +319,8 @@ const canonicalPropertyTrees = {
               "supportsRoomContextCoverage": {},
               "supportsWorkspaceLeases": {},
               "supportsArtifactPublication": {},
-              "supportsArtifactMaterialization": {}
+              "supportsArtifactMaterialization": {},
+              "supportsDiscussionSupplementalEvidence": {}
             }
           },
           "runtimePolicy": {
@@ -999,6 +1024,15 @@ const canonicalPropertyTrees = {
                 "agentId": {},
                 "name": {}
               }
+            }
+          },
+          "discussionSupplementalEvidence": {
+            "p": {
+              "version": {},
+              "operationId": {},
+              "discussionId": {},
+              "waveId": {},
+              "turnId": {}
             }
           },
           "deadline": {}

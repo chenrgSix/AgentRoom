@@ -30,6 +30,29 @@ type RunActivityPayload struct {
 }
 
 // Fields shared by versioned cross-process messages.
+type DiscussionSupplementalEvidenceMessage struct {
+	MessageID string                                `json:"messageId"`
+	Payload   DiscussionSupplementalEvidencePayload `json:"payload"`
+	// Major and minor protocol version negotiated by peers.
+	ProtocolVersion string `json:"protocolVersion"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Timestamp time.Time                                 `json:"timestamp"`
+	Type      DiscussionSupplementalEvidenceMessageType `json:"type"`
+}
+
+type DiscussionSupplementalEvidencePayload struct {
+	AgentID             string `json:"agentId"`
+	DiscussionID        string `json:"discussionId"`
+	OperationID         string `json:"operationId"`
+	RunID               string `json:"runId"`
+	SourceReplySequence int64  `json:"sourceReplySequence"`
+	TraceID             string `json:"traceId"`
+	TurnID              string `json:"turnId"`
+	WaveID              string `json:"waveId"`
+}
+
+// Fields shared by versioned cross-process messages.
 type RunOutputDeltaMessage struct {
 	MessageID string                `json:"messageId"`
 	Payload   RunOutputDeltaPayload `json:"payload"`
@@ -195,13 +218,16 @@ type Capabilities struct {
 	InvocationMode                  InvocationMode                 `json:"invocationMode"`
 	SupportsArtifactMaterialization *bool                          `json:"supportsArtifactMaterialization,omitempty"`
 	SupportsArtifactPublication     *bool                          `json:"supportsArtifactPublication,omitempty"`
-	SupportsHandoff                 bool                           `json:"supportsHandoff"`
-	SupportsInterrupt               bool                           `json:"supportsInterrupt"`
-	SupportsResume                  bool                           `json:"supportsResume"`
-	SupportsRoomContextCoverage     *bool                          `json:"supportsRoomContextCoverage,omitempty"`
-	SupportsStart                   bool                           `json:"supportsStart"`
-	SupportsStreaming               bool                           `json:"supportsStreaming"`
-	SupportsWorkspaceLeases         *bool                          `json:"supportsWorkspaceLeases,omitempty"`
+	// Whether this managed Runtime can replay the content-free late Discussion evidence
+	// operation offered in run.requested. Omission means unsupported.
+	SupportsDiscussionSupplementalEvidence *bool `json:"supportsDiscussionSupplementalEvidence,omitempty"`
+	SupportsHandoff                        bool  `json:"supportsHandoff"`
+	SupportsInterrupt                      bool  `json:"supportsInterrupt"`
+	SupportsResume                         bool  `json:"supportsResume"`
+	SupportsRoomContextCoverage            *bool `json:"supportsRoomContextCoverage,omitempty"`
+	SupportsStart                          bool  `json:"supportsStart"`
+	SupportsStreaming                      bool  `json:"supportsStreaming"`
+	SupportsWorkspaceLeases                *bool `json:"supportsWorkspaceLeases,omitempty"`
 }
 
 type CapabilitiesGovernedExecution struct {
@@ -352,12 +378,13 @@ type RunRequestedPayload struct {
 	ContextPlan     *RuntimeContextPlan `json:"contextPlan,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	Deadline          time.Time `json:"deadline"`
-	DeliveryAttemptID string    `json:"deliveryAttemptId"`
-	IdempotencyKey    string    `json:"idempotencyKey"`
-	Instruction       string    `json:"instruction"`
-	ParentRunID       *string   `json:"parentRunId,omitempty"`
-	RequesterMemberID string    `json:"requesterMemberId"`
+	Deadline                       time.Time                            `json:"deadline"`
+	DeliveryAttemptID              string                               `json:"deliveryAttemptId"`
+	DiscussionSupplementalEvidence *DiscussionSupplementalEvidenceClass `json:"discussionSupplementalEvidence,omitempty"`
+	IdempotencyKey                 string                               `json:"idempotencyKey"`
+	Instruction                    string                               `json:"instruction"`
+	ParentRunID                    *string                              `json:"parentRunId,omitempty"`
+	RequesterMemberID              string                               `json:"requesterMemberId"`
 	// Server-owned coverage ending with one separate current request. Bridge derives
 	// session-local consumption from this bundle.
 	RoomContextBundle *ServerRoomContextBundle `json:"roomContextBundle,omitempty"`
@@ -693,6 +720,14 @@ type TaskMemoryClass struct {
 	Summary          string          `json:"summary"`
 }
 
+type DiscussionSupplementalEvidenceClass struct {
+	DiscussionID string  `json:"discussionId"`
+	OperationID  string  `json:"operationId"`
+	TurnID       string  `json:"turnId"`
+	Version      float64 `json:"version"`
+	WaveID       string  `json:"waveId"`
+}
+
 // Server-owned coverage ending with one separate current request. Bridge derives
 // session-local consumption from this bundle.
 type ServerRoomContextBundle struct {
@@ -1001,6 +1036,12 @@ type RunActivityMessageType string
 
 const (
 	RunActivity RunActivityMessageType = "run.activity"
+)
+
+type DiscussionSupplementalEvidenceMessageType string
+
+const (
+	DiscussionSupplementalEvidence DiscussionSupplementalEvidenceMessageType = "discussion.supplemental_evidence"
 )
 
 type RunOutputDeltaMessageType string

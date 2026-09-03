@@ -36,6 +36,37 @@ export type RunActivityMessageType = "run.activity";
 /**
  * Fields shared by versioned cross-process messages.
  */
+export interface DiscussionSupplementalEvidenceMessage {
+  messageId: string;
+  payload:   DiscussionSupplementalEvidencePayload;
+  /**
+   * Major and minor protocol version negotiated by peers.
+   */
+  protocolVersion: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  timestamp: string;
+  type:      DiscussionSupplementalEvidenceMessageType;
+}
+
+export interface DiscussionSupplementalEvidencePayload {
+  agentId:             string;
+  discussionId:        string;
+  operationId:         string;
+  runId:               string;
+  sourceReplySequence: number;
+  traceId:             string;
+  turnId:              string;
+  waveId:              string;
+}
+
+export type DiscussionSupplementalEvidenceMessageType = "discussion.supplemental_evidence";
+
+/**
+ * Fields shared by versioned cross-process messages.
+ */
 export interface RunOutputDeltaMessage {
   messageId: string;
   payload:   RunOutputDeltaPayload;
@@ -255,13 +286,18 @@ export interface Capabilities {
   invocationMode:                   InvocationMode;
   supportsArtifactMaterialization?: boolean;
   supportsArtifactPublication?:     boolean;
-  supportsHandoff:                  boolean;
-  supportsInterrupt:                boolean;
-  supportsResume:                   boolean;
-  supportsRoomContextCoverage?:     boolean;
-  supportsStart:                    boolean;
-  supportsStreaming:                boolean;
-  supportsWorkspaceLeases?:         boolean;
+  /**
+   * Whether this managed Runtime can replay the content-free late Discussion evidence
+   * operation offered in run.requested. Omission means unsupported.
+   */
+  supportsDiscussionSupplementalEvidence?: boolean;
+  supportsHandoff:                         boolean;
+  supportsInterrupt:                       boolean;
+  supportsResume:                          boolean;
+  supportsRoomContextCoverage?:            boolean;
+  supportsStart:                           boolean;
+  supportsStreaming:                       boolean;
+  supportsWorkspaceLeases?:                boolean;
   [property: string]: unknown;
 }
 
@@ -464,12 +500,13 @@ export interface RunRequestedPayload {
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
    */
-  deadline:          string;
-  deliveryAttemptId: string;
-  idempotencyKey:    string;
-  instruction:       string;
-  parentRunId?:      string;
-  requesterMemberId: string;
+  deadline:                        string;
+  deliveryAttemptId:               string;
+  discussionSupplementalEvidence?: DiscussionSupplementalEvidence;
+  idempotencyKey:                  string;
+  instruction:                     string;
+  parentRunId?:                    string;
+  requesterMemberId:               string;
   /**
    * Server-owned coverage ending with one separate current request. Bridge derives
    * session-local consumption from this bundle.
@@ -863,6 +900,14 @@ export interface TaskMemoryClass {
   sourceCursor:     number;
   sourceMessageIds: string[];
   summary:          string;
+}
+
+export interface DiscussionSupplementalEvidence {
+  discussionId: string;
+  operationId:  string;
+  turnId:       string;
+  version:      number;
+  waveId:       string;
 }
 
 /**
@@ -1277,6 +1322,7 @@ export type BridgeJoinPairedStatus = "paired";
 
 export type BridgeMessage =
   | RunActivityMessage
+  | DiscussionSupplementalEvidenceMessage
   | RunOutputDeltaMessage
   | BridgeHelloMessage
   | BridgeHeartbeatMessage

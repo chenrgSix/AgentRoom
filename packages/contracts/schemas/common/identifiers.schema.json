@@ -61,6 +61,14 @@
       "type": "string",
       "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
     },
+    "discussionWaveId": {
+      "type": "string",
+      "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+    },
+    "discussionTurnId": {
+      "type": "string",
+      "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+    },
     "memoryId": {
       "type": "string",
       "pattern": "^memory_[A-Za-z0-9_-]{8,128}$"

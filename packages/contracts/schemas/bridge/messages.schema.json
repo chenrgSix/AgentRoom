@@ -24,6 +24,7 @@
             "run.activity",
             "run.output_delta",
             "run.reply",
+            "discussion.supplemental_evidence",
             "run.cancel_requested",
             "run.handoff_requested"
           ]
@@ -45,6 +46,25 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/runActivityPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "discussion.supplemental_evidence"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/discussionSupplementalEvidencePayload"
               }
             }
           }
@@ -626,6 +646,10 @@
         },
         "supportsArtifactMaterialization": {
           "type": "boolean"
+        },
+        "supportsDiscussionSupplementalEvidence": {
+          "type": "boolean",
+          "description": "Whether this managed Runtime can replay the content-free late Discussion evidence operation offered in run.requested. Omission means unsupported."
         }
       },
       "allOf": [
@@ -1865,6 +1889,9 @@
             "$ref": "#/$defs/routingAgent"
           }
         },
+        "discussionSupplementalEvidence": {
+          "$ref": "#/$defs/discussionSupplementalEvidenceOffer"
+        },
         "deadline": {
           "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
         }
@@ -2236,6 +2263,74 @@
           }
         }
       ]
+    },
+    "discussionSupplementalEvidenceOffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "discussionId",
+        "waveId",
+        "turnId"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "discussionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionId"
+        },
+        "waveId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionWaveId"
+        },
+        "turnId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionTurnId"
+        }
+      }
+    },
+    "discussionSupplementalEvidencePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "discussionId",
+        "waveId",
+        "turnId",
+        "runId",
+        "traceId",
+        "agentId",
+        "sourceReplySequence"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "discussionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionId"
+        },
+        "waveId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionWaveId"
+        },
+        "turnId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionTurnId"
+        },
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "traceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/traceId"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "sourceReplySequence": {
+          "$ref": "#/$defs/sequence"
+        }
+      }
     },
     "runCancelRequestedPayload": {
       "type": "object",

@@ -60,6 +60,7 @@
             "run.activity",
             "run.output_delta",
             "run.reply",
+            "discussion.supplemental_evidence",
             "run.cancel_requested",
             "run.handoff_requested"
           ]
@@ -155,6 +156,71 @@
                     }
                   }
                 ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "discussion.supplemental_evidence"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "operationId",
+                  "discussionId",
+                  "waveId",
+                  "turnId",
+                  "runId",
+                  "traceId",
+                  "agentId",
+                  "sourceReplySequence"
+                ],
+                "properties": {
+                  "operationId": {
+                    "type": "string",
+                    "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "discussionId": {
+                    "type": "string",
+                    "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "waveId": {
+                    "type": "string",
+                    "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "turnId": {
+                    "type": "string",
+                    "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "pattern": "^run_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "traceId": {
+                    "type": "string",
+                    "pattern": "^trace_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "agentId": {
+                    "type": "string",
+                    "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "sourceReplySequence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
               }
             }
           }
@@ -1020,6 +1086,10 @@
                       },
                       "supportsArtifactMaterialization": {
                         "type": "boolean"
+                      },
+                      "supportsDiscussionSupplementalEvidence": {
+                        "type": "boolean",
+                        "description": "Whether this managed Runtime can replay the content-free late Discussion evidence operation offered in run.requested. Omission means unsupported."
                       }
                     },
                     "allOf": [
@@ -1497,6 +1567,14 @@
                               "type": "string",
                               "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
                             },
+                            "discussionWaveId": {
+                              "type": "string",
+                              "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                            },
+                            "discussionTurnId": {
+                              "type": "string",
+                              "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+                            },
                             "memoryId": {
                               "type": "string",
                               "pattern": "^memory_[A-Za-z0-9_-]{8,128}$"
@@ -1760,6 +1838,14 @@
                                     "discussionId": {
                                       "type": "string",
                                       "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+                                    },
+                                    "discussionWaveId": {
+                                      "type": "string",
+                                      "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                                    },
+                                    "discussionTurnId": {
+                                      "type": "string",
+                                      "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
                                     },
                                     "memoryId": {
                                       "type": "string",
@@ -3547,6 +3633,38 @@
                       }
                     }
                   },
+                  "discussionSupplementalEvidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "operationId",
+                      "discussionId",
+                      "waveId",
+                      "turnId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "operationId": {
+                        "type": "string",
+                        "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "discussionId": {
+                        "type": "string",
+                        "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "waveId": {
+                        "type": "string",
+                        "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "turnId": {
+                        "type": "string",
+                        "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+                      }
+                    }
+                  },
                   "deadline": {
                     "title": "ConveneWire UTC Timestamp",
                     "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
@@ -4405,6 +4523,14 @@
               "type": "string",
               "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
             },
+            "discussionWaveId": {
+              "type": "string",
+              "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+            },
+            "discussionTurnId": {
+              "type": "string",
+              "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+            },
             "memoryId": {
               "type": "string",
               "pattern": "^memory_[A-Za-z0-9_-]{8,128}$"
@@ -4555,6 +4681,14 @@
             "discussionId": {
               "type": "string",
               "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+            },
+            "discussionWaveId": {
+              "type": "string",
+              "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+            },
+            "discussionTurnId": {
+              "type": "string",
+              "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
             },
             "memoryId": {
               "type": "string",
@@ -5073,6 +5207,10 @@
         },
         "supportsArtifactMaterialization": {
           "type": "boolean"
+        },
+        "supportsDiscussionSupplementalEvidence": {
+          "type": "boolean",
+          "description": "Whether this managed Runtime can replay the content-free late Discussion evidence operation offered in run.requested. Omission means unsupported."
         }
       },
       "allOf": [
@@ -5861,6 +5999,10 @@
             },
             "supportsArtifactMaterialization": {
               "type": "boolean"
+            },
+            "supportsDiscussionSupplementalEvidence": {
+              "type": "boolean",
+              "description": "Whether this managed Runtime can replay the content-free late Discussion evidence operation offered in run.requested. Omission means unsupported."
             }
           },
           "allOf": [
@@ -6172,6 +6314,14 @@
               "type": "string",
               "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
             },
+            "discussionWaveId": {
+              "type": "string",
+              "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+            },
+            "discussionTurnId": {
+              "type": "string",
+              "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+            },
             "memoryId": {
               "type": "string",
               "pattern": "^memory_[A-Za-z0-9_-]{8,128}$"
@@ -6408,6 +6558,14 @@
                   "discussionId": {
                     "type": "string",
                     "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "discussionWaveId": {
+                    "type": "string",
+                    "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "discussionTurnId": {
+                    "type": "string",
+                    "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
                   },
                   "memoryId": {
                     "type": "string",
@@ -6674,6 +6832,14 @@
                       "discussionId": {
                         "type": "string",
                         "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "discussionWaveId": {
+                        "type": "string",
+                        "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "discussionTurnId": {
+                        "type": "string",
+                        "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
                       },
                       "memoryId": {
                         "type": "string",
@@ -9307,6 +9473,14 @@
                     "type": "string",
                     "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
                   },
+                  "discussionWaveId": {
+                    "type": "string",
+                    "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                  },
+                  "discussionTurnId": {
+                    "type": "string",
+                    "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+                  },
                   "memoryId": {
                     "type": "string",
                     "pattern": "^memory_[A-Za-z0-9_-]{8,128}$"
@@ -9570,6 +9744,14 @@
                           "discussionId": {
                             "type": "string",
                             "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+                          },
+                          "discussionWaveId": {
+                            "type": "string",
+                            "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+                          },
+                          "discussionTurnId": {
+                            "type": "string",
+                            "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
                           },
                           "memoryId": {
                             "type": "string",
@@ -11357,6 +11539,38 @@
             }
           }
         },
+        "discussionSupplementalEvidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "operationId",
+            "discussionId",
+            "waveId",
+            "turnId"
+          ],
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "operationId": {
+              "type": "string",
+              "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+            },
+            "discussionId": {
+              "type": "string",
+              "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+            },
+            "waveId": {
+              "type": "string",
+              "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+            },
+            "turnId": {
+              "type": "string",
+              "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+            }
+          }
+        },
         "deadline": {
           "title": "ConveneWire UTC Timestamp",
           "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
@@ -12190,6 +12404,87 @@
           }
         }
       ]
+    },
+    "discussionSupplementalEvidenceOffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "discussionId",
+        "waveId",
+        "turnId"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "discussionId": {
+          "type": "string",
+          "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+        },
+        "waveId": {
+          "type": "string",
+          "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+        },
+        "turnId": {
+          "type": "string",
+          "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+        }
+      }
+    },
+    "discussionSupplementalEvidencePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "discussionId",
+        "waveId",
+        "turnId",
+        "runId",
+        "traceId",
+        "agentId",
+        "sourceReplySequence"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "discussionId": {
+          "type": "string",
+          "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+        },
+        "waveId": {
+          "type": "string",
+          "pattern": "^wave_[A-Za-z0-9_-]{8,128}$"
+        },
+        "turnId": {
+          "type": "string",
+          "pattern": "^turn_[A-Za-z0-9_-]{8,128}$"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^run_[A-Za-z0-9_-]{8,128}$"
+        },
+        "traceId": {
+          "type": "string",
+          "pattern": "^trace_[A-Za-z0-9_-]{8,128}$"
+        },
+        "agentId": {
+          "type": "string",
+          "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
+        },
+        "sourceReplySequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
     },
     "runCancelRequestedPayload": {
       "type": "object",
