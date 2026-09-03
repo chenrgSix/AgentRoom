@@ -134,11 +134,12 @@ function installDom(): JSDOM {
 }
 
 interface ServerOptions {
+  initialState?: ExecutionPlanProjection["state"];
   networkCutOnce?: boolean;
 }
 
 function installServer(options: ServerOptions = {}) {
-  let active = projection();
+  let active = projection(2, options.initialState ?? "draft");
   const previous = projection(1);
   const approvals: Array<Record<string, unknown>> = [];
   const bodies: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -328,6 +329,26 @@ test("non-owner can inspect but has no revision or human review controls", async
     assert.equal(page.queryByRole("button", { name: "Edit current draft" }), null);
     assert.equal(page.queryByRole("button", { name: "Approve exact plan" }), null);
     assert.equal(page.queryByRole("textbox", { name: "Review reason" }), null);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("non-owner cannot read or operate active-plan supersession authority", async () => {
+  const dom = installDom();
+  const { cleanup, render, within } = await import("@testing-library/react");
+  installServer({ initialState: "running" });
+  try {
+    renderPanel(render, {
+      ...owner,
+      memberId: "member_plan_active_observer0001",
+      role: "member"
+    });
+    const page = within(dom.window.document.body);
+    await page.findByText("Exact identity");
+    assert.equal(page.queryByLabelText("Bounded replanning"), null);
+    assert.equal(page.queryByText("Tech Lead replanning delegations"), null);
   } finally {
     cleanup();
     dom.window.close();

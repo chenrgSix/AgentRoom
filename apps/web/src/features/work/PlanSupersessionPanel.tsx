@@ -53,7 +53,8 @@ function display(value: string): string {
 function defaultExpiry(): string {
   const next = new Date(Date.now() + 60 * 60 * 1000);
   next.setSeconds(0, 0);
-  return next.toISOString().slice(0, 16);
+  const local = new Date(next.getTime() - next.getTimezoneOffset() * 60 * 1000);
+  return local.toISOString().slice(0, 16);
 }
 
 function candidateAuthor(
@@ -119,6 +120,10 @@ export function PlanSupersessionPanel({
           locale
         ));
       }
+      candidateOperation.current = null;
+      activationOperation.current = null;
+      delegationOperation.current = null;
+      revocationOperations.current.clear();
       setControl(next);
       setUnknown(null);
     } catch (reason) {
@@ -130,6 +135,11 @@ export function PlanSupersessionPanel({
   }, [isCurrent, locale, plan.controlRevision, plan.current.digest,
     plan.current.revision, plan.planId, token]);
 
+  async function reloadAuthoritative(): Promise<void> {
+    if (unknown === "activation") await onChanged();
+    if (isCurrent()) await load();
+  }
+
   useEffect(() => {
     mounted.current = true;
     void load();
@@ -140,7 +150,7 @@ export function PlanSupersessionPanel({
   }, [load]);
 
   async function prepareCandidate(): Promise<void> {
-    if (busy || control?.candidate) return;
+    if (busy || unknown || control?.candidate) return;
     setBusy("candidate");
     setCommandError(null);
     try {
@@ -182,7 +192,7 @@ export function PlanSupersessionPanel({
   }
 
   async function submitCandidate(): Promise<void> {
-    if (!control || control.candidate || busy || !candidateReason.trim()) return;
+    if (!control || control.candidate || busy || unknown || !candidateReason.trim()) return;
     let definition: ExecutionPlanDefinition;
     try {
       const parsed = JSON.parse(candidateDefinition) as Partial<ExecutionPlanDefinition>;
@@ -236,8 +246,8 @@ export function PlanSupersessionPanel({
       if (reason instanceof HttpRequestError) candidateOperation.current = null;
       else setUnknown("candidate");
       setCommandError(t(
-        `候选结果未确认：${String(reason)}。请先重新载入；网络结果未知时只能重试当前内存中的完全相同请求。`,
-        `Candidate outcome was not confirmed: ${String(reason)}. Reload first; after an unknown network outcome only the exact in-memory request may be retried.`,
+        `候选结果未确认：${String(reason)}。请先重新载入 Server 状态；在确认未生效前不会接受新命令。`,
+        `Candidate outcome was not confirmed: ${String(reason)}. Reload Server state first; no new command is accepted until absence is confirmed.`,
         locale
       ));
     } finally {
@@ -247,7 +257,7 @@ export function PlanSupersessionPanel({
 
   async function activate(): Promise<void> {
     const template = control?.activationTemplate;
-    if (!control?.candidate || !template || busy || !activationConfirmed ||
+    if (!control?.candidate || !template || busy || unknown || !activationConfirmed ||
       !activationReason.trim()) return;
     const op = activationOperation.current ?? operationId();
     activationOperation.current = op;
@@ -277,8 +287,8 @@ export function PlanSupersessionPanel({
       if (reason instanceof HttpRequestError) activationOperation.current = null;
       else setUnknown("activation");
       setCommandError(t(
-        `激活结果未确认：${String(reason)}。请从 Server 重新读取当前修订；未知结果只能以相同操作 ID 重试。`,
-        `Activation outcome was not confirmed: ${String(reason)}. Reload the current Server revision; an unknown outcome may only be retried with the same operation ID.`,
+        `激活结果未确认：${String(reason)}。请从 Server 重新读取当前计划修订；在确认未生效前不会接受新命令。`,
+        `Activation outcome was not confirmed: ${String(reason)}. Reload the current Server plan revision; no new command is accepted until absence is confirmed.`,
         locale
       ));
     } finally {
@@ -287,7 +297,7 @@ export function PlanSupersessionPanel({
   }
 
   async function issueDelegation(): Promise<void> {
-    if (!control || busy || !delegationAgentId || !delegationReason.trim()) return;
+    if (!control || busy || unknown || !delegationAgentId || !delegationReason.trim()) return;
     const expires = Date.parse(delegationExpiry);
     if (!Number.isFinite(expires)) {
       setCommandError(t("请输入有效的委托到期时间。", "Enter a valid delegation expiry.", locale));
@@ -332,8 +342,8 @@ export function PlanSupersessionPanel({
       if (reason instanceof HttpRequestError) delegationOperation.current = null;
       else setUnknown("delegation");
       setCommandError(t(
-        `委托结果未确认：${String(reason)}。先重新载入；未知结果只可重试相同命令。`,
-        `Delegation outcome was not confirmed: ${String(reason)}. Reload first; an unknown outcome may only retry the same command.`,
+        `委托结果未确认：${String(reason)}。先重新载入 Server 状态；在确认未生效前不会接受新命令。`,
+        `Delegation outcome was not confirmed: ${String(reason)}. Reload Server state first; no new command is accepted until absence is confirmed.`,
         locale
       ));
     } finally {
@@ -343,7 +353,7 @@ export function PlanSupersessionPanel({
 
   async function revoke(delegation: ExecutionReplanDelegation): Promise<void> {
     const reasonText = revocationReasons[delegation.delegationId]?.trim();
-    if (busy || !reasonText) return;
+    if (busy || unknown || !reasonText) return;
     const op = revocationOperations.current.get(delegation.delegationId) ?? operationId();
     revocationOperations.current.set(delegation.delegationId, op);
     setBusy("revocation");
@@ -375,8 +385,8 @@ export function PlanSupersessionPanel({
       if (reason instanceof HttpRequestError) revocationOperations.current.delete(delegation.delegationId);
       else setUnknown("revocation");
       setCommandError(t(
-        `撤销结果未确认：${String(reason)}。先重新载入；未知结果只可重试相同命令。`,
-        `Revocation outcome was not confirmed: ${String(reason)}. Reload first; an unknown outcome may only retry the same command.`,
+        `撤销结果未确认：${String(reason)}。先重新载入 Server 状态；在确认未生效前不会接受新命令。`,
+        `Revocation outcome was not confirmed: ${String(reason)}. Reload Server state first; no new command is accepted until absence is confirmed.`,
         locale
       ));
     } finally {
@@ -387,16 +397,17 @@ export function PlanSupersessionPanel({
   const candidateDiffs = useMemo(() => control?.candidate
     ? diffPlanDefinitions(plan.current.definition, control.candidate.definition)
     : [], [control?.candidate, plan.current.definition]);
+  const mutationBlocked = busy !== null || unknown !== null;
 
   return <section className="work-plan-supersession" aria-label={t("有界重规划", "Bounded replanning", locale)}>
     <header>
       <div><h5>{t("有界重规划与证据继承", "Bounded replanning and evidence carry-forward", locale)}</h5>
         <p>{t("Owner 审查候选；Server 计算可继承证据。激活不会接受浏览器自行选择的 proof。", "The Owner reviews the candidate while the Server computes reusable evidence. Activation never accepts browser-selected proof.", locale)}</p></div>
-      <button disabled={loading || busy !== null} onClick={() => void load()} type="button">{t("刷新重规划状态", "Reload replanning state", locale)}</button>
+      <button disabled={loading || busy !== null} onClick={() => void reloadAuthoritative()} type="button">{t("刷新重规划状态", "Reload replanning state", locale)}</button>
     </header>
     {error && <p className="work-command-error" role="alert">{error}</p>}
     {commandError && <p className="work-command-error" role="alert">{commandError}</p>}
-    {unknown && <p className="work-plan-pending" role="status">{t(`存在未确认的 ${display(unknown)} 请求。请先刷新权威状态，再决定是否重试内存中的完全相同命令。`, `An ${display(unknown)} request is unconfirmed. Reload authoritative state before deciding whether to retry the exact in-memory command.`, locale)}</p>}
+    {unknown && <p className="work-plan-pending" role="status">{t(`存在未确认的 ${display(unknown)} 请求。新变更已被锁定；请先刷新 Server 权威状态，只有确认未生效后才能重新准备命令。`, `An ${display(unknown)} request is unconfirmed. New mutations are locked; reload authoritative Server state before preparing another command, and only after confirmed absence.`, locale)}</p>}
     {loading && !control ? <p role="status">{t("正在载入重规划权限…", "Loading replanning authority…", locale)}</p> : control && <>
       <dl className="work-plan-supersession-pins">
         <div><dt>{t("当前计划", "Current plan", locale)}</dt><dd>r{control.currentRevision} · {shortenedDigest(control.currentDigest)}</dd></div>
@@ -407,10 +418,10 @@ export function PlanSupersessionPanel({
       {!control.candidate && <div className="work-plan-supersession-command">
         <h6>{t("准备候选修订", "Prepare candidate revision", locale)}</h6>
         <p>{t("浏览器会先读取所有已编译 Task 的当前身份，并将节点改为 existing-task pins；不会创建新 Task。", "The browser first reads every compiled Task identity and converts nodes to existing-task pins; it creates no new Task.", locale)}</p>
-        {!candidateOpen ? <button disabled={busy !== null} onClick={() => void prepareCandidate()} type="button">{t("准备可编辑候选", "Prepare editable candidate", locale)}</button> : <>
-          <label>{t("重规划理由", "Replanning reason", locale)}<textarea onChange={(event) => setCandidateReason(event.target.value)} value={candidateReason} /></label>
-          <label>{t("完整候选计划 JSON", "Complete candidate plan JSON", locale)}<textarea aria-label={t("完整候选计划 JSON", "Complete candidate plan JSON", locale)} className="work-plan-json" onChange={(event) => setCandidateDefinition(event.target.value)} spellCheck={false} value={candidateDefinition} /></label>
-          <div><button disabled={busy !== null || !candidateReason.trim()} onClick={() => void submitCandidate()} type="button">{t("保留候选", "Retain candidate", locale)}</button><button disabled={busy !== null} onClick={() => { setCandidateOpen(false); setCandidateDefinition(""); setCandidateReason(""); candidateOperation.current = null; }} type="button">{t("取消", "Cancel", locale)}</button></div>
+        {!candidateOpen ? <button disabled={mutationBlocked} onClick={() => void prepareCandidate()} type="button">{t("准备可编辑候选", "Prepare editable candidate", locale)}</button> : <>
+          <label>{t("重规划理由", "Replanning reason", locale)}<textarea disabled={mutationBlocked} onChange={(event) => setCandidateReason(event.target.value)} value={candidateReason} /></label>
+          <label>{t("完整候选计划 JSON", "Complete candidate plan JSON", locale)}<textarea aria-label={t("完整候选计划 JSON", "Complete candidate plan JSON", locale)} className="work-plan-json" disabled={mutationBlocked} onChange={(event) => setCandidateDefinition(event.target.value)} spellCheck={false} value={candidateDefinition} /></label>
+          <div><button disabled={mutationBlocked || !candidateReason.trim()} onClick={() => void submitCandidate()} type="button">{t("保留候选", "Retain candidate", locale)}</button><button disabled={mutationBlocked} onClick={() => { setCandidateOpen(false); setCandidateDefinition(""); setCandidateReason(""); candidateOperation.current = null; }} type="button">{t("取消", "Cancel", locale)}</button></div>
         </>}
       </div>}
 
@@ -428,9 +439,9 @@ export function PlanSupersessionPanel({
         <h6>{t("Server 准备的证据继承", "Server-prepared evidence carry-forward", locale)}</h6>
         {control.activationTemplate ? <>
           {control.activationTemplate.carryForward.length === 0 ? <p>{t("此候选不需要继承旧证据。", "This candidate requires no prior evidence carry-forward.", locale)}</p> : <ol className="work-plan-carry">{control.activationTemplate.carryForward.map((entry) => <li key={`${entry.targetNodeKey}:${entry.gate}`}><strong>{entry.targetNodeKey} · {display(entry.gate)}</strong><span>Adoption {entry.sourceAdoptionId} · {shortenedDigest(entry.sourceAdoptionDigest)}</span><span>Reuse {entry.sourceReuseContractId} · {shortenedDigest(entry.sourceNodeReuseContractDigest)}</span><span>Inputs {shortenedDigest(entry.sourceReuseInputEvidenceDigest)}</span></li>)}</ol>}
-          <label>{t("激活理由", "Activation reason", locale)}<textarea onChange={(event) => setActivationReason(event.target.value)} value={activationReason} /></label>
-          <label className="work-plan-confirm"><input checked={activationConfirmed} onChange={(event) => setActivationConfirmed(event.target.checked)} type="checkbox" />{t(`我确认激活候选 r${control.activationTemplate.expectedCandidateRevision}（${shortenedDigest(control.activationTemplate.expectedCandidateDigest)}）及 Server 列出的精确证据继承。`, `I confirm activation of candidate r${control.activationTemplate.expectedCandidateRevision} (${shortenedDigest(control.activationTemplate.expectedCandidateDigest)}) and the exact Server-listed evidence carry-forward.`, locale)}</label>
-          <button disabled={busy !== null || !activationConfirmed || !activationReason.trim()} onClick={() => void activate()} type="button">{t("激活精确候选", "Activate exact candidate", locale)}</button>
+          <label>{t("激活理由", "Activation reason", locale)}<textarea disabled={mutationBlocked} onChange={(event) => setActivationReason(event.target.value)} value={activationReason} /></label>
+          <label className="work-plan-confirm"><input checked={activationConfirmed} disabled={mutationBlocked} onChange={(event) => setActivationConfirmed(event.target.checked)} type="checkbox" />{t(`我确认激活候选 r${control.activationTemplate.expectedCandidateRevision}（${shortenedDigest(control.activationTemplate.expectedCandidateDigest)}）及 Server 列出的精确证据继承。`, `I confirm activation of candidate r${control.activationTemplate.expectedCandidateRevision} (${shortenedDigest(control.activationTemplate.expectedCandidateDigest)}) and the exact Server-listed evidence carry-forward.`, locale)}</label>
+          <button disabled={mutationBlocked || !activationConfirmed || !activationReason.trim()} onClick={() => void activate()} type="button">{t("激活精确候选", "Activate exact candidate", locale)}</button>
         </> : <p className="work-evidence-blockers">{t(`当前不能激活：${control.activationBlockerCode ?? "authority unavailable"}。`, `Activation is currently blocked: ${control.activationBlockerCode ?? "authority unavailable"}.`, locale)}</p>}
       </div>}
 
@@ -438,16 +449,16 @@ export function PlanSupersessionPanel({
         <h6>{t("Tech Lead 重规划委托", "Tech Lead replanning delegations", locale)}</h6>
         <p>{t("委托只允许 primary Agent 在固定 Task 集内提出候选或激活；Owner 可以随时撤销。", "Delegation only lets a primary Agent propose or activate within the fixed Task set; the Owner may revoke it.", locale)}</p>
         {primaryAgentIds.length === 0 ? <p>{t("根 Task 没有 primary Agent，不能签发委托。", "The root Task has no primary Agent, so delegation cannot be issued.", locale)}</p> : <div className="work-plan-delegation-form">
-          <label>{t("Primary Agent", "Primary Agent", locale)}<select onChange={(event) => setDelegationAgentId(event.target.value)} value={delegationAgentId}><option value="">—</option>{primaryAgentIds.map((agentId) => <option key={agentId} value={agentId}>{agentNames.get(agentId) ?? agentId}</option>)}</select></label>
-          <label>{t("到期时间（最长 24 小时）", "Expiry (maximum 24 hours)", locale)}<input onChange={(event) => setDelegationExpiry(event.target.value)} type="datetime-local" value={delegationExpiry} /></label>
-          <label>{t("委托理由", "Delegation reason", locale)}<textarea onChange={(event) => setDelegationReason(event.target.value)} value={delegationReason} /></label>
-          <button disabled={busy !== null || !delegationAgentId || !delegationReason.trim()} onClick={() => void issueDelegation()} type="button">{t("签发精确委托", "Issue exact delegation", locale)}</button>
+          <label>{t("Primary Agent", "Primary Agent", locale)}<select disabled={mutationBlocked} onChange={(event) => setDelegationAgentId(event.target.value)} value={delegationAgentId}><option value="">—</option>{primaryAgentIds.map((agentId) => <option key={agentId} value={agentId}>{agentNames.get(agentId) ?? agentId}</option>)}</select></label>
+          <label>{t("到期时间（最长 24 小时）", "Expiry (maximum 24 hours)", locale)}<input disabled={mutationBlocked} onChange={(event) => setDelegationExpiry(event.target.value)} type="datetime-local" value={delegationExpiry} /></label>
+          <label>{t("委托理由", "Delegation reason", locale)}<textarea disabled={mutationBlocked} onChange={(event) => setDelegationReason(event.target.value)} value={delegationReason} /></label>
+          <button disabled={mutationBlocked || !delegationAgentId || !delegationReason.trim()} onClick={() => void issueDelegation()} type="button">{t("签发精确委托", "Issue exact delegation", locale)}</button>
         </div>}
         {control.delegations.length === 0 ? <p>{t("尚无委托记录。", "No delegation records yet.", locale)}</p> : <ol>{control.delegations.map(({ delegation, state }) => <li key={delegation.delegationId}>
           <header><strong>{agentNames.get(delegation.agentId) ?? delegation.agentId}</strong><span>{display(state)} · revision {delegation.revision}</span></header>
           <p>{delegation.reason}</p>
           <dl><div><dt>Delegation</dt><dd>{delegation.delegationId}</dd></div><div><dt>Digest</dt><dd>{delegation.delegationDigest}</dd></div><div><dt>{t("有效期", "Validity", locale)}</dt><dd>{delegation.issuedAt} → {delegation.expiresAt}</dd></div><div><dt>{t("固定 Task", "Pinned Tasks", locale)}</dt><dd>{delegation.taskIds.join(", ")}</dd></div></dl>
-          {state === "active" && <div className="work-plan-delegation-revoke"><label>{t("撤销理由", "Revocation reason", locale)}<input onChange={(event) => setRevocationReasons((current) => ({ ...current, [delegation.delegationId]: event.target.value }))} value={revocationReasons[delegation.delegationId] ?? ""} /></label><button disabled={busy !== null || !revocationReasons[delegation.delegationId]?.trim()} onClick={() => void revoke(delegation)} type="button">{t("撤销委托", "Revoke delegation", locale)}</button></div>}
+          {state === "active" && <div className="work-plan-delegation-revoke"><label>{t("撤销理由", "Revocation reason", locale)}<input disabled={mutationBlocked} onChange={(event) => setRevocationReasons((current) => ({ ...current, [delegation.delegationId]: event.target.value }))} value={revocationReasons[delegation.delegationId] ?? ""} /></label><button disabled={mutationBlocked || !revocationReasons[delegation.delegationId]?.trim()} onClick={() => void revoke(delegation)} type="button">{t("撤销委托", "Revoke delegation", locale)}</button></div>}
         </li>)}</ol>}
       </div>
       <p className="work-plan-authority-note">{t(`当前操作人为 ${currentMember.displayName}。Central 只保留计划、授权与证据回执；仓库与 Git 操作仍由 Client / Bridge 控制。`, `Current operator: ${currentMember.displayName}. Central retains plans, authority and evidence receipts only; repository and Git operations remain under Client / Bridge control.`, locale)}</p>

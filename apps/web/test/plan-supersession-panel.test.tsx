@@ -265,6 +265,70 @@ test("Owner prepares fixed-Task candidate and activates only Server carry pins",
   }
 });
 
+test("unknown candidate response locks mutations until authoritative reload", async () => {
+  const dom = installDom();
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  let view = control();
+  let candidatePosts = 0;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const path = String(input);
+    if (path.endsWith("/supersession-control")) return json(view);
+    const childIndex = compiledTasks.findIndex(({ taskId }) => path === `/api/tasks/${taskId}`);
+    if (childIndex >= 0) return json(childTask(childIndex));
+    if (path.endsWith("/supersession-candidates") && init?.method === "POST") {
+      candidatePosts += 1;
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      view = control({
+        planId: plan.planId,
+        candidateId: "candidate_supersession_unknown0001",
+        candidateRevision: 2,
+        candidateDigest: "7".repeat(64),
+        baseRevision: 1,
+        baseDigest: plan.current.digest,
+        baseControlRevision: 3,
+        rootTaskRevision: rootTask.taskRevision,
+        definition: body.definition as ExecutionPlanDefinition,
+        author: { kind: "member", memberId: owner.memberId },
+        operationId: body.operationId as string,
+        requestDigest: "6".repeat(64),
+        reason: body.reason as string,
+        createdAt: timestamp
+      });
+      throw new TypeError("simulated response loss");
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  }) as typeof fetch;
+  try {
+    render(<PlanSupersessionPanel
+      agentNames={new Map([["agent_00000001", "Lead"]])}
+      currentMember={owner}
+      locale="en"
+      onChanged={() => undefined}
+      plan={plan}
+      task={rootTask}
+      token="web-session"
+    />);
+    const page = within(dom.window.document.body);
+    fireEvent.click(await page.findByText("Prepare editable candidate"));
+    fireEvent.input(await page.findByLabelText("Replanning reason"), {
+      target: { value: "Retain once across response loss." }
+    });
+    fireEvent.click(page.getByText("Retain candidate"));
+    await page.findByText(/New mutations are locked/u);
+    assert.equal((page.getByText("Retain candidate") as HTMLButtonElement).disabled, true);
+    assert.equal((page.getByLabelText("Complete candidate plan JSON") as HTMLTextAreaElement).disabled, true);
+    assert.equal(candidatePosts, 1);
+
+    fireEvent.click(page.getByText("Reload replanning state"));
+    await page.findByText("Candidate awaiting activation");
+    await waitFor(() => assert.equal(page.queryByText(/New mutations are locked/u), null));
+    assert.equal(candidatePosts, 1, "authoritative recovery must not replay the mutation");
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
 test("Owner issues and revokes exact primary-Agent delegation", async () => {
   const dom = installDom();
   const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
@@ -330,6 +394,10 @@ test("Owner issues and revokes exact primary-Agent delegation", async () => {
     fireEvent.click(page.getByText("Issue exact delegation"));
     await page.findByText("active · revision 1");
     assert.equal(posted[0]!.expectedPlanDigest, plan.current.digest);
+    const expiresAt = Date.parse(posted[0]!.expiresAt as string);
+    assert.ok(expiresAt > Date.now(), "the default local expiry must remain in the future");
+    assert.ok(expiresAt <= Date.now() + 61 * 60 * 1000,
+      "the default local expiry must stay inside the one-hour window");
     fireEvent.input(page.getByLabelText("Revocation reason"), { target: { value: "Authority no longer needed" } });
     fireEvent.click(page.getByText("Revoke delegation"));
     await page.findByText("revoked · revision 1");
