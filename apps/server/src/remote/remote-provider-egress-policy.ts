@@ -332,6 +332,7 @@ async function performRequest(
 ): Promise<Response> {
   const method = init.method ?? "GET";
   const headers = new Headers(init.headers);
+  headers.set("host", url.host);
   const body = init.body;
   if ((method !== "GET" && method !== "POST") ||
     (body !== undefined && body !== null && typeof body !== "string")) {

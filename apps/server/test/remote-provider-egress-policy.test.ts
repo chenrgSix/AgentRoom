@@ -212,7 +212,10 @@ test("direct loopback transport requires its marker, ignores proxies and rejects
 
   const direct = createRemoteProviderEgressFetch({ testOnlyAllowLoopback: true });
   const response = await direct(`${endpoint}/ok`, {
-    headers: { authorization: "Bearer sec014-runtime-token" },
+    headers: {
+      authorization: "Bearer sec014-runtime-token",
+      host: "metadata.invalid"
+    },
     redirect: "follow"
   });
   assert.equal(response.status, 200);
