@@ -1511,3 +1511,15 @@ digest changes. Generating a one-use client-entry ticket remains a separate
 explicit action after the target browser has been restarted. Public CA remains
 the normal zero-setup browser path; native trust-store success requires
 platform evidence and is never inferred from copying the command.
+
+BRG-073 makes this product surface platform-neutral. A private CA can require
+trust preparation on any other computer, not only Windows. The same validated
+public DER certificate and full SHA-256 now produce both the existing Windows
+current-user command and a macOS Terminal command limited to the invoking
+user's login keychain. The macOS command owns a randomized temporary directory,
+registers `EXIT`, `INT` and `TERM` cleanup, and never uses `sudo` or the system
+keychain. Its exact-digest removal companion removes both user trust settings
+and that certificate. Linux remains explicitly supported as a Bridge/browser
+platform, but differing distribution and browser stores prevent a safe
+universal install command; the Console says so instead of implying Windows-only
+support.

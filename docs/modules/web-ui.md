@@ -418,6 +418,13 @@ itself. A paired-Central or trust change closes the assistant and clears the
 stale command. Public CA remains the normal browser path; neither surface asks
 the user to bypass a certificate warning.
 
+BRG-073 renames that local action to describe another computer rather than one
+operating system. The dialog offers separate Windows and macOS current-user
+commands derived from the same validated CA and explicitly states that Linux
+trust setup depends on its distribution/browser. Platform selection and copy
+remain browser-local, issue no entry ticket and never imply that ConveneWire or
+private-CA browser access is Windows-only.
+
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The
 timeline shows one logical round without a hard-limit denominator. While its
