@@ -55,6 +55,13 @@ compatibility machinery. They are not invoked by the default Release graph.
   after the runner exited.
 - Shell syntax and `git diff --check` pass for the current packaging and policy
   files.
+- Exact commit `9326967` passes 14-schema/258-fixture validation, all workspace
+  production builds and the complete `npm test` aggregate, including 598 Server
+  tests, Web tests, Bridge UI, QA evidence, product-experience, site and 25
+  temporary-lifecycle checks. Its owned outer root
+  `/private/tmp/convene-wire-test-run-mDRPMO` was physically absent after exit.
+  The separately running product-preview root was observed open by its live Node
+  processes and was neither classified as residue nor removed by this task.
 
 ## Open Admission Evidence
 
