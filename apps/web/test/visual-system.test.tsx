@@ -52,7 +52,7 @@ test("brand interaction and success state remain visually distinct", () => {
   );
   assert.match(
     visualSystem,
-    /\.agent-avatar,[^}]*\.integration-badge[^}]*background: var\(--cw-accent-soft\)/s
+    /\.agent-avatar,[^}]*\.device-icon,[^}]*\.participant-avatar\.human,[^}]*\.integration-badge,[^}]*\.current-user-badge[^}]*background: var\(--cw-accent-soft\)/s
   );
 });
 

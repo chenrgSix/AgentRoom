@@ -430,7 +430,10 @@ summary:focus-visible {
 }
 
 :root[data-theme] .agent-avatar,
-:root[data-theme] .integration-badge {
+:root[data-theme] .device-icon,
+:root[data-theme] .participant-avatar.human,
+:root[data-theme] .integration-badge,
+:root[data-theme] .current-user-badge {
   border-color: var(--cw-accent-border);
   background: var(--cw-accent-soft);
   color: var(--cw-accent-hover);
@@ -449,10 +452,16 @@ summary:focus-visible {
   color: var(--cw-text-secondary);
 }
 
-:root[data-theme] .status-badge:is(.ready, .online) {
+:root[data-theme] .status-badge:is(.active, .ready, .online) {
   border-color: var(--cw-success-border);
   background: var(--cw-success-soft);
   color: var(--cw-success);
+}
+
+:root[data-theme] .panel-header > span {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-inset);
+  color: var(--cw-text-secondary);
 }
 
 :root[data-theme] :is(
