@@ -108,17 +108,13 @@ jobs:
           bash -n scripts/package-central-release.sh
           bash -n scripts/verify-central-release.sh
 
-      - name: Package and verify Central release matrix
+      - name: Package and verify Central source release
         env:
           RELEASE_TAG: v0.0.0-ci
           SOURCE_REF: HEAD
           OUTPUT_DIR: ${{ runner.temp }}/central-dist
-          CENTRAL_RELEASE_SCHEMA: 1
         run: |
-          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-            GOOS=${target%/*} GOARCH=${target#*/} \
-              ./ops/convenewirectl/scripts/package-central-release.sh
-          done
+          ./ops/convenewirectl/scripts/package-central-release.sh
           ASSET_DIR="${OUTPUT_DIR}" \
             ./ops/convenewirectl/scripts/verify-central-release.sh
 

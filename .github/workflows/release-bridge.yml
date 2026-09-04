@@ -148,17 +148,13 @@ jobs:
           bash -n scripts/package-central-release.sh
           bash -n scripts/verify-central-release.sh
 
-      - name: Package and verify Central release matrix
+      - name: Package and verify Central source release
         env:
           RELEASE_TAG: v0.0.0-release-gate
           SOURCE_REF: HEAD
           OUTPUT_DIR: ${{ runner.temp }}/central-dist
-          CENTRAL_RELEASE_SCHEMA: 1
         run: |
-          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-            GOOS=${target%/*} GOARCH=${target#*/} \
-              ./ops/convenewirectl/scripts/package-central-release.sh
-          done
+          ./ops/convenewirectl/scripts/package-central-release.sh
           ASSET_DIR="${OUTPUT_DIR}" \
             ./ops/convenewirectl/scripts/verify-central-release.sh
 
@@ -177,12 +173,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
           - goos: linux
             goarch: amd64
           - goos: linux
@@ -221,15 +211,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  central-image:
-    name: Build Central OCI linux/${{ matrix.goarch }}
+  central:
+    name: Build Central source release
     needs: [validate-release, repository-gates, go-gates]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        goarch: [amd64, arm64]
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -242,88 +228,16 @@ jobs:
           go-version-file: ops/convenewirectl/go.mod
           cache-dependency-path: ops/convenewirectl/go.mod
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
-
-      - name: Build one attested offline image bundle
+      - name: Build checksum-pinned Central source archive
         env:
-          GOARCH: ${{ matrix.goarch }}
-          OUTPUT_DIR: ${{ github.workspace }}/central-image
-          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
-          CENTRAL_SBOM_GENERATOR: docker.io/docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9
-          CENTRAL_IMAGE_BUILDER_ID: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
-          CENTRAL_IMAGE_INVOCATION_URI: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
-        run: ./ops/convenewirectl/scripts/build-central-image.sh
-
-      - name: Verify clean-daemon OCI load and digest execution
-        env:
-          GOARCH: ${{ matrix.goarch }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
-          CENTRAL_IMAGE_BUNDLE_DIR: ${{ github.workspace }}/central-image
-        run: ./ops/convenewirectl/scripts/verify-central-image-docker.sh
-
-      - name: Upload once-built Central image bundle
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: central-runtime-image-${{ matrix.goarch }}
-          path: |
-            central-image/*.oci.tar
-            central-image/*.metadata.json
-          if-no-files-found: error
-          retention-days: 7
-
-  central:
-    name: Build Central ${{ matrix.goos }}/${{ matrix.goarch }}
-    needs: [validate-release, repository-gates, go-gates, central-image]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ needs.validate-release.outputs.source_sha }}
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: ops/convenewirectl/go.mod
-          cache-dependency-path: ops/convenewirectl/go.mod
-
-      - name: Download once-built Central image bundle
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: central-runtime-image-${{ matrix.goarch }}
-          path: central-image
-
-      - name: Build checksum-pinned Central archive
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
           SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
-          CENTRAL_IMAGE_BUNDLE_DIR: ${{ github.workspace }}/central-image
         run: ./ops/convenewirectl/scripts/package-central-release.sh
 
       - name: Upload Central artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: convenewire-central-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: convenewire-central-source
           path: |
             dist/*.tar.gz
             dist/*.SHA256SUMS.sha256
@@ -331,18 +245,10 @@ jobs:
           retention-days: 7
 
   desktop-macos:
-    name: Build desktop macOS/${{ matrix.goarch }}
+    name: Build desktop macOS/arm64
     needs: [validate-release, repository-gates, go-gates]
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goarch: arm64
-            runner: macos-15
-          - goarch: amd64
-            runner: macos-15-intel
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -365,7 +271,7 @@ jobs:
         shell: bash
         working-directory: bridge
         env:
-          GOARCH: ${{ matrix.goarch }}
+          GOARCH: arm64
           OUTPUT_DIR: ${{ github.workspace }}/dist
           SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
         run: ./scripts/package-desktop-darwin.sh
@@ -373,7 +279,7 @@ jobs:
       - name: Upload desktop artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: convenewire-bridge-desktop-darwin-${{ matrix.goarch }}
+          name: convenewire-bridge-desktop-darwin-arm64
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -529,23 +435,13 @@ jobs:
         run: |
           version=${RELEASE_TAG#v}
           sha256sum \
-            "convenewire-bridge_${version}_darwin_amd64.tar.gz" \
-            "convenewire-bridge_${version}_darwin_arm64.tar.gz" \
             "convenewire-bridge_${version}_linux_amd64.tar.gz" \
             "convenewire-bridge_${version}_linux_arm64.tar.gz" \
-            "convenewire-bridge_${version}_windows_amd64.zip" \
-            "convenewire-bridge-desktop_${version}_darwin_amd64.zip" \
             "convenewire-bridge-desktop_${version}_darwin_arm64.zip" \
             "convenewire-bridge-desktop_${version}_windows_amd64.zip" \
             "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe" \
-            "convenewire-central_${version}_darwin_amd64.tar.gz" \
-            "convenewire-central_${version}_darwin_amd64.SHA256SUMS.sha256" \
-            "convenewire-central_${version}_darwin_arm64.tar.gz" \
-            "convenewire-central_${version}_darwin_arm64.SHA256SUMS.sha256" \
-            "convenewire-central_${version}_linux_amd64.tar.gz" \
-            "convenewire-central_${version}_linux_amd64.SHA256SUMS.sha256" \
-            "convenewire-central_${version}_linux_arm64.tar.gz" \
-            "convenewire-central_${version}_linux_arm64.SHA256SUMS.sha256" \
+            "convenewire-central_${version}_source.tar.gz" \
+            "convenewire-central_${version}_source.SHA256SUMS.sha256" \
             > SHA256SUMS
 
       - name: Add top-level license assets

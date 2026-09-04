@@ -30,14 +30,10 @@ if [[ ! -d "${asset_dir}" ]]; then
 fi
 
 cli_archives=(
-  "convenewire-bridge_${version}_darwin_amd64.tar.gz"
-  "convenewire-bridge_${version}_darwin_arm64.tar.gz"
   "convenewire-bridge_${version}_linux_amd64.tar.gz"
   "convenewire-bridge_${version}_linux_arm64.tar.gz"
-  "convenewire-bridge_${version}_windows_amd64.zip"
 )
 desktop_archives=(
-  "convenewire-bridge-desktop_${version}_darwin_amd64.zip"
   "convenewire-bridge-desktop_${version}_darwin_arm64.zip"
   "convenewire-bridge-desktop_${version}_windows_amd64.zip"
 )
@@ -45,16 +41,10 @@ desktop_installers=(
   "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe"
 )
 central_archives=(
-  "convenewire-central_${version}_darwin_amd64.tar.gz"
-  "convenewire-central_${version}_darwin_arm64.tar.gz"
-  "convenewire-central_${version}_linux_amd64.tar.gz"
-  "convenewire-central_${version}_linux_arm64.tar.gz"
+  "convenewire-central_${version}_source.tar.gz"
 )
 central_pins=(
-  "convenewire-central_${version}_darwin_amd64.SHA256SUMS.sha256"
-  "convenewire-central_${version}_darwin_arm64.SHA256SUMS.sha256"
-  "convenewire-central_${version}_linux_amd64.SHA256SUMS.sha256"
-  "convenewire-central_${version}_linux_arm64.SHA256SUMS.sha256"
+  "convenewire-central_${version}_source.SHA256SUMS.sha256"
 )
 license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md)
 expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#desktop_installers[@]} + ${#central_archives[@]} + ${#central_pins[@]} + ${#license_assets[@]} + 1))
@@ -275,6 +265,7 @@ verify_macos_desktop_archive() {
   local contents
   local resources
   local binary
+  local helper
 
   mkdir -p "${extraction}"
   unzip -Z1 "${asset_dir}/${archive}" > "${members}"
@@ -284,8 +275,9 @@ verify_macos_desktop_archive() {
   contents="${extraction}/${package}/ConveneWire Bridge.app/Contents"
   resources="${contents}/Resources"
   binary="${contents}/MacOS/convenewire-bridge-desktop"
-  if [[ ! -s "${contents}/Info.plist" || ! -x "${binary}" || ! -s "${resources}/README.md" ]]; then
-    echo "Desktop archive is missing its application metadata, executable, or README: ${archive}" >&2
+  helper="${resources}/bin/convenewire-bridge"
+  if [[ ! -s "${contents}/Info.plist" || ! -x "${binary}" || ! -x "${helper}" || ! -s "${resources}/README.md" ]]; then
+    echo "Desktop archive is missing its application metadata, executable, CLI helper, or README: ${archive}" >&2
     exit 1
   fi
   if ! grep -Fq '<string>dev.agentroom.bridge</string>' "${contents}/Info.plist"; then
@@ -306,6 +298,8 @@ verify_macos_desktop_archive() {
   fi
   assert_binary_version "${binary}"
   assert_binary_architecture "${binary}" "darwin/${architecture}"
+  assert_binary_version "${helper}"
+  assert_binary_architecture "${helper}" "darwin/${architecture}"
   assert_licenses "${resources}"
 }
 
@@ -317,6 +311,7 @@ verify_windows_desktop_archive() {
   local members="${temporary_root}/${package}.members"
   local root
   local binary
+  local helper
 
   mkdir -p "${extraction}"
   unzip -Z1 "${asset_dir}/${archive}" > "${members}"
@@ -325,12 +320,15 @@ verify_windows_desktop_archive() {
 
   root="${extraction}/${package}"
   binary="${root}/ConveneWire Bridge.exe"
-  if [[ ! -s "${binary}" || ! -s "${root}/README.md" ]]; then
-    echo "Windows Desktop archive is missing its executable or README: ${archive}" >&2
+  helper="${root}/convenewire-bridge.exe"
+  if [[ ! -s "${binary}" || ! -s "${helper}" || ! -s "${root}/README.md" ]]; then
+    echo "Windows Desktop archive is missing its executable, CLI helper, or README: ${archive}" >&2
     exit 1
   fi
   assert_binary_version "${binary}"
   assert_binary_architecture "${binary}" "windows/${architecture}"
+  assert_binary_version "${helper}"
+  assert_binary_architecture "${helper}" "windows/${architecture}"
   assert_licenses "${root}"
 }
 
@@ -381,14 +379,10 @@ verify_windows_desktop_installer() {
   fi
 }
 
-verify_cli_archive "${cli_archives[0]}" darwin amd64
-verify_cli_archive "${cli_archives[1]}" darwin arm64
-verify_cli_archive "${cli_archives[2]}" linux amd64
-verify_cli_archive "${cli_archives[3]}" linux arm64
-verify_cli_archive "${cli_archives[4]}" windows amd64
-verify_macos_desktop_archive "${desktop_archives[0]}" amd64
-verify_macos_desktop_archive "${desktop_archives[1]}" arm64
-verify_windows_desktop_archive "${desktop_archives[2]}" amd64
+verify_cli_archive "${cli_archives[0]}" linux amd64
+verify_cli_archive "${cli_archives[1]}" linux arm64
+verify_macos_desktop_archive "${desktop_archives[0]}" arm64
+verify_windows_desktop_archive "${desktop_archives[1]}" amd64
 verify_windows_desktop_installer "${desktop_installers[0]}"
 ASSET_DIR="${asset_dir}" RELEASE_TAG="${release_tag}" SOURCE_REF="${source_commit}" \
   "${repository_root}/ops/convenewirectl/scripts/verify-central-release.sh"

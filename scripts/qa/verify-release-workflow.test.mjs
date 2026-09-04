@@ -171,7 +171,6 @@ test("every job fails policy verification if checkout falls back to the tag ref"
     "repository-gates",
     "go-gates",
     "build",
-    "central-image",
     "central",
     "desktop-macos",
     "desktop-windows",
@@ -199,17 +198,6 @@ test("Central packaging cannot resolve its source from the mutable tag", () => {
   assert.throws(
     () => verifyReleaseWorkflowSource(changed),
     /central package step must include SOURCE_REF/u
-  );
-});
-
-test("Central image build cannot resolve its source from the mutable tag", () => {
-  const changed = mutateJob(workflow, "central-image", (block) => block.replace(
-    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
-    "SOURCE_REF: ${{ inputs.release_tag }}"
-  ));
-  assert.throws(
-    () => verifyReleaseWorkflowSource(changed),
-    /central-image build step must include SOURCE_REF/u
   );
 });
 
@@ -266,56 +254,63 @@ test("workflow fails policy verification if an asset build bypasses full gates",
   );
 });
 
-test("once-built Central OCI job cannot bypass full gates", () => {
-  const changed = mutateJob(workflow, "central-image", (block) => block.replace(
-    "needs: [validate-release, repository-gates, go-gates]",
-    "needs: validate-release"
-  ));
+test("default Release cannot restore the embedded Central OCI matrix", () => {
+  const changed = workflow.replace(
+    "  central:\n",
+    "  central-image:\n    needs: [validate-release, repository-gates, go-gates]\n    runs-on: ubuntu-latest\n    steps: []\n\n  central:\n"
+  );
   assert.throws(
     () => verifyReleaseWorkflowSource(changed),
-    /central-image must depend on repository-gates/u
+    /must not build embedded Central OCI bundles/u
   );
 });
 
-test("Central OCI artifacts cannot skip the clean-daemon Docker gate", () => {
-  const changed = mutateJob(workflow, "central-image", (block) => block.replace(
-    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
-    "echo docker-load-gate-skipped"
+test("Central source archive cannot regain matrix or OCI inputs", () => {
+  for (const addition of [
+    "    strategy:\n      matrix:\n        goarch: [amd64, arm64]\n",
+    "    env:\n      CENTRAL_IMAGE_BUNDLE_DIR: central-image\n"
+  ]) {
+    const changed = mutateJob(workflow, "central", (block) => block.replace(
+      "    runs-on: ubuntu-latest\n",
+      `    runs-on: ubuntu-latest\n${addition}`
+    ));
+    assert.throws(
+      () => verifyReleaseWorkflowSource(changed),
+      /one job with no OCI matrix input/u
+    );
+  }
+});
+
+test("standalone Bridge CLI matrix remains Linux-only", () => {
+  const changed = mutateJob(workflow, "build", (block) => block.replace(
+    "          - goos: linux\n            goarch: amd64",
+    "          - goos: windows\n            goarch: amd64"
   ));
   assert.throws(
     () => verifyReleaseWorkflowSource(changed),
-    /central-image must include .*verify-central-image-docker/u
+    /standalone Bridge CLI matrix must include|Linux-only/u
   );
 });
 
-test("Central SBOM generation cannot fall back to a mutable scanner tag", () => {
-  const changed = mutateJob(workflow, "central-image", (block) => block.replace(
-    /CENTRAL_SBOM_GENERATOR: docker\.io\/docker\/buildkit-syft-scanner@sha256:[0-9a-f]{64}/u,
-    "CENTRAL_SBOM_GENERATOR: docker.io/docker/buildkit-syft-scanner:stable-1"
+test("macOS Desktop remains Apple silicon only", () => {
+  const changed = mutateJob(workflow, "desktop-macos", (block) => block.replace(
+    "runs-on: macos-15",
+    "runs-on: macos-15-intel"
   ));
   assert.throws(
     () => verifyReleaseWorkflowSource(changed),
-    /central-image must include CENTRAL_SBOM_GENERATOR/u
+    /desktop-macos must include runs-on: macos-15|Apple silicon only/u
   );
 });
 
-test("Central archives cannot skip the once-built image artifact", () => {
-  const withoutDependency = mutateJob(workflow, "central", (block) => block.replace(
-    "needs: [validate-release, repository-gates, go-gates, central-image]",
-    "needs: [validate-release, repository-gates, go-gates]"
+test("publish checksum closure cannot restore retired assets", () => {
+  const changed = mutateJob(workflow, "publish", (block) => block.replace(
+    '"convenewire-bridge_${version}_linux_amd64.tar.gz"',
+    '"convenewire-bridge_${version}_darwin_amd64.tar.gz"'
   ));
   assert.throws(
-    () => verifyReleaseWorkflowSource(withoutDependency),
-    /central must depend on central-image/u
-  );
-
-  const withoutBundle = mutateJob(workflow, "central", (block) => block.replace(
-    "CENTRAL_IMAGE_BUNDLE_DIR: ${{ github.workspace }}/central-image",
-    "CENTRAL_RELEASE_SCHEMA: 1"
-  ));
-  assert.throws(
-    () => verifyReleaseWorkflowSource(withoutBundle),
-    /central package step must include CENTRAL_IMAGE_BUNDLE_DIR/u
+    () => verifyReleaseWorkflowSource(changed),
+    /publish checksum closure/u
   );
 });
 

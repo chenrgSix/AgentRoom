@@ -84,6 +84,14 @@ export function verifyCIWorkflowSource(source) {
     !source.includes("go test ./... -run Windows"),
     "native Windows process regressions must not use the cacheable command"
   );
+  invariant(
+    source.includes("Package and verify Central source release") &&
+      source.includes("./ops/convenewirectl/scripts/package-central-release.sh") &&
+      source.includes("./ops/convenewirectl/scripts/verify-central-release.sh") &&
+      !source.includes("Package and verify Central release matrix") &&
+      !source.includes("CENTRAL_RELEASE_SCHEMA: 1"),
+    "CI must package and verify the current single Central source release"
+  );
   verifyWindowsNativeFailures(source);
 }
 
@@ -311,7 +319,6 @@ export function verifyReleaseWorkflowSource(source) {
   const go = requireJob(jobs, "go-gates");
   const buildJobNames = [
     "build",
-    "central-image",
     "central",
     "desktop-macos",
     "desktop-windows"
@@ -367,6 +374,10 @@ export function verifyReleaseWorkflowSource(source) {
       "go-gates"
     ]);
   }
+  invariant(
+    !jobs.has("central-image"),
+    "the default Release must not build embedded Central OCI bundles"
+  );
   const assetBuildMarkers = [
     "package-release.sh",
     "package-central-release.sh",
@@ -387,17 +398,25 @@ export function verifyReleaseWorkflowSource(source) {
   }
   const central = requireJob(jobs, "central");
   assertIncludes(central, [
-    "central-runtime-image-${{ matrix.goarch }}"
+    "name: Build Central source release",
+    "name: convenewire-central-source"
   ], "central");
   assertIncludes(
-    stepForName(central, "Build checksum-pinned Central archive"),
+    stepForName(central, "Build checksum-pinned Central source archive"),
     [
       "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
-      "CENTRAL_IMAGE_BUNDLE_DIR: ${{ github.workspace }}/central-image"
+      "./ops/convenewirectl/scripts/package-central-release.sh"
     ],
     "central package step"
   );
-  assertNeeds(central, "central", ["central-image"]);
+  invariant(
+    !central.includes("strategy:") &&
+      !central.includes("matrix:") &&
+      !central.includes("matrix.") &&
+      !central.includes("CENTRAL_IMAGE_BUNDLE_DIR") &&
+      !central.includes("central-runtime-image"),
+    "Central source packaging must be one job with no OCI matrix input"
+  );
 
   for (const [jobName, stepName] of [
     ["build", "Build archive"],
@@ -411,42 +430,29 @@ export function verifyReleaseWorkflowSource(source) {
     );
   }
 
-  const centralImage = requireJob(jobs, "central-image");
-  assertIncludes(centralImage, [
-    "goarch: [amd64, arm64]",
-    "docker/setup-qemu-action@",
-    "docker/setup-buildx-action@",
-    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
-    "CENTRAL_SBOM_GENERATOR: docker.io/docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9",
-    "CENTRAL_IMAGE_BUILDER_ID:",
-    "./ops/convenewirectl/scripts/build-central-image.sh",
-    "Verify clean-daemon OCI load and digest execution",
-    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
-    "name: central-runtime-image-${{ matrix.goarch }}",
-    "central-image/*.oci.tar",
-    "central-image/*.metadata.json"
-  ], "central-image");
-  assertIncludes(
-    stepForName(centralImage, "Build one attested offline image bundle"),
-    ["SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"],
-    "central-image build step"
+  const build = requireJob(jobs, "build");
+  assertIncludes(build, [
+    "- goos: linux\n            goarch: amd64",
+    "- goos: linux\n            goarch: arm64"
+  ], "standalone Bridge CLI matrix");
+  invariant(
+    !build.includes("goos: darwin") && !build.includes("goos: windows"),
+    "standalone Bridge CLI archives are Linux-only"
   );
-  assertIncludes(
-    stepForName(centralImage, "Verify clean-daemon OCI load and digest execution"),
-    ["SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"],
-    "central-image Docker verification step"
-  );
-  assertBefore(
-    centralImage,
-    "./ops/convenewirectl/scripts/build-central-image.sh",
-    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
-    "central-image"
-  );
-  assertBefore(
-    centralImage,
-    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
-    "Upload once-built Central image bundle",
-    "central-image"
+
+  const desktopMacos = requireJob(jobs, "desktop-macos");
+  assertIncludes(desktopMacos, [
+    "name: Build desktop macOS/arm64",
+    "runs-on: macos-15",
+    "GOARCH: arm64",
+    "name: convenewire-bridge-desktop-darwin-arm64"
+  ], "desktop-macos");
+  invariant(
+    !desktopMacos.includes("strategy:") &&
+      !desktopMacos.includes("matrix.") &&
+      !desktopMacos.includes("macos-15-intel") &&
+      !desktopMacos.includes("GOARCH: amd64"),
+    "macOS Desktop must publish Apple silicon only"
   );
 
   const desktopWindows = requireJob(jobs, "desktop-windows");
@@ -491,6 +497,28 @@ export function verifyReleaseWorkflowSource(source) {
     "--json isDraft",
     "--json assets"
   ], "publish");
+  const expectedChecksummedAssets = [
+    "convenewire-bridge_${version}_linux_amd64.tar.gz",
+    "convenewire-bridge_${version}_linux_arm64.tar.gz",
+    "convenewire-bridge-desktop_${version}_darwin_arm64.zip",
+    "convenewire-bridge-desktop_${version}_windows_amd64.zip",
+    "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe",
+    "convenewire-central_${version}_source.tar.gz",
+    "convenewire-central_${version}_source.SHA256SUMS.sha256"
+  ];
+  assertIncludes(publish, expectedChecksummedAssets, "publish checksum closure");
+  for (const retiredAsset of [
+    "convenewire-bridge_${version}_darwin_amd64.tar.gz",
+    "convenewire-bridge_${version}_darwin_arm64.tar.gz",
+    "convenewire-bridge_${version}_windows_amd64.zip",
+    "convenewire-bridge-desktop_${version}_darwin_amd64.zip",
+    "convenewire-central_${version}_linux_amd64.tar.gz"
+  ]) {
+    invariant(
+      !publish.includes(retiredAsset),
+      `publish checksum closure must exclude retired asset ${retiredAsset}`
+    );
+  }
   assertIncludes(
     stepForName(publish, "Verify release assets before upload"),
     [
