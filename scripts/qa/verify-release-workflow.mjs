@@ -127,6 +127,42 @@ export function verifyReleaseAssetVerifierSource(source) {
   }
 }
 
+export function verifyWindowsInstallerVerifierSource(source) {
+  assertIncludes(source, [
+    "[switch]$RequireCLIHelper",
+    'if ($RequireCLIHelper) {',
+    '$required += "convenewire-bridge.exe"',
+    'throw "Candidate executable verification must require the bundled CLI helper"',
+    "Assert-InstalledPayload -ExpectedReleaseTag $PreviousReleaseTag",
+    "-ExpectedReleaseTag $ReleaseTag `",
+    "-ExpectedExecutableSHA256 $candidateExecutableSHA256 `",
+    "-RequireCLIHelper"
+  ], "Windows installer verifier");
+
+  invariant(
+    !source.includes("Assert-InstalledPayload $PreviousReleaseTag") &&
+      !source.includes("Assert-InstalledPayload $ReleaseTag $candidateExecutableSHA256"),
+    "Windows installer verifier must keep legacy and candidate requirements explicit"
+  );
+
+  const previousCall = source.indexOf(
+    "Assert-InstalledPayload -ExpectedReleaseTag $PreviousReleaseTag"
+  );
+  const candidateCall = source.indexOf("-ExpectedReleaseTag $ReleaseTag `", previousCall);
+  invariant(
+    previousCall >= 0 && candidateCall > previousCall,
+    "Windows installer verifier must check the previous stable before the candidate"
+  );
+  invariant(
+    !source.slice(previousCall, candidateCall).includes("-RequireCLIHelper"),
+    "Windows installer verifier must not impose the new CLI helper on the previous stable"
+  );
+  invariant(
+    source.slice(candidateCall).includes("-RequireCLIHelper"),
+    "Windows installer verifier must require the CLI helper after candidate upgrade"
+  );
+}
+
 export function verifyWindowsNativeFailures(source) {
   const windows = requireJob(jobBlocks(source), "desktop-windows");
   const commands = [...windows.matchAll(/^          go (?:test|vet|run) [^\n]+\n([^\n]*)/gmu)];

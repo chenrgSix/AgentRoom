@@ -11,7 +11,8 @@ import {
   verifyCentralImageDockerGateSource,
   verifyComposeBackupDurabilitySource,
   verifyReleaseAssetVerifierSource,
-  verifyReleaseWorkflowSource
+  verifyReleaseWorkflowSource,
+  verifyWindowsInstallerVerifierSource
 } from "./verify-release-workflow.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,10 @@ const composeBackup = await readFile(path.resolve(
 const releaseAssetVerifier = await readFile(path.resolve(
   scriptDirectory,
   "../../bridge/scripts/verify-release-assets.sh"
+), "utf8");
+const windowsInstallerVerifier = await readFile(path.resolve(
+  scriptDirectory,
+  "../../bridge/scripts/verify-desktop-windows-installer.ps1"
 ), "utf8");
 
 function mutateJob(source, jobName, mutate) {
@@ -65,6 +70,28 @@ test("combined asset verifier cannot restore a retired top-level package", () =>
   assert.throws(
     () => verifyReleaseAssetVerifierSource(changed),
     /combined Release asset verifier/u
+  );
+});
+
+test("Windows upgrade verifier requires the CLI helper only after candidate upgrade", () => {
+  assert.doesNotThrow(() => verifyWindowsInstallerVerifierSource(windowsInstallerVerifier));
+
+  const legacyRequiresHelper = windowsInstallerVerifier.replace(
+    "Assert-InstalledPayload -ExpectedReleaseTag $PreviousReleaseTag",
+    "Assert-InstalledPayload -ExpectedReleaseTag $PreviousReleaseTag -RequireCLIHelper"
+  );
+  assert.throws(
+    () => verifyWindowsInstallerVerifierSource(legacyRequiresHelper),
+    /must not impose the new CLI helper/u
+  );
+
+  const candidateOmitsHelper = windowsInstallerVerifier.replace(
+    "    -ExpectedExecutableSHA256 $candidateExecutableSHA256 `\n    -RequireCLIHelper",
+    "    -ExpectedExecutableSHA256 $candidateExecutableSHA256 `\n    -ConfirmCandidate"
+  );
+  assert.throws(
+    () => verifyWindowsInstallerVerifierSource(candidateOmitsHelper),
+    /must include -RequireCLIHelper|must require the CLI helper/u
   );
 });
 

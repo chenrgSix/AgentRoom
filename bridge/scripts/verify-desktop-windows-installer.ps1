@@ -157,13 +157,13 @@ function Invoke-CheckedProcess {
 function Assert-InstalledPayload {
   param(
     [string]$ExpectedReleaseTag,
-    [string]$ExpectedExecutableSHA256 = ""
+    [string]$ExpectedExecutableSHA256 = "",
+    [switch]$RequireCLIHelper
   )
 
   $expectedVersion = $ExpectedReleaseTag.Substring(1)
   $required = @(
     "ConveneWire Bridge.exe",
-    "convenewire-bridge.exe",
     "README.md",
     "LICENSE",
     "NOTICE",
@@ -171,6 +171,9 @@ function Assert-InstalledPayload {
     "TRADEMARKS.md",
     "unins000.exe"
   )
+  if ($RequireCLIHelper) {
+    $required += "convenewire-bridge.exe"
+  }
   foreach ($filename in $required) {
     $path = Join-Path $installDir $filename
     if (-not (Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -eq 0) {
@@ -181,11 +184,16 @@ function Assert-InstalledPayload {
   if (-not $binaryText.Contains($ExpectedReleaseTag)) {
     throw "Installed Bridge does not contain $ExpectedReleaseTag"
   }
-  $cliText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $installDir "convenewire-bridge.exe")))
-  if (-not $cliText.Contains($ExpectedReleaseTag)) {
-    throw "Installed CLI helper does not contain $ExpectedReleaseTag"
+  if ($RequireCLIHelper) {
+    $cliText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $installDir "convenewire-bridge.exe")))
+    if (-not $cliText.Contains($ExpectedReleaseTag)) {
+      throw "Installed CLI helper does not contain $ExpectedReleaseTag"
+    }
   }
   if (-not [string]::IsNullOrWhiteSpace($ExpectedExecutableSHA256)) {
+    if (-not $RequireCLIHelper) {
+      throw "Candidate executable verification must require the bundled CLI helper"
+    }
     $installedDigest = (Get-FileHash `
       -LiteralPath (Join-Path $installDir "ConveneWire Bridge.exe") `
       -Algorithm SHA256).Hash
@@ -293,7 +301,7 @@ try {
     "/LOG=`"$installLog`""
   )
   Invoke-CheckedProcess $previousInstaller $installArguments "Previous stable installer run" $installLog
-  Assert-InstalledPayload $PreviousReleaseTag
+  Assert-InstalledPayload -ExpectedReleaseTag $PreviousReleaseTag
   Install-OwnerStateFixture
   Assert-OwnerStateFixture
 
@@ -304,7 +312,10 @@ try {
     "/LOG=`"$upgradeLog`""
   )
   Invoke-CheckedProcess $installer $upgradeArguments "Installer upgrade run" $upgradeLog
-  Assert-InstalledPayload $ReleaseTag $candidateExecutableSHA256
+  Assert-InstalledPayload `
+    -ExpectedReleaseTag $ReleaseTag `
+    -ExpectedExecutableSHA256 $candidateExecutableSHA256 `
+    -RequireCLIHelper
   Assert-OwnerStateFixture
 
   $uninstaller = Join-Path $installDir "unins000.exe"
