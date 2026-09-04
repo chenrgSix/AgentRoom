@@ -2,7 +2,8 @@
 
 Date: 2026-09-04
 
-Status: active. Delivery state lives only in `docs/TASKS.md`.
+Status: accepted on 2026-09-04. Delivery state lives only in
+`docs/TASKS.md`.
 
 ## Goal
 
@@ -48,3 +49,42 @@ pairing, Runtime and repository behavior are unchanged.
 
 No transition release may be published by this task. Release admission remains
 a separate explicit user decision after visual review.
+
+## Implemented Result And Evidence
+
+Implementation commit `6be3ebf` removes the private-HTTPS action from the
+overview collaboration card and places its unique control inside a collapsed
+**Advanced browser trust** disclosure immediately after Central connection
+settings. The disclosure is available only with a valid current private-CA
+projection and says that ordinary LAN HTTP needs no CA while public-CA HTTPS is
+already covered by system trust. Existing Windows/macOS command generation,
+platform selection, copy handling, invalidation and Linux guidance are
+unchanged.
+
+The following gates passed through owned test roots, each of which reported its
+physical cleanup:
+
+```text
+npm run test:bridge-ui
+# 61 passed
+
+node scripts/test/run-with-temp-root.mjs --cwd bridge -- go test ./internal/console
+# passed
+
+node scripts/test/run-with-temp-root.mjs --cwd bridge -- \
+  go test -tags desktop ./cmd/convenewire-bridge-desktop
+# passed
+
+node scripts/test/run-with-temp-root.mjs --cwd bridge -- \
+  go build -tags desktop ./cmd/convenewire-bridge-desktop
+# passed; the explicit build output was removed after inspection
+```
+
+Structural regressions prove that the unique trust action occurs after the
+Settings page begins and not between the overview and Settings pages.
+Controller regressions prove that invalid trust or active enrollment hides both
+the disclosure and action. A freshly compiled current-source macOS Desktop was
+started with the Owner's existing local state; the Owner then explicitly
+requested transition-release publication after the preview. No command was run
+against an operating-system trust store, and release admission is tracked
+separately by `QA-062`.
