@@ -3,6 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
+const legacyStyles = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+const workspaceSidebar = await readFile(
+  new URL("../src/features/navigation/WorkspaceSidebar.tsx", import.meta.url),
+  "utf8"
+);
 const visualSystem = await readFile(
   new URL("../src/visual-system.css", import.meta.url),
   "utf8"
@@ -54,6 +59,12 @@ test("brand interaction and success state remain visually distinct", () => {
     visualSystem,
     /\.agent-avatar,[^}]*\.device-icon,[^}]*\.participant-avatar\.human,[^}]*\.integration-badge,[^}]*\.current-user-badge[^}]*background: var\(--cw-accent-soft\)/s
   );
+});
+
+test("inactive Work navigation does not inherit the retired green rail control", () => {
+  assert.match(workspaceSidebar, /className="product-work-link"/);
+  assert.doesNotMatch(workspaceSidebar, /className="rail-manage"/);
+  assert.doesNotMatch(legacyStyles, /\.rail-manage/);
 });
 
 test("critical compact controls stay legible and responsive", () => {

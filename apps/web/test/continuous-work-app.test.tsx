@@ -98,7 +98,7 @@ async function fixture(t: TestContext) {
   async function openRoomTask(task: TaskProjection) {
     // Enter through the real Work detail's Room action, not a synthetic URL.
     const work = page.getAllByRole("button", { name: "Work", exact: true })
-      .find((button) => button.className.includes("rail-manage"))!;
+      .find((button) => button.className.includes("product-work-link"))!;
     testing.fireEvent.click(work);
     testing.fireEvent.click(await page.findByRole("button", { name: `Open TASK-${task.taskDisplayNumber}` }));
     await page.findByRole("heading", { name: task.title });

@@ -55,7 +55,7 @@ export function WorkspaceSidebar(props: Props) {
       ) : (
         <div className="product-collaboration-nav">
           <nav className="product-destinations" aria-label={zh ? "协作导航" : "Collaboration navigation"}>
-            <button className="rail-manage" aria-current={activeView === "work" ? "page" : undefined} onClick={() => props.onView("work")} type="button"><span aria-hidden="true">▦</span>{zh ? "工作" : "Work"}</button>
+            <button className="product-work-link" aria-current={activeView === "work" ? "page" : undefined} onClick={() => props.onView("work")} type="button"><span aria-hidden="true">▦</span>{zh ? "工作" : "Work"}</button>
             <button aria-current={activeView === "room" ? "page" : undefined} onClick={() => props.onView("room")} type="button"><span aria-hidden="true">⌁</span>{translate(locale, "chat")}</button>
           </nav>
           {teamId && <div className="product-rooms">

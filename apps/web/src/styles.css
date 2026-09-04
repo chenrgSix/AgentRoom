@@ -64,8 +64,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .team-add:hover { border-color: #bddb67; background: #22291a; color: #e1f6a1; }
 
 .rail-actions { display: grid; gap: 9px; }
-.rail-manage { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid #465235; border-radius: 14px; background: #1c2118; color: #bdd975; font-size: 18px; cursor: pointer; transition: .18s ease; }
-.rail-manage:hover, .rail-manage.active { border-color: #bddb67; background: #2a331f; color: #e1f6a1; box-shadow: 0 0 24px rgb(194 225 103 / 12%); }
 
 .room-sidebar {
   display: flex;
@@ -880,9 +878,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .team-add { border-color: #b7c3aa; background: #f4f7ef; color: #607738; }
 :root[data-theme="light"] .team-chip:hover,
 :root[data-theme="light"] .team-chip.active { border-color: #7d963e; background: #dfe8cc; color: #354617; }
-:root[data-theme="light"] .rail-manage { border-color: #bcc9a7; background: #f5f8ef; color: #5f7627; }
-:root[data-theme="light"] .rail-manage:hover,
-:root[data-theme="light"] .rail-manage.active { border-color: #829b45; background: #dfe8cc; color: #3e5418; }
 :root[data-theme="light"] .room-sidebar { border-color: #d5dccd; background: rgb(240 243 234 / 96%); }
 :root[data-theme="light"] .participant-panel,
 :root[data-theme="light"] .workspace-header,
