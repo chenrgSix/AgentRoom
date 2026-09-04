@@ -110,8 +110,8 @@ click from the client; it is never automatically replayed.
 | Central Web | Node.js 22, TypeScript, Fastify, React, Vite |
 | Team integration | Remote MCP Server |
 | Push channel | Authenticated WebSocket |
-| Local Bridge | Go 1.26.7, distributed as a macOS GUI or headless binary |
-| Central controller | Go 1.26.7, distributed for Linux and macOS |
+| Local Bridge | Go 1.26.7; Desktop on Apple-silicon macOS and 64-bit Windows, standalone CLI on Linux |
+| Central controller | Go 1.26.7; bundled for Linux amd64/arm64 and Apple-silicon macOS inside one Central source archive |
 | MVP persistence | SQLite |
 | Server and Web tests | Node test runner and TypeScript build |
 | Bridge tests | Go test |
@@ -190,15 +190,19 @@ existing member. This path only supports ordinary single-Team members.
 ### Connect local Codex or Pi with the Bridge
 
 The managed Bridge lets the central service wake a local runtime. Client
-machines do not need Go or Node.js:
+machines do not need Go or Node.js. The streamlined package names below apply
+to Releases implementing ADR-0041; `v0.5.0-rc.5` and older Releases retain
+their immutable historical asset sets and should be used with their own Release
+notes:
 
-1. Download the archive for the client's OS and CPU from
-   [GitHub Releases](https://github.com/chenrgSix/ConveneWire/releases). On macOS,
-   choose the `convenewire-bridge-desktop` ZIP for Apple Silicon (`arm64`) or
-   Intel (`amd64`), then move **ConveneWire Bridge.app** to `/Applications`. On
-   64-bit Windows, use the `convenewire-bridge-desktop` executable ending in
-   `windows_amd64_setup.exe` for a current-user installation, or choose the ZIP
-   ending in `windows_amd64` for a portable copy.
+1. Download the client product from
+   [GitHub Releases](https://github.com/chenrgSix/ConveneWire/releases). On an
+   Apple-silicon Mac, choose the `convenewire-bridge-desktop` ZIP ending in
+   `darwin_arm64`, then move **ConveneWire Bridge.app** to `/Applications`.
+   Intel Macs are not a current Release target. On 64-bit Windows, use the
+   `windows_amd64_setup.exe` Desktop installer, or choose the Desktop ZIP ending
+   in `windows_amd64` for a portable copy. Headless Linux users choose the
+   standalone `convenewire-bridge` archive for `linux_amd64` or `linux_arm64`.
 2. Download `SHA256SUMS`, verify the archive, and extract it. Desktop packages
    are intentionally unsigned. The macOS app is also unnotarized; approve it
    under **Privacy & Security**, or remove quarantine from that app only after
@@ -217,8 +221,10 @@ machines do not need Go or Node.js:
    menu entry and uninstaller, and leaves Bridge configuration and credentials
    under the user's application-data directory untouched during upgrades and
    uninstall.
-3. Open the desktop app. For a headless system, use the portable CLI archive
-   and its launcher, or run:
+3. On macOS or Windows, open the Desktop app. Each Desktop package includes a
+   same-version CLI helper for advanced owner-local repository and automation
+   commands, so there is no separate macOS or Windows CLI download. On a
+   headless Linux system, use the portable CLI archive and its launcher, or run:
 
    ```bash
    convenewire-bridge console --workspace /absolute/path/to/project
@@ -282,18 +288,21 @@ intentionally hides `/api/metrics` from the public network.
 
 ## Production Deployment
 
-For a trusted small Team, use the checksum-pinned Central archive matching the
-host's OS and CPU. The host needs Docker Engine 24 or newer with Compose 2.20
-or newer; it does not need Git, Node.js, Go, OpenSSL, or manual `.env` editing.
-When a release includes `convenewire-central` assets, verify the matching archive
-with the outer Release `SHA256SUMS`, extract it, and retain the matching
-`*.SHA256SUMS.sha256` asset as the separately published pin for the archive's
-internal file manifest.
+For a trusted small Team on a Release implementing ADR-0041, use the single
+checksum-pinned Central source archive.
+It supports Linux amd64/arm64 and Apple-silicon macOS hosts. The host needs
+Docker Engine 24 or newer with Compose 2.20 or newer and enough local build
+capacity; it does not need Git, Node.js, Go, OpenSSL, or manual `.env` editing.
+The initial build needs access to the digest-pinned Node and Caddy base images
+unless the operator has already loaded them. Verify the source archive with the
+outer Release `SHA256SUMS`, extract it, and retain its matching
+`*_source.SHA256SUMS.sha256` asset as the separately published pin for the
+archive's internal file manifest.
 
 Run the shipped controller from the extracted root:
 
 ```bash
-archive=convenewire-central_0.4.0-rc.1_linux_amd64.tar.gz
+archive=convenewire-central_0.5.0_source.tar.gz
 pin_asset=${archive%.tar.gz}.SHA256SUMS.sha256
 release_dir=${archive%.tar.gz}
 tar -xzf "${archive}"

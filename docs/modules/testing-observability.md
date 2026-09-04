@@ -582,15 +582,18 @@ safe stop, off-host backup expectations, and version-aligned rollback without
 claiming public ACME or high-availability evidence.
 
 A ConveneWire release begins as an empty draft candidate and builds from the
-exact requested tag. The workflow requires five Bridge CLI archives, two native
-macOS GUI archives, one native Windows GUI preview archive, one Windows
-current-user installer, four Central archives, four separately published
-internal-checksum pins, one outer checksum file, and four top-level license
-files. It verifies names, versions, architectures, archive layouts, installer
-metadata, launchers, licenses, source/schema metadata, file closure and
-checksums before upload, then downloads the candidate and repeats the same
+exact requested tag. Releases implementing ADR-0041 require two standalone
+Linux Bridge CLI archives, one native Apple-silicon macOS Desktop archive, one
+native Windows Desktop archive and current-user installer, one host-neutral
+Central source archive with its separately published internal-checksum pin, one
+outer checksum file, and four top-level license files: exactly 12 assets. The
+Desktop archives also carry same-version, same-source CLI helpers. The verifier
+checks names, versions, architectures, helper placement, archive layouts,
+installer metadata, launchers, licenses, source/schema metadata, file closure
+and checksums before upload, then downloads the candidate and repeats the same
 verifier. Native Windows CI also executes install, upgrade, and uninstall smoke
-tests. Existing assets are never silently replaced.
+tests. Existing assets are never silently replaced; historical 22-asset
+Releases retain their tagged verifier and acceptance evidence.
 
 New release candidates are owned by the canonical
 `github.com/chenrgSix/ConveneWire` repository. GitHub redirects retained

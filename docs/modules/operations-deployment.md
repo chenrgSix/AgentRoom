@@ -300,24 +300,29 @@ separately pinned `SHA256SUMS` digest before it executes Compose configuration
 or a release-owned script. A directory whose content or checksum manifest has
 drifted is diagnostic input only, not trusted executable installation state.
 
-Release-metadata schema 2 disables target-host application builds. Before
-Compose validation or start, the controller verifies the embedded OCI archive,
-its exact Docker-save projection and attestations against the already pinned
-release, imports it with `docker image load`, resolves one complete config-ID or
-repository-qualified manifest-digest pair, atomically records that selection
-before rendering Compose configuration, inspects both exact identities and
-platform, and runs Compose with `--no-build --pull never`. Once recorded,
-status, doctor, reinstall and upgrade revalidate that same generation rather
-than switching to another one. Release-metadata schema 1 remains an explicit
-compatibility path and alone may use the historical source build; schema 2
-cannot silently fall back to it after missing image content, Docker failure or
-registry reachability.
+Release-metadata schema 3 is the current ADR-0041 source-build contract. It is
+host-neutral, records `targetOS=source` and `targetArch=multi`, and requires the
+controller to invoke Compose build with the exact verified Release/source
+identity. Readiness is insufficient unless the running Server reports that same
+identity. Status, doctor, reinstall and upgrade continue to revalidate the
+installed release closure before any lifecycle operation.
+
+Release-metadata schema 2 remains the accepted image-backed compatibility
+contract. Before Compose validation or start, the controller verifies the
+embedded OCI archive, its exact Docker-save projection and attestations against
+the already pinned release, imports it with `docker image load`, resolves one
+complete config-ID or repository-qualified manifest-digest pair, atomically
+records that selection before rendering Compose configuration, inspects both
+exact identities and platform, and runs Compose with `--no-build --pull never`.
+It cannot silently fall back to a source build after missing image content,
+Docker failure or registry reachability. Release-metadata schema 1 remains the
+legacy source-build compatibility path.
 
 ## Verification
 
 Focused tests use real temporary files and a fake process/readiness boundary.
-They cover the four supported host/architecture pairs and release-target
-rejection, local/direct network
+They cover the current Linux amd64/arm64 and Apple-silicon macOS controller
+hosts, historical release fixtures and release-target rejection, local/direct network
 rendering, exact release pin and exhaustive content validation, permissions,
 no-secret output/configuration, successful reentry with an existing database,
 each recorded external crash cut, conflicting reentry, delegated
@@ -377,6 +382,7 @@ publication evidence.
 - `OPS-011`: private DHCP-IP to stable-hostname migration.
 - `OPS-012`: exclusive lifecycle configuration and mutation authority.
 - `OPS-013`: immutable exact-digest Central image release and activation.
+- `OPS-017`: one exact-source, checksum-closed, locally built Central release.
 - `QA-028`: deterministic plus physical one-install/one-Device acceptance.
 - `GOV-017`/`QA-038`: optional in-image Hosted Agent boundary and deterministic
   acceptance; no new deployment lifecycle surface.
