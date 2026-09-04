@@ -1,6 +1,6 @@
 # WEB-066 Central visual system goal and acceptance
 
-- State: Frozen implementation goal
+- State: Accepted
 - Date: 2026-09-04
 - Owner: Web UI
 - Depends on: WEB-065, QA-055
@@ -63,3 +63,90 @@ healthy state.
   pass;
 - completion evidence records exact commands and limitations before `WEB-066`
   becomes `DONE`.
+
+## Accepted delivery
+
+Central now loads `visual-system.css` after every existing feature stylesheet.
+That final presentation authority defines one dark/light semantic token system
+for canvas, structural surfaces, borders, text, focus, indigo interaction and
+success/warning/danger/info state. The existing layout files continue to own
+component geometry; Server facts, DOM order, commands, URLs and authorization
+remain unchanged.
+
+The resulting **Graphite Control Plane** uses near-black graphite in dark mode
+and cool white/gray in light mode. Brand marks, primary actions, selected
+navigation, active work and discussion state, Agent identities and integration
+types use indigo. Green is limited to actual positive state such as an active
+authorization, online/ready status, completed Run, healthy presence or passed
+feedback. Warning, danger and informational state retain separate roles.
+
+Shared overrides cover the Product Shell, responsive navigation, access and
+setup screens, forms, menus, dialogs, cards, Work, Task overview, Plan,
+Evidence, Room/composer, Agent, Device, Member and account/security surfaces.
+Critical metadata is at least 11 px and Task fact values are 12 px; opaque
+identifiers, commits and digests use the monospace role. Focus remains visible,
+motion is restrained and the reduced-motion media query collapses transitions.
+
+The implementation is retained in independently reviewable commits:
+
+- `d08c2b6` freezes this goal and registers `WEB-066`;
+- `214a897` repairs the disposable product preview for the already accepted
+  split LAN browser transport, including both trusted Cookie names;
+- `a22a3c1` adds the token authority, Central surface coverage and structural
+  regressions; and
+- `f4e63e1` removes the final non-semantic green from Device and Member
+  management while retaining green for active authorization state.
+
+## Production-browser evidence
+
+The production Web build was exercised against two fresh, disposable real
+Server/SQLite product fixtures. The authenticated trusted-Team browser used the
+fixture-only Owner recovery key; no external request or real user data entered
+the process.
+
+Dark and light review covered the Work workbench, Task overview, Plan,
+Evidence, Room and composer, Agent inventory, Device inventory, Team members
+and account/security pages. Computed browser styles confirmed indigo for
+generic identity, activity and primary interaction, and green only for the
+positive Device authorization state. The Work, Task, Plan and Evidence pages
+kept long Task, Plan and digest values bounded.
+
+The default 1280 px viewport and explicit 760, 720 and 390 px viewports all
+reported `documentElement.scrollWidth - clientWidth = 0`. The 390 px Task tabs
+retained a bounded local horizontal scroller (`clientWidth=360`,
+`scrollWidth=606`) without producing page-level overflow. Controls remained
+visible at every inspected width. Warning/error browser logs were empty after
+the complete navigation pass.
+
+Both preview processes removed their exact owned roots on `SIGINT`:
+
+- `/private/tmp/convene-wire-test-run-dmy696`;
+- `/private/tmp/convene-wire-test-run-uk46Si`.
+
+## Verification record
+
+The final gates passed on 2026-09-04:
+
+- focused visual and Task responsive structure: 6/6 tests;
+- `npm test --workspace @convene-wire/web`: 281/281 tests plus strict
+  TypeScript;
+- `npm run test:product-experience`: 3/3 real SQLite fixtures covering local,
+  direct-HTTPS trusted Team and LAN-HTTP trusted Team sessions;
+- `npm run build`: Server TypeScript, Web production build and all 14 schemas
+  plus 258 generated fixtures passed;
+- `npm run lint:docs`: 372 maintained Markdown files, zero issues; and
+- `git diff --check`: no whitespace errors.
+
+The focused, Web and product suites printed and removed roots
+`/private/tmp/convene-wire-test-run-pkbwY4`,
+`/private/tmp/convene-wire-test-run-bXPuET`,
+`/private/tmp/convene-wire-test-run-9V8mbd` and
+`/private/tmp/convene-wire-test-run-DRSiU4`. Explicit before/after inspection of
+both `/private/tmp` and the macOS user temporary directory found zero
+`agentroom-*`, `agent-room-*`, `convenewire-*` or `convene-wire-*` directories.
+
+The existing Vite large-chunk advisory and pre-existing React test `act(...)`
+diagnostics remain non-blocking optimization debt; the production-browser
+console itself was empty. This delivery does not redesign Bridge Desktop or the
+product site, change behavior, publish a release or update an installed Central
+service.
