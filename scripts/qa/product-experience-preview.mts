@@ -102,13 +102,23 @@ try {
   const localUrl = await local.listen({ host: "127.0.0.1", port: 0 });
 
   const port = await reservePort();
-  const origin = `http://localhost:${port}`;
+  // The reserved .localhost suffix resolves only to loopback while still
+  // exercising the production rule that browser and Bridge transports share
+  // one exact hostname.
+  const previewHost = "convenewire-preview.localhost";
+  const origin = `http://${previewHost}:${port}`;
+  const bridgeOrigin = `https://${previewHost}:${port}`;
   const databasePath = path.join(directory, "trusted/server.sqlite");
-  // Direct test configuration only: production's HTTPS environment validator
-  // remains unchanged. Chromium treats localhost as a secure cookie context.
+  // The disposable browser listens on loopback HTTP, but the trusted-team
+  // model still keeps a distinct HTTPS machine origin exactly like lan_http.
   const trusted = await createServerApp({
     databasePath, webRoot, hostedFetch,
-    webAuth: { mode: "trusted-team", publicOrigin: origin, ownerRecoveryToken }
+    webAuth: {
+      mode: "trusted-team",
+      publicOrigin: bridgeOrigin,
+      browserOrigin: origin,
+      ownerRecoveryToken
+    }
   });
   apps.push(trusted);
   const setup = await trusted.inject({

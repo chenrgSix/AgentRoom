@@ -75,7 +75,8 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
     const now = room!.createdAt;
     const normalizedHeaders = new Map(Object.entries(options.headers).map(([name, value]) => [name.toLowerCase(), value]));
     const bearer = /^Bearer (.+)$/u.exec(normalizedHeaders.get("authorization") ?? "")?.[1];
-    const cookie = /(?:^|;\s*)__Host-agentroom_session=([^;]+)/u.exec(normalizedHeaders.get("cookie") ?? "")?.[1];
+    const cookie = /(?:^|;\s*)(?:__Host-agentroom_session|agentroom_lan_session)=([^;]+)/u
+      .exec(normalizedHeaders.get("cookie") ?? "")?.[1];
     const webCredential = bearer ?? cookie;
     assert.ok(webCredential, "QA seed requires the authenticated Owner session");
     const principal = auth.authenticateWebSession(webCredential, now);

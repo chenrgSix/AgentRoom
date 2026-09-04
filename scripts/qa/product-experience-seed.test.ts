@@ -7,21 +7,28 @@ import test from "node:test";
 import { createServerApp } from "../../apps/server/src/app.js";
 import { seedProductExperience } from "./product-experience-seed.js";
 
-for (const mode of ["local", "trusted-team"] as const) test(`product experience seed creates real paging, recovery and sealed evidence projections (${mode})`, async (t) => {
+for (const mode of ["local", "trusted-team", "trusted-team-lan"] as const) test(`product experience seed creates real paging, recovery and sealed evidence projections (${mode})`, async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-product-seed-test-"));
   const databasePath = path.join(directory, "server.sqlite");
-  const origin = "https://qa.example.com";
+  const trusted = mode !== "local";
+  const origin = mode === "trusted-team-lan"
+    ? "http://qa.example.com"
+    : "https://qa.example.com";
+  const publicOrigin = "https://qa.example.com";
   const ownerRecoveryToken = "qa-seed-owner-recovery-test-0123456789abcdef";
   const app = await createServerApp({ databasePath, clock: () => "2026-08-31T01:00:00.000Z",
-    webAuth: mode === "trusted-team" ? { mode, publicOrigin: origin, ownerRecoveryToken } : { mode }
+    webAuth: trusted ? {
+      mode: "trusted-team", publicOrigin, ownerRecoveryToken,
+      ...(mode === "trusted-team-lan" ? { browserOrigin: origin } : {})
+    } : { mode: "local" }
   });
   t.after(async () => { await app.close(); await rm(directory, { recursive: true, force: true }); });
-  const bootstrap = await app.inject({ method: "POST", url: mode === "trusted-team" ? "/api/auth/setup" : "/api/bootstrap",
-    headers: mode === "trusted-team" ? { origin, "x-agent-room-recovery-token": ownerRecoveryToken } : {},
+  const bootstrap = await app.inject({ method: "POST", url: trusted ? "/api/auth/setup" : "/api/bootstrap",
+    headers: trusted ? { origin, "x-agent-room-recovery-token": ownerRecoveryToken } : {},
     payload: { displayName: "QA Owner" }
   });
   assert.equal(bootstrap.statusCode, 200);
-  const headers: Record<string, string> = mode === "trusted-team"
+  const headers: Record<string, string> = trusted
     ? { origin, cookie: String(bootstrap.headers["set-cookie"]).split(";")[0]! }
     : { authorization: `Bearer ${bootstrap.json().session.token as string}` };
   const team = await app.inject({ method: "POST", url: "/api/teams", headers, payload: { name: "QA Team" } });
