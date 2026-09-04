@@ -10,6 +10,7 @@ import {
   verifyCIWorkflowSource,
   verifyCentralImageDockerGateSource,
   verifyComposeBackupDurabilitySource,
+  verifyReleaseAssetVerifierSource,
   verifyReleaseWorkflowSource
 } from "./verify-release-workflow.mjs";
 
@@ -31,6 +32,10 @@ const composeBackup = await readFile(path.resolve(
   scriptDirectory,
   "../compose-backup.sh"
 ), "utf8");
+const releaseAssetVerifier = await readFile(path.resolve(
+  scriptDirectory,
+  "../../bridge/scripts/verify-release-assets.sh"
+), "utf8");
 
 function mutateJob(source, jobName, mutate) {
   const marker = `  ${jobName}:\n`;
@@ -49,6 +54,18 @@ test("Release workflow binds every checkout and build gate to one source SHA", (
   assert.doesNotThrow(() => verifyReleaseWorkflowSource(workflow));
   assert.doesNotThrow(() => verifyCentralImageDockerGateSource(centralDockerGate));
   assert.doesNotThrow(() => verifyComposeBackupDurabilitySource(composeBackup));
+  assert.doesNotThrow(() => verifyReleaseAssetVerifierSource(releaseAssetVerifier));
+});
+
+test("combined asset verifier cannot restore a retired top-level package", () => {
+  const changed = releaseAssetVerifier.replace(
+    '"convenewire-bridge_${version}_linux_amd64.tar.gz"',
+    '"convenewire-bridge_${version}_darwin_amd64.tar.gz"'
+  );
+  assert.throws(
+    () => verifyReleaseAssetVerifierSource(changed),
+    /combined Release asset verifier/u
+  );
 });
 
 test("native Windows process-tree regressions cannot reuse the Go test cache", () => {

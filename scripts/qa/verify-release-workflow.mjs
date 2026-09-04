@@ -95,6 +95,38 @@ export function verifyCIWorkflowSource(source) {
   verifyWindowsNativeFailures(source);
 }
 
+export function verifyReleaseAssetVerifierSource(source) {
+  const requiredAssets = [
+    '"convenewire-bridge_${version}_linux_amd64.tar.gz"',
+    '"convenewire-bridge_${version}_linux_arm64.tar.gz"',
+    '"convenewire-bridge-desktop_${version}_darwin_arm64.zip"',
+    '"convenewire-bridge-desktop_${version}_windows_amd64.zip"',
+    '"convenewire-bridge-desktop_${version}_windows_amd64_setup.exe"',
+    '"convenewire-central_${version}_source.tar.gz"',
+    '"convenewire-central_${version}_source.SHA256SUMS.sha256"',
+    "license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md)",
+    "verify_cli_archive \"${cli_archives[0]}\" linux amd64",
+    "verify_cli_archive \"${cli_archives[1]}\" linux arm64",
+    "verify_macos_desktop_archive \"${desktop_archives[0]}\" arm64",
+    "verify_windows_desktop_archive \"${desktop_archives[1]}\" amd64",
+    'helper="${resources}/bin/convenewire-bridge"',
+    'helper="${root}/convenewire-bridge.exe"'
+  ];
+  assertIncludes(source, requiredAssets, "combined Release asset verifier");
+  for (const retiredAsset of [
+    '"convenewire-bridge_${version}_darwin_amd64.tar.gz"',
+    '"convenewire-bridge_${version}_darwin_arm64.tar.gz"',
+    '"convenewire-bridge_${version}_windows_amd64.zip"',
+    '"convenewire-bridge-desktop_${version}_darwin_amd64.zip"',
+    '"convenewire-central_${version}_linux_amd64.tar.gz"'
+  ]) {
+    invariant(
+      !source.includes(retiredAsset),
+      `combined Release asset verifier must exclude retired asset ${retiredAsset}`
+    );
+  }
+}
+
 export function verifyWindowsNativeFailures(source) {
   const windows = requireJob(jobBlocks(source), "desktop-windows");
   const commands = [...windows.matchAll(/^          go (?:test|vet|run) [^\n]+\n([^\n]*)/gmu)];
@@ -578,6 +610,10 @@ if (isMain) {
       verifyComposeBackupDurabilitySource(await readFile(path.join(
         repositoryRoot,
         "scripts/compose-backup.sh"
+      ), "utf8"));
+      verifyReleaseAssetVerifierSource(await readFile(path.join(
+        repositoryRoot,
+        "bridge/scripts/verify-release-assets.sh"
       ), "utf8"));
     }
   } catch (error) {
