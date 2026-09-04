@@ -15,6 +15,7 @@ test("LAN HTTP uses its exact Origin and a transport-distinct session Cookie", a
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-lan-http-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "central.sqlite"),
+    trustProxyHops: 1,
     webAuth: { mode: "trusted-team", publicOrigin, browserOrigin, ownerRecoveryToken: recoveryToken }
   });
   try {
@@ -43,6 +44,17 @@ test("LAN HTTP uses its exact Origin and a transport-distinct session Cookie", a
     assert.equal(team.statusCode, 200, team.body);
     assert.equal((await app.inject({ method: "POST", url: "/api/teams",
       headers: { cookie, origin: publicOrigin }, payload: { name: "Wrong Origin" } })).statusCode, 403);
+
+    const plainDevice = await app.inject({ method: "POST", url: "/api/client-access/tickets",
+      headers: { authorization: `Bearer ${randomBytes(32).toString("base64url")}`,
+        "x-forwarded-proto": "http" }, payload: { clientAccessSecret: randomBytes(32).toString("base64url") } });
+    assert.equal(plainDevice.statusCode, 403);
+    const plainLegacy = await app.inject({ url: "/api/health/ready",
+      headers: { "x-agentroom-server-token": randomBytes(32).toString("base64url"),
+        "x-forwarded-proto": "http" } });
+    assert.equal(plainLegacy.statusCode, 403);
+    const plainSocket = await app.inject({ url: "/ws/bridge", headers: { "x-forwarded-proto": "http" } });
+    assert.equal(plainSocket.statusCode, 403);
 
     const logout = await app.inject({ method: "DELETE", url: "/api/auth/session",
       headers: { cookie, origin: browserOrigin } });

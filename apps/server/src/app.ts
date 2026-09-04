@@ -1034,6 +1034,18 @@ export async function createServerApp(
 
   app.addHook("onRequest", async (request) => {
     requestStartedAt.set(request, process.hrtime.bigint());
+    if (
+      trustedOrigins?.secureCookies === false &&
+      request.headers["x-forwarded-proto"] === "http" &&
+      (request.headers.authorization !== undefined ||
+        request.headers[bridgeServerTokenHeader] !== undefined ||
+        request.url.startsWith("/ws/bridge"))
+    ) {
+      throw new AuthorizationError(
+        "FORBIDDEN",
+        "Bridge authority requires the HTTPS machine origin"
+      );
+    }
     if (webAuth.mode === "local" && !isLoopbackHost(request.headers.host)) {
       throw new AuthorizationError(
         "FORBIDDEN",
