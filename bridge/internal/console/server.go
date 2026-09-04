@@ -151,6 +151,7 @@ type State struct {
 	ActiveServerTrustMode   string                      `json:"activeServerTrustMode,omitempty"`
 	ServerTrustEpoch        int64                       `json:"serverTrustEpoch,omitempty"`
 	ServerCADigestPrefix    string                      `json:"serverCaDigestPrefix,omitempty"`
+	BrowserTrustSetup       *BrowserTrustSetupView      `json:"browserTrustSetup,omitempty"`
 	DeviceName              string                      `json:"deviceName,omitempty"`
 	TeamID                  string                      `json:"teamId,omitempty"`
 	DeviceID                string                      `json:"deviceId,omitempty"`
@@ -399,6 +400,9 @@ func (s *Service) State() State {
 	if s.configuration != nil && s.credential != nil && s.joinCancel == nil {
 		_, accessError := pairing.LoadClientAccess(s.configuration.DataDir, *s.credential)
 		snapshot.ClientAccessAvailable = accessError == nil
+	}
+	if s.credential != nil {
+		snapshot.BrowserTrustSetup = browserTrustSetupView(*s.credential, time.Now())
 	}
 	if s.configuration != nil {
 		snapshot.AgentProvisioning = agentProvisioningView(

@@ -57,6 +57,17 @@ func (trust ScopedPrivateTrust) validate(expectedOrigin string, now time.Time) (
 	return certificate, err
 }
 
+// ValidatedScopedPrivateCACertificate returns the active public CA only after
+// applying the same exact-origin, lifetime, CA and digest checks used by Bridge
+// transport authentication.
+func ValidatedScopedPrivateCACertificate(
+	trust ScopedPrivateTrust,
+	expectedOrigin string,
+	now time.Time,
+) (*x509.Certificate, error) {
+	return trust.validate(expectedOrigin, now)
+}
+
 func (trust ScopedPrivateTrust) certificates(
 	expectedOrigin string,
 	now time.Time,

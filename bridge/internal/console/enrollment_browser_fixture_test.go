@@ -99,6 +99,38 @@ func TestSetupBrowserFixture(t *testing.T) {
 	}
 }
 
+// Opt-in private-browser trust fixture: an authenticated public CA projection
+// with no Central request, trust-store mutation or real client-entry issuance.
+func TestPrivateBrowserTrustFixture(t *testing.T) {
+	if os.Getenv("CONVENE_WIRE_PRIVATE_BROWSER_UI_FIXTURE") != "1" {
+		t.Skip("opt-in isolated private-browser trust fixture")
+	}
+	service, _ := pairedRecoveryService(t, inertDependencies())
+	credential, _ := browserTrustCredential(t, true)
+	service.mu.Lock()
+	service.credential = &credential
+	service.state.ServerURL = credential.ServerURL
+	service.applyCredentialTrustViewLocked(credential)
+	service.mu.Unlock()
+
+	finished := make(chan struct{})
+	var stop sync.Once
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /fixture/stop", func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+		stop.Do(func() { close(finished) })
+	})
+	mux.Handle("/", service.Handler())
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	fmt.Printf("PRIVATE_BROWSER_FIXTURE_URL=%s/?token=%s\n", server.URL, service.Token())
+	select {
+	case <-finished:
+	case <-time.After(20 * time.Minute):
+		t.Fatal("browser fixture timed out")
+	}
+}
+
 // Opt-in browser fixture: temporary config, fake credentials, and no central
 // network calls. Control routes exist only in this test, never in the binary.
 func TestPairingBrowserFixture(t *testing.T) {

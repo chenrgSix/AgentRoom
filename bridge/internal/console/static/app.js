@@ -20,6 +20,9 @@ import { governedOwnerPresentation } from "./governed-owner-view.mjs";
 
 const elements = Object.fromEntries([
   "open-client-team", "load-client-rooms", "open-client-room", "client-room", "client-entry-status", "client-entry-help",
+  "prepare-private-browser", "browser-trust-dialog", "browser-trust-fingerprint", "browser-trust-command",
+  "browser-trust-removal-command", "copy-browser-trust-command", "copy-browser-trust-removal-command",
+  "browser-trust-status", "close-browser-trust", "acknowledge-browser-trust",
   "app-sidebar", "setup-intro", "page-context", "page-title", "phase", "phase-label",
   "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view", "approval-eyebrow", "approval-title",
