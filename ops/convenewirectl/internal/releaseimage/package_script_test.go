@@ -70,6 +70,51 @@ func TestPackageCentralReleaseBuildsHostNeutralControllerHelpers(t *testing.T) {
 		assertPackagedControllerTarget(t, archivePath,
 			packageName+"/bin/"+target.path+"/convenewirectl", target.goos, target.goarch)
 	}
+
+	verifyScript := filepath.Join(repositoryRoot, "ops", "convenewirectl", "scripts", "verify-central-release.sh")
+	verify := exec.Command("bash", verifyScript)
+	verify.Dir = repositoryRoot
+	verify.Env = append(os.Environ(),
+		"ASSET_DIR="+outputDirectory,
+		"RELEASE_TAG="+releaseTag,
+		"SOURCE_REF="+sourceCommit,
+	)
+	if verified, verifyErr := verify.CombinedOutput(); verifyErr != nil {
+		t.Fatalf("source package verification failed: %v\n%s", verifyErr, verified)
+	}
+
+	tamperedRoot := t.TempDir()
+	extract := exec.Command("tar", "-xzf", archivePath, "-C", tamperedRoot)
+	if extracted, extractErr := extract.CombinedOutput(); extractErr != nil {
+		t.Fatalf("extract source package for tamper test: %v\n%s", extractErr, extracted)
+	}
+	packageJSON := filepath.Join(tamperedRoot, packageName, "package.json")
+	file, err := os.OpenFile(packageJSON, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString("\n"); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	repack := exec.Command("tar", "-C", tamperedRoot, "-czf", archivePath, packageName)
+	if repacked, repackErr := repack.CombinedOutput(); repackErr != nil {
+		t.Fatalf("repack tampered source package: %v\n%s", repackErr, repacked)
+	}
+	verify = exec.Command("bash", verifyScript)
+	verify.Dir = repositoryRoot
+	verify.Env = append(os.Environ(),
+		"ASSET_DIR="+outputDirectory,
+		"RELEASE_TAG="+releaseTag,
+		"SOURCE_REF="+sourceCommit,
+	)
+	if rejected, rejectErr := verify.CombinedOutput(); rejectErr == nil ||
+		!strings.Contains(string(rejected), "checksum") {
+		t.Fatalf("tampered source package was not rejected by its pinned manifest: err=%v\n%s", rejectErr, rejected)
+	}
 }
 
 func assertPackagedControllerTarget(t *testing.T, archivePath, controllerPath, targetOS, targetArch string) {
