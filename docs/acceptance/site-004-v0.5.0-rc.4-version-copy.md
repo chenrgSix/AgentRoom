@@ -2,8 +2,9 @@
 
 Date: 2026-09-04
 
-Status: goal frozen after the prerelease became public and before changing the
-README or product-site source. Delivery state lives only in `docs/TASKS.md`.
+Status: accepted. The goal was frozen after the prerelease became public and
+before changing the README or product-site source. Delivery state lives only
+in `docs/TASKS.md`.
 
 ## Goal
 
@@ -43,3 +44,36 @@ trust store or Git repository is changed by this task.
    claiming automatic trust installation.
 5. The Pages workflow publishes the exact source commit and every deployed
    file matches the exact locally built bytes.
+
+## Acceptance Evidence
+
+README, home and guide now identify the public `v0.5.0-rc.4` prerelease, retain
+`v0.4.2` as stable Latest and explain that Windows, macOS and Linux clients may
+all need an explicit private-CA browser trust step on another computer. The
+copy promises no silent trust-store mutation, signed package or automatic
+update.
+
+All 15 static tests passed before and after commit, the exact-commit static
+build recorded source
+`811bc0f1e9f9c4c626978ce8a11c2e0a8b3ebfe8`, the 369-file documentation gate
+reported zero findings and whitespace checks passed. Product Website run
+[33838982972](https://github.com/chenrgSix/ConveneWire/actions/runs/33838982972)
+built and deployed that exact source.
+
+Independent HTTPS downloads of home, guide, custom 404, guide JavaScript,
+product mark, CSS, robots, sitemap and version metadata matched all nine local
+build files byte for byte on the first comparison round. Public
+`version.json` named the same full source revision. The task-owned comparison
+root was physically removed and the four historical-prefix snapshots in both
+inspected temporary locations were unchanged.
+
+Post-copy CI run
+[33838983102](https://github.com/chenrgSix/ConveneWire/actions/runs/33838983102)
+passed Repository, native macOS Desktop and native Windows Desktop on its first
+attempt. Its first Go attempt recorded one contention-sensitive one-second
+client-shutdown timeout in
+`TestCanceledRunReplaysDurableTerminalStatusAfterFirstWriteIsLost`; the exact
+test then passed 100 consecutive isolated local executions, its owned cache
+root disappeared, and the failed-only Go rerun passed the complete Go gate in
+2 minutes 17 seconds. No production or test source was changed to conceal the
+original result.
