@@ -1516,9 +1516,11 @@ contains no private key, Device/Server token, pairing proof, client-entry
 ticket, member or Room identity, repository value, Runtime setting or local
 path. It is invalidated when the paired Central identity, trust epoch or CA
 digest changes. Generating a one-use client-entry ticket remains a separate
-explicit action after the target browser has been restarted. Public CA remains
-the normal zero-setup browser path; native trust-store success requires
-platform evidence and is never inferred from copying the command.
+explicit action after the target browser has been restarted. LAN HTTP is the
+ordinary no-CA private-LAN browser path, while a public CA remains the
+zero-setup encrypted path for public deployment. Native trust-store success on
+the advanced private-HTTPS path requires platform evidence and is never
+inferred from copying the command.
 
 BRG-073 makes this product surface platform-neutral. A private CA can require
 trust preparation on any other computer, not only Windows. The same validated
