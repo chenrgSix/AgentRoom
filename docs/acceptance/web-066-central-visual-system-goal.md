@@ -160,4 +160,8 @@ visual and real-App navigation tests plus strict TypeScript. A concurrent full
 Web run passed 279/282 tests; its three client-entry/history timing failures did
 not touch the changed navigation or CSS and all affected Work-navigation tests
 passed when rerun with the repository's supported Web TypeScript configuration
-at concurrency one. Its owned roots were removed after both runs.
+at concurrency one. Its owned roots were removed after both runs. A fresh
+production Web build then confirmed the light-theme inactive Work destination
+uses a transparent background with neutral secondary text, while the selected
+Chat destination retains the indigo selection surface; the browser warning and
+error log was empty.
