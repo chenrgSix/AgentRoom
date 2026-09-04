@@ -104,7 +104,7 @@
               <p id="client-entry-help"></p>
               <div class="actions"><button class="primary" id="open-client-team" type="button">进入 Team</button><button class="secondary" id="load-client-rooms" type="button">选择房间</button></div>
               <div class="actions"><select class="hidden" id="client-room" aria-label="已授权房间"></select><button class="secondary hidden" id="open-client-room" type="button">打开房间</button></div>
-              <div class="actions"><button class="secondary hidden" id="prepare-private-browser" type="button">准备另一台 Windows 浏览器</button></div>
+              <div class="actions"><button class="secondary hidden" id="prepare-private-browser" type="button">准备其他电脑浏览器</button></div>
               <p id="client-entry-status" role="status"></p>
             </section>
             <div class="overview-statline">
@@ -504,33 +504,57 @@
 
     <dialog class="agent-modal browser-trust-dialog" id="browser-trust-dialog" aria-labelledby="browser-trust-title" aria-describedby="browser-trust-summary">
       <div class="section-heading">
-        <div><p class="eyebrow">PRIVATE BROWSER TRUST</p><h2 id="browser-trust-title">准备另一台 Windows 浏览器</h2></div>
+        <div><p class="eyebrow">PRIVATE BROWSER TRUST</p><h2 id="browser-trust-title">准备其他电脑浏览器</h2></div>
         <button class="icon-button" id="close-browser-trust" type="button" aria-label="关闭浏览器信任设置">×</button>
       </div>
       <div class="guide-callout" id="browser-trust-summary">
         <strong>不需要手工传 CA 文件</strong>
-        <p>在要访问 Team 的 Windows 账号中打开 PowerShell，复制并运行下面的安装命令。命令只包含 Bridge 已验证的公开 CA 证书，会先核对完整 SHA-256，再写入当前用户信任库；不包含设备凭据、成员身份或房间入口。</p>
+        <p>Windows、macOS 或 Linux 上的浏览器只要尚未信任此私有 CA，都可能拒绝连接。请选择目标电脑的平台；命令只包含 Bridge 已验证的公开 CA 证书，会先核对完整 SHA-256，再写入当前用户信任库，不包含设备凭据、成员身份或房间入口。</p>
       </div>
       <section class="guide-section" aria-labelledby="browser-trust-fingerprint-title">
         <h3 id="browser-trust-fingerprint-title">核对完整 CA 指纹</h3>
         <code class="browser-trust-fingerprint" id="browser-trust-fingerprint"></code>
       </section>
-      <section class="guide-section" aria-labelledby="browser-trust-install-title">
-        <h3 id="browser-trust-install-title">1. 安装到当前 Windows 用户</h3>
-        <p>此操作会建立持续的根证书信任，不是一次性的房间登录。只应在你控制且准备访问此 Central 的 Windows 账号中执行。</p>
-        <textarea class="browser-trust-command" id="browser-trust-command" readonly spellcheck="false" aria-label="Windows PowerShell CA 安装命令"></textarea>
-        <div class="actions"><button class="primary" id="copy-browser-trust-command" type="button">复制安装命令</button></div>
-      </section>
+      <div class="actions browser-trust-platform-picker" role="group" aria-label="选择目标电脑平台">
+        <button class="secondary" id="browser-trust-platform-windows" type="button" aria-pressed="true">Windows</button>
+        <button class="secondary" id="browser-trust-platform-macos" type="button" aria-pressed="false">macOS</button>
+      </div>
+      <div id="browser-trust-windows">
+        <section class="guide-section" aria-labelledby="browser-trust-install-title">
+          <h3 id="browser-trust-install-title">1. 安装到当前 Windows 用户</h3>
+          <p>在目标 Windows 账号中打开 PowerShell。此操作建立持续的当前用户根证书信任，不是一次性的房间登录。</p>
+          <textarea class="browser-trust-command" id="browser-trust-command" readonly spellcheck="false" aria-label="Windows PowerShell CA 安装命令"></textarea>
+          <div class="actions"><button class="primary" id="copy-browser-trust-command" type="button">复制 Windows 安装命令</button></div>
+        </section>
+        <details class="browser-trust-removal">
+          <summary>以后如何从 Windows 移除此信任</summary>
+          <p>在同一个 Windows 账号的 PowerShell 中运行下面命令，只移除这张 CA。</p>
+          <textarea class="browser-trust-command browser-trust-removal-command" id="browser-trust-removal-command" readonly spellcheck="false" aria-label="Windows PowerShell CA 移除命令"></textarea>
+          <div class="actions"><button class="secondary" id="copy-browser-trust-removal-command" type="button">复制 Windows 移除命令</button></div>
+        </details>
+      </div>
+      <div class="hidden" id="browser-trust-macos">
+        <section class="guide-section" aria-labelledby="browser-trust-macos-install-title">
+          <h3 id="browser-trust-macos-install-title">1. 安装到当前 macOS 用户</h3>
+          <p>在目标 Mac 的“终端”中运行。命令只写入该账号的登录钥匙串，不使用 sudo，也不修改系统钥匙串；macOS 可能要求确认钥匙串访问。</p>
+          <textarea class="browser-trust-command" id="browser-trust-macos-command" readonly spellcheck="false" aria-label="macOS Terminal CA 安装命令"></textarea>
+          <div class="actions"><button class="primary" id="copy-browser-trust-macos-command" type="button">复制 macOS 安装命令</button></div>
+        </section>
+        <details class="browser-trust-removal">
+          <summary>以后如何从 macOS 移除此信任</summary>
+          <p>在同一个 macOS 账号的“终端”中运行下面命令，按完整 SHA-256 移除证书及其用户信任设置。</p>
+          <textarea class="browser-trust-command browser-trust-removal-command" id="browser-trust-macos-removal-command" readonly spellcheck="false" aria-label="macOS Terminal CA 移除命令"></textarea>
+          <div class="actions"><button class="secondary" id="copy-browser-trust-macos-removal-command" type="button">复制 macOS 移除命令</button></div>
+        </details>
+      </div>
       <section class="guide-section" aria-labelledby="browser-trust-next-title">
-        <h3 id="browser-trust-next-title">2. 完全退出并重新打开 Chrome</h3>
-        <p>关闭所有 Chrome 窗口并重新启动，再回到本机 Bridge 点击“进入 Team”或“打开房间”生成新的单次入口。不要绕过浏览器证书警告，也不要复用旧入口。</p>
+        <h3 id="browser-trust-next-title">2. 完全退出并重新打开浏览器</h3>
+        <p>关闭目标电脑上的所有浏览器窗口并重新启动，再回到本机 Bridge 点击“进入 Team”或“打开房间”生成新的单次入口。不要绕过浏览器证书警告，也不要复用旧入口。</p>
       </section>
-      <details class="browser-trust-removal">
-        <summary>以后如何移除此信任</summary>
-        <p>在同一个 Windows 账号的 PowerShell 中运行下面命令，只移除这张 CA。移除后，使用它签发证书的私有 Central 将不再被该账号信任。</p>
-        <textarea class="browser-trust-command browser-trust-removal-command" id="browser-trust-removal-command" readonly spellcheck="false" aria-label="Windows PowerShell CA 移除命令"></textarea>
-        <div class="actions"><button class="secondary" id="copy-browser-trust-removal-command" type="button">复制移除命令</button></div>
-      </details>
+      <section class="guide-section browser-trust-linux" aria-labelledby="browser-trust-linux-title">
+        <h3 id="browser-trust-linux-title">Linux 也可以使用</h3>
+        <p>Linux 的系统与浏览器信任库因发行版、Chrome/Chromium 和 Firefox 配置而不同，当前不提供可能误改系统的通用命令。请按目标发行版或浏览器的证书导入流程操作，并核对上方完整 SHA-256 指纹。</p>
+      </section>
       <p id="browser-trust-status" role="status"></p>
       <div class="actions modal-actions">
         <button class="secondary" id="acknowledge-browser-trust" type="button">完成</button>

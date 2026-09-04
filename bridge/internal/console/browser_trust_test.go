@@ -68,7 +68,8 @@ func TestBrowserTrustSetupUsesExactValidatedPublicCA(t *testing.T) {
 		t.Fatal("valid private trust did not project a browser setup")
 	}
 	digest := sha256.Sum256(der)
-	if view.CACertificateSHA256 != hex.EncodeToString(digest[:]) {
+	fingerprint := hex.EncodeToString(digest[:])
+	if view.CACertificateSHA256 != fingerprint {
 		t.Fatalf("unexpected projected digest %q", view.CACertificateSHA256)
 	}
 	encodedMatch := regexp.MustCompile(`FromBase64String\('([^']+)'\)`).FindStringSubmatch(view.WindowsPowerShellCommand)
@@ -93,12 +94,46 @@ func TestBrowserTrustSetupUsesExactValidatedPublicCA(t *testing.T) {
 			t.Fatalf("removal command omitted safety boundary %q", required)
 		}
 	}
+	macOSEncodedMatch := regexp.MustCompile(`encoded='([^']+)'`).FindStringSubmatch(view.MacOSShellCommand)
+	if len(macOSEncodedMatch) != 2 {
+		t.Fatal("macOS install command did not contain one embedded certificate")
+	}
+	macOSDecoded, err := base64.StdEncoding.DecodeString(macOSEncodedMatch[1])
+	if err != nil || string(macOSDecoded) != string(der) {
+		t.Fatal("macOS install command certificate does not match retained DER bytes")
+	}
+	for _, required := range []string{
+		fingerprint, "/usr/bin/mktemp -d", "convenewire-browser-ca.XXXXXX",
+		"trap cleanup EXIT INT TERM", "/bin/rm -rf -- \"$tmp_dir\"",
+		"/usr/bin/shasum -a 256", "$HOME/Library/Keychains/login.keychain-db",
+		"/usr/bin/security add-trusted-cert -r trustRoot -k",
+	} {
+		if !strings.Contains(view.MacOSShellCommand, required) {
+			t.Fatalf("macOS install command omitted safety boundary %q", required)
+		}
+	}
+	if strings.Contains(view.MacOSShellCommand, "sudo") || strings.Contains(view.MacOSShellCommand, "System.keychain") {
+		t.Fatal("macOS install command requested system-level trust authority")
+	}
+	for _, required := range []string{
+		fingerprint, "/usr/bin/security delete-certificate -Z", "-t \"$keychain\"",
+		"$HOME/Library/Keychains/login.keychain-db",
+	} {
+		if !strings.Contains(view.MacOSRemovalShellCommand, required) {
+			t.Fatalf("macOS removal command omitted safety boundary %q", required)
+		}
+	}
+	if strings.Contains(view.MacOSRemovalShellCommand, "sudo") || strings.Contains(view.MacOSRemovalShellCommand, "System.keychain") {
+		t.Fatal("macOS removal command requested system-level trust authority")
+	}
 	for _, prohibited := range []string{
 		credential.Token, credential.DeviceID, credential.TeamID, credential.ServerURL,
 		"clientEntry", "room_", "repository", "BEGIN PRIVATE KEY",
 	} {
 		if strings.Contains(view.WindowsPowerShellCommand, prohibited) ||
-			strings.Contains(view.WindowsRemovalPowerShellCommand, prohibited) {
+			strings.Contains(view.WindowsRemovalPowerShellCommand, prohibited) ||
+			strings.Contains(view.MacOSShellCommand, prohibited) ||
+			strings.Contains(view.MacOSRemovalShellCommand, prohibited) {
 			t.Fatalf("browser trust projection exposed prohibited value %q", prohibited)
 		}
 	}

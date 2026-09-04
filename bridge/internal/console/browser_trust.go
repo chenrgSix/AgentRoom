@@ -16,6 +16,8 @@ type BrowserTrustSetupView struct {
 	CACertificateSHA256             string `json:"caCertificateSha256"`
 	WindowsPowerShellCommand        string `json:"windowsPowerShellCommand"`
 	WindowsRemovalPowerShellCommand string `json:"windowsRemovalPowerShellCommand"`
+	MacOSShellCommand               string `json:"macosShellCommand"`
+	MacOSRemovalShellCommand        string `json:"macosRemovalShellCommand"`
 }
 
 func browserTrustSetupView(
@@ -48,10 +50,21 @@ func browserTrustSetupView(
 		"$ErrorActionPreference='Stop'; $certutil=[IO.Path]::Combine([Environment]::SystemDirectory,'certutil.exe'); & $certutil -user -delstore Root '%s'; if ($LASTEXITCODE -ne 0) { throw 'Windows could not remove the ConveneWire CA' }; Write-Host 'ConveneWire CA removed from the current Windows user.'",
 		strings.ToUpper(hex.EncodeToString(thumbprint[:])),
 	)
+	macOSInstall := fmt.Sprintf(
+		"expected='%s'; encoded='%s'; tmp_dir=$(/usr/bin/mktemp -d \"${TMPDIR:-/tmp}/convenewire-browser-ca.XXXXXX\") || exit 1; cleanup() { status=$?; trap - EXIT INT TERM; /bin/rm -rf -- \"$tmp_dir\"; exit \"$status\"; }; trap cleanup EXIT INT TERM; cert=\"$tmp_dir/ca.cer\"; printf '%%s' \"$encoded\" | /usr/bin/base64 -D > \"$cert\" || exit 1; actual=$(/usr/bin/shasum -a 256 \"$cert\" | /usr/bin/awk '{print $1}'); if [ \"$actual\" != \"$expected\" ]; then echo 'ConveneWire CA SHA-256 mismatch' >&2; exit 1; fi; keychain=\"$HOME/Library/Keychains/login.keychain-db\"; /usr/bin/security add-trusted-cert -r trustRoot -k \"$keychain\" \"$cert\" || exit 1; echo 'ConveneWire CA installed for the current macOS user.'",
+		fingerprint,
+		certificateBase64,
+	)
+	macOSRemove := fmt.Sprintf(
+		"expected='%s'; keychain=\"$HOME/Library/Keychains/login.keychain-db\"; /usr/bin/security delete-certificate -Z \"$expected\" -t \"$keychain\" || exit 1; echo 'ConveneWire CA removed from the current macOS user.'",
+		fingerprint,
+	)
 
 	return &BrowserTrustSetupView{
 		CACertificateSHA256:             fingerprint,
 		WindowsPowerShellCommand:        install,
 		WindowsRemovalPowerShellCommand: remove,
+		MacOSShellCommand:               macOSInstall,
+		MacOSRemovalShellCommand:        macOSRemove,
 	}
 }

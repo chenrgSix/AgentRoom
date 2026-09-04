@@ -19,12 +19,25 @@ export function createClientEntryController({
   const trustFingerprint = elements["browser-trust-fingerprint"];
   const trustCommand = elements["browser-trust-command"];
   const trustRemovalCommand = elements["browser-trust-removal-command"];
+  const trustMacOSCommand = elements["browser-trust-macos-command"];
+  const trustMacOSRemovalCommand = elements["browser-trust-macos-removal-command"];
   const trustStatus = elements["browser-trust-status"];
 
   function validTrustSetup(value) {
     return value && /^[a-f0-9]{64}$/u.test(value.caCertificateSha256) &&
       typeof value.windowsPowerShellCommand === "string" && value.windowsPowerShellCommand.length > 0 &&
-      typeof value.windowsRemovalPowerShellCommand === "string" && value.windowsRemovalPowerShellCommand.length > 0;
+      typeof value.windowsRemovalPowerShellCommand === "string" && value.windowsRemovalPowerShellCommand.length > 0 &&
+      typeof value.macosShellCommand === "string" && value.macosShellCommand.length > 0 &&
+      typeof value.macosRemovalShellCommand === "string" && value.macosRemovalShellCommand.length > 0;
+  }
+
+  function setTrustPlatform(platform) {
+    const macOS = platform === "macos";
+    elements["browser-trust-windows"].classList.toggle("hidden", macOS);
+    elements["browser-trust-macos"].classList.toggle("hidden", !macOS);
+    elements["browser-trust-platform-windows"].setAttribute("aria-pressed", String(!macOS));
+    elements["browser-trust-platform-macos"].setAttribute("aria-pressed", String(macOS));
+    trustStatus.textContent = "";
   }
 
   function closeTrustDialog() {
@@ -33,7 +46,10 @@ export function createClientEntryController({
     trustFingerprint.textContent = "";
     trustCommand.value = "";
     trustRemovalCommand.value = "";
+    trustMacOSCommand.value = "";
+    trustMacOSRemovalCommand.value = "";
     trustStatus.textContent = "";
+    setTrustPlatform("windows");
   }
 
   function openTrustDialog() {
@@ -42,22 +58,25 @@ export function createClientEntryController({
     trustFingerprint.textContent = setup.caCertificateSha256.toUpperCase();
     trustCommand.value = setup.windowsPowerShellCommand;
     trustRemovalCommand.value = setup.windowsRemovalPowerShellCommand;
+    trustMacOSCommand.value = setup.macosShellCommand;
+    trustMacOSRemovalCommand.value = setup.macosRemovalShellCommand;
     trustStatus.textContent = "";
     if (typeof trustDialog.showModal === "function") trustDialog.showModal();
     else trustDialog.setAttribute("open", "");
   }
 
-  async function copyTrustCommand(kind) {
+  async function copyTrustCommand(platform, kind) {
     const setup = state?.browserTrustSetup;
     if (!validTrustSetup(setup) || !trustDialog.hasAttribute("open")) return;
-    const command = kind === "remove"
-      ? setup.windowsRemovalPowerShellCommand
-      : setup.windowsPowerShellCommand;
+    const macOS = platform === "macos";
+    const command = macOS
+      ? kind === "remove" ? setup.macosRemovalShellCommand : setup.macosShellCommand
+      : kind === "remove" ? setup.windowsRemovalPowerShellCommand : setup.windowsPowerShellCommand;
     try {
       await copyText(command);
       trustStatus.textContent = kind === "remove"
-        ? "移除命令已复制；请只在先前建立信任的同一 Windows 账号中运行。"
-        : "安装命令已复制；运行后请完全退出并重新打开 Chrome。";
+        ? `移除命令已复制；请只在先前建立信任的同一 ${macOS ? "macOS" : "Windows"} 账号中运行。`
+        : `${macOS ? "macOS" : "Windows"} 安装命令已复制；运行后请完全退出并重新打开浏览器。`;
     } catch {
       trustStatus.textContent = "复制失败。请手动选择命令文本复制；未执行任何系统更改。";
     }
@@ -81,7 +100,7 @@ export function createClientEntryController({
     trustButton.classList.toggle("hidden", !trustAvailable);
     help.textContent = available
       ? trustAvailable
-        ? "以客户端主人的普通成员身份进入协作。另一台 Windows 尚未信任私有 CA 时，可先由本机生成核验命令。"
+        ? "以客户端主人的普通成员身份进入协作。其他电脑尚未信任私有 CA 时，可先由本机准备其浏览器。"
         : "以客户端主人的普通成员身份进入协作。浏览器会确认身份；私有 CA 仍需满足浏览器的证书要求。"
       : "此设备尚无成员入口。请让管理员确认实际主人，并使用新的成员配对链接重新配对；不会自动取得管理员身份。";
   }
@@ -123,8 +142,12 @@ export function createClientEntryController({
     if (current()) status.textContent = "已打开浏览器，请确认成员身份后进入房间。";
   }));
   trustButton.addEventListener("click", openTrustDialog);
-  elements["copy-browser-trust-command"].addEventListener("click", () => void copyTrustCommand("install"));
-  elements["copy-browser-trust-removal-command"].addEventListener("click", () => void copyTrustCommand("remove"));
+  elements["browser-trust-platform-windows"].addEventListener("click", () => setTrustPlatform("windows"));
+  elements["browser-trust-platform-macos"].addEventListener("click", () => setTrustPlatform("macos"));
+  elements["copy-browser-trust-command"].addEventListener("click", () => void copyTrustCommand("windows", "install"));
+  elements["copy-browser-trust-removal-command"].addEventListener("click", () => void copyTrustCommand("windows", "remove"));
+  elements["copy-browser-trust-macos-command"].addEventListener("click", () => void copyTrustCommand("macos", "install"));
+  elements["copy-browser-trust-macos-removal-command"].addEventListener("click", () => void copyTrustCommand("macos", "remove"));
   for (const id of ["close-browser-trust", "acknowledge-browser-trust"]) {
     elements[id].addEventListener("click", closeTrustDialog);
   }

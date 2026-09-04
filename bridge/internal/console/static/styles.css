@@ -508,6 +508,8 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .pairing-guidance { line-height: 1.6; }
 .browser-trust-dialog { width: min(760px, calc(100% - 28px)); }
 .browser-trust-dialog::backdrop { background: rgb(12 15 13 / 56%); backdrop-filter: blur(9px); }
+.browser-trust-platform-picker { margin-top: 18px; }
+.browser-trust-platform-picker button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 .browser-trust-fingerprint {
   display: block;
   padding: 11px;
@@ -535,6 +537,7 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .browser-trust-removal { margin-top: 18px; color: var(--muted); font-size: 11px; }
 .browser-trust-removal summary { cursor: pointer; color: var(--text); font-weight: 700; }
 .browser-trust-removal-command { min-height: 76px; }
+.browser-trust-linux { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-subtle); }
 .session-guide-dialog { width: min(740px, calc(100% - 28px)); }
 .session-guide-dialog::backdrop { background: rgb(12 15 13 / 56%); backdrop-filter: blur(9px); }
 .session-guide-dialog .section-heading { position: sticky; top: -22px; z-index: 1; margin: -22px -22px 16px; padding: 22px 22px 13px; border-bottom: 1px solid var(--line); background: var(--surface); }
