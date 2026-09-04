@@ -169,7 +169,7 @@ type State struct {
 }
 
 type Dependencies struct {
-	OpenClientEntry           func(string, string) error
+	OpenClientEntry           func(string, string, string) error
 	DiscoverRuntime           func(string) RuntimeDiscovery
 	Enroll                    func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
 	PairDevice                func(context.Context, config.Config, pairing.SessionInput, func(pairing.SessionStatus)) (pairing.Credential, error)
@@ -244,7 +244,7 @@ var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
 
 func New(options Options, dependencies Dependencies) (*Service, error) {
 	if dependencies.OpenClientEntry == nil {
-		dependencies.OpenClientEntry = browserlaunch.OpenClientEntry
+		dependencies.OpenClientEntry = browserlaunch.OpenClientEntryForBridge
 	}
 	if dependencies.DiscoverRuntime == nil {
 		dependencies.DiscoverRuntime = discoverRuntime

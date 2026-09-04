@@ -16,6 +16,8 @@ import (
 	pairingcontracts "convenewire.dev/contracts/generated/go/pairing"
 )
 
+const clientBrowserOriginHeader = "ConveneWire-Browser-Origin"
+
 type clientEntryInput struct {
 	RoomID string `json:"roomId,omitempty"`
 }
@@ -38,19 +40,19 @@ func (s *Service) clientEntrySnapshot() (config.Config, pairing.Credential, uint
 	return cfg, credential, s.joinEpoch, key, nil
 }
 
-func clientEntryRequest(ctx context.Context, cfg config.Config, credential pairing.Credential, key, action, roomID string, target any) error {
+func clientEntryRequest(ctx context.Context, cfg config.Config, credential pairing.Credential, key, action, roomID string, target any) (string, error) {
 	payload := pairingcontracts.ClientEntryRequest{ClientAccessSecret: key}
 	if roomID != "" {
 		payload.RoomID = &roomID
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("无法准备成员入口请求")
+		return "", fmt.Errorf("无法准备成员入口请求")
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		strings.TrimRight(cfg.ServerURL, "/")+"/api/client-access/"+action, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("成员入口地址无效")
+		return "", fmt.Errorf("成员入口地址无效")
 	}
 	request.Header.Set("content-type", "application/json")
 	request.Header.Set("authorization", "Bearer "+credential.Token)
@@ -59,32 +61,32 @@ func clientEntryRequest(ctx context.Context, cfg config.Config, credential pairi
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	response, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("无法连接中央服务，请检查网络和 HTTPS 信任后重试")
+		return "", fmt.Errorf("无法连接中央服务，请检查网络和 HTTPS 信任后重试")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		if response.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("成员或设备授权已失效，请确认归属后重新配对")
+			return "", fmt.Errorf("成员或设备授权已失效，请确认归属后重新配对")
 		}
 		if response.StatusCode == http.StatusForbidden {
-			return fmt.Errorf("当前成员已无权进入此房间，请刷新房间列表")
+			return "", fmt.Errorf("当前成员已无权进入此房间，请刷新房间列表")
 		}
-		return fmt.Errorf("中央服务暂时无法提供成员入口，请稍后重试")
+		return "", fmt.Errorf("中央服务暂时无法提供成员入口，请稍后重试")
 	}
 	source, err := io.ReadAll(io.LimitReader(response.Body, 65537))
 	if err != nil || len(source) > 65536 {
-		return fmt.Errorf("成员入口响应无效")
+		return "", fmt.Errorf("成员入口响应无效")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(source))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("成员入口响应无效")
+		return "", fmt.Errorf("成员入口响应无效")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return fmt.Errorf("成员入口响应无效")
+		return "", fmt.Errorf("成员入口响应无效")
 	}
-	return nil
+	return strings.TrimSpace(response.Header.Get(clientBrowserOriginHeader)), nil
 }
 
 func (s *Service) clientEntryUnchangedLocked(cfg config.Config, credential pairing.Credential, epoch uint64) bool {
@@ -100,7 +102,7 @@ func (s *Service) clientEntryRooms(response http.ResponseWriter, request *http.R
 		return
 	}
 	var identity pairingcontracts.ClientEntryIdentity
-	if err := clientEntryRequest(request.Context(), cfg, credential, key, "rooms", "", &identity); err != nil {
+	if _, err := clientEntryRequest(request.Context(), cfg, credential, key, "rooms", "", &identity); err != nil {
 		writeError(response, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -131,7 +133,8 @@ func (s *Service) openClientEntry(response http.ResponseWriter, request *http.Re
 		return
 	}
 	var ticket pairingcontracts.ClientEntryTicket
-	if err := clientEntryRequest(request.Context(), cfg, credential, key, "tickets", input.RoomID, &ticket); err != nil {
+	browserOrigin, err := clientEntryRequest(request.Context(), cfg, credential, key, "tickets", input.RoomID, &ticket)
+	if err != nil {
 		writeError(response, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -142,7 +145,10 @@ func (s *Service) openClientEntry(response http.ResponseWriter, request *http.Re
 		writeError(response, http.StatusConflict, "成员入口已过期或配对已变化，请重试")
 		return
 	}
-	if err := s.dependencies.OpenClientEntry(cfg.ServerURL, ticket.Ticket); err != nil {
+	if browserOrigin == "" {
+		browserOrigin = cfg.ServerURL
+	}
+	if err := s.dependencies.OpenClientEntry(cfg.ServerURL, browserOrigin, ticket.Ticket); err != nil {
 		writeError(response, http.StatusBadGateway, "无法打开浏览器，请检查系统默认浏览器后重试")
 		return
 	}

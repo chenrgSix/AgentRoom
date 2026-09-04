@@ -15,7 +15,7 @@ import (
 	"convenewire.dev/bridge/internal/pairing"
 )
 
-func memberEntryService(t *testing.T, origin string, open func(string, string) error, enabled bool) *Service {
+func memberEntryService(t *testing.T, origin string, open func(string, string, string) error, enabled bool) *Service {
 	t.Helper()
 	deps := inertDependencies()
 	deps.OpenClientEntry = open
@@ -55,12 +55,13 @@ func TestClientEntryAuthenticatesBothProofsAndNeverReturnsTicketToConsole(t *tes
 		if body["roomId"] != "room_member123" {
 			t.Error("lost selected Room")
 		}
+		w.Header().Set(clientBrowserOriginHeader, "http://127.0.0.1:40080")
 		writeJSON(w, 200, map[string]any{"ticket": strings.Repeat("t", 43), "expiresAt": time.Now().Add(time.Minute)})
 	}))
 	defer central.Close()
 	var opens atomic.Int32
-	s := memberEntryService(t, central.URL, func(origin, ticket string) error {
-		if origin != central.URL || ticket != strings.Repeat("t", 43) {
+	s := memberEntryService(t, central.URL, func(origin, browserOrigin, ticket string) error {
+		if origin != central.URL || browserOrigin != "http://127.0.0.1:40080" || ticket != strings.Repeat("t", 43) {
 			t.Error("wrong browser target")
 		}
 		opens.Add(1)
@@ -97,7 +98,7 @@ func TestClientEntryAuthenticatesBothProofsAndNeverReturnsTicketToConsole(t *tes
 	if strings.Contains(string(state), strings.Repeat("h", 43)) {
 		t.Fatal("status disclosed human proof")
 	}
-	legacy := memberEntryService(t, central.URL, func(string, string) error { t.Fatal("legacy device opened browser"); return nil }, false)
+	legacy := memberEntryService(t, central.URL, func(string, string, string) error { t.Fatal("legacy device opened browser"); return nil }, false)
 	legacyLocal := httptest.NewServer(legacy.Handler())
 	defer legacyLocal.Close()
 	response := consoleRequest(t, legacyLocal.URL, legacy.Token(), "POST", "/api/client-access/open", map[string]string{})
@@ -115,7 +116,7 @@ func TestClientEntryRejectsLatePairingResponseAndCentralRedirect(t *testing.T) {
 		writeJSON(w, 200, map[string]any{"ticket": strings.Repeat("t", 43), "expiresAt": time.Now().Add(time.Minute)})
 	}))
 	defer central.Close()
-	s := memberEntryService(t, central.URL, func(string, string) error { t.Error("stale pairing opened browser"); return nil }, true)
+	s := memberEntryService(t, central.URL, func(string, string, string) error { t.Error("stale pairing opened browser"); return nil }, true)
 	local := httptest.NewServer(s.Handler())
 	defer local.Close()
 	result := make(chan int, 1)
@@ -139,12 +140,38 @@ func TestClientEntryRejectsLatePairingResponseAndCentralRedirect(t *testing.T) {
 		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
 	}))
 	defer redirect.Close()
-	redirectService := memberEntryService(t, redirect.URL, func(string, string) error { t.Error("redirect opened browser"); return nil }, true)
+	redirectService := memberEntryService(t, redirect.URL, func(string, string, string) error { t.Error("redirect opened browser"); return nil }, true)
 	redirectLocal := httptest.NewServer(redirectService.Handler())
 	defer redirectLocal.Close()
 	response := consoleRequest(t, redirectLocal.URL, redirectService.Token(), "POST", "/api/client-access/open", map[string]string{})
 	response.Body.Close()
 	if response.StatusCode != 502 || leaked.Load() {
 		t.Fatal("Central redirected independent credentials")
+	}
+}
+
+func TestClientEntryFallsBackToAuthenticatedBridgeOriginForOlderCentral(t *testing.T) {
+	central := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ticket":    strings.Repeat("t", 43),
+			"expiresAt": time.Now().Add(time.Minute),
+		})
+	}))
+	defer central.Close()
+	opened := false
+	service := memberEntryService(t, central.URL, func(bridgeOrigin, browserOrigin, ticket string) error {
+		opened = true
+		if bridgeOrigin != central.URL || browserOrigin != central.URL || ticket != strings.Repeat("t", 43) {
+			t.Fatalf("older Central fallback changed identity: bridge=%q browser=%q", bridgeOrigin, browserOrigin)
+		}
+		return nil
+	}, true)
+	local := httptest.NewServer(service.Handler())
+	defer local.Close()
+	response := consoleRequest(t, local.URL, service.Token(), http.MethodPost,
+		"/api/client-access/open", map[string]string{})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || !opened {
+		t.Fatalf("older Central entry was not opened: status=%d", response.StatusCode)
 	}
 }
