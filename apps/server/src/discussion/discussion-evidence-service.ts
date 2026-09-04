@@ -6,6 +6,11 @@ import {
 } from "../domain/unicode-length.js";
 import type { RunRepository } from "../run/run-repository.js";
 import { redactSensitiveText } from "../security/redaction.js";
+import type { ArtifactRepository } from "../task/artifact-repository.js";
+import type { MemoryEntryRepository } from "../task/memory-entry-repository.js";
+import type { ResultRepository } from "../task/result-repository.js";
+import { verifyDiscussionEvidenceReferences } from
+  "./discussion-evidence-reference.js";
 import type { DiscussionRepository } from "./discussion-repository.js";
 import type {
   DiscussionParticipant,
@@ -18,6 +23,12 @@ const maximumInstructionCodePoints = 20_000;
 const maximumGoalCodePoints = 8_000;
 const maximumProgressCodePoints = 6_000;
 const truncationMarker = "\n[... truncated to preserve required instruction sections ...]";
+
+export interface DiscussionEvidenceReferenceSources {
+  artifacts?: Pick<ArtifactRepository, "get">;
+  results?: Pick<ResultRepository, "get">;
+  memories?: Pick<MemoryEntryRepository, "get">;
+}
 
 function codePointLength(value: string): number {
   let length = 0;
@@ -61,7 +72,8 @@ export class DiscussionEvidenceService {
     private readonly core: CoreRepository,
     private readonly repository: DiscussionRepository,
     private readonly runs: RunRepository,
-    private readonly clock: () => string
+    private readonly clock: () => string,
+    private readonly referenceSources: DiscussionEvidenceReferenceSources = {}
   ) {}
 
   public latestOutputMessageId(discussion: DiscussionRecord): string {
@@ -142,7 +154,8 @@ export class DiscussionEvidenceService {
         .map(({ question, importance }) => `- [${importance}] ${question}`)
         .join("\n");
     const transcriptLines = transcript.map((message) =>
-      `[${this.senderName(message)}] ${redactSensitiveText(message.content)}`
+      `[${message.messageId} | ${this.senderName(message)}] ` +
+        redactSensitiveText(message.content)
     );
     const planProposalInstruction = turn.kind === "finalization" &&
       discussion.outputMode === "decision_record"
@@ -168,6 +181,11 @@ export class DiscussionEvidenceService {
       `Confidence: ${discussion.progress.confidence ?? "unknown"}`,
       `Disagreement: ${discussion.progress.disagreementRemaining}`,
       `Plateau count: ${discussion.progress.plateauCount}`,
+      `Verified evidence references: ${
+        discussion.progress.verifiedEvidenceRefs.length > 0
+          ? discussion.progress.verifiedEvidenceRefs.join(", ")
+          : "None"
+      }`,
       "Important unresolved questions:",
       unresolved
     ].join("\n"), maximumProgressCodePoints);
@@ -259,6 +277,30 @@ export class DiscussionEvidenceService {
     return messageId;
   }
 
+  public verifyEvidenceRefs(
+    discussion: DiscussionRecord,
+    references: readonly string[]
+  ): string[] {
+    return verifyDiscussionEvidenceReferences(discussion, references, {
+      message: (reference) => this.core.getMessage(reference),
+      run: (reference) => this.runs.getRun(reference),
+      artifact: (reference) => this.referenceSources.artifacts?.get(reference),
+      result: (reference) => this.referenceSources.results?.get(reference),
+      memory: (reference) => this.referenceSources.memories?.get(reference),
+      discussion: (reference) => this.repository.get(reference)
+    });
+  }
+
+  public recentAcceptedReplies(
+    discussion: DiscussionRecord,
+    currentWave: DiscussionWave,
+    maximum = 10
+  ): string[] {
+    return this.acceptedPriorTurnMessages(discussion, currentWave)
+      .slice(-maximum)
+      .map(({ content }) => content);
+  }
+
   public appendFallbackConclusion(
     discussion: DiscussionRecord,
     parentMessageId: string
@@ -290,6 +332,23 @@ export class DiscussionEvidenceService {
     currentWave: DiscussionWave,
     trigger: MessageRecord | undefined
   ): MessageRecord[] {
+    const messages: MessageRecord[] = [];
+    const root = this.core.getMessage(discussion.rootMessageId);
+    if (root) messages.push(root);
+    messages.push(...this.acceptedPriorTurnMessages(discussion, currentWave));
+    if (
+      trigger && trigger.messageId !== discussion.rootMessageId &&
+      !messages.some(({ messageId }) => messageId === trigger.messageId)
+    ) {
+      messages.push(trigger);
+    }
+    return messages.slice(-24);
+  }
+
+  private acceptedPriorTurnMessages(
+    discussion: DiscussionRecord,
+    currentWave: DiscussionWave
+  ): MessageRecord[] {
     const waves = new Map(
       this.repository.listWaves(discussion.discussionId)
         .map((wave) => [wave.waveId, wave.ordinal])
@@ -302,8 +361,6 @@ export class DiscussionEvidenceService {
         ])
     );
     const messages: MessageRecord[] = [];
-    const root = this.core.getMessage(discussion.rootMessageId);
-    if (root) messages.push(root);
     for (const turn of this.repository.listTurns(discussion.discussionId)) {
       const waveOrdinal = turn.waveId ? waves.get(turn.waveId) : undefined;
       if (
@@ -317,13 +374,7 @@ export class DiscussionEvidenceService {
       const output = this.core.getMessage(turn.outputMessageId);
       if (output) messages.push(output);
     }
-    if (
-      trigger && trigger.messageId !== discussion.rootMessageId &&
-      !messages.some(({ messageId }) => messageId === trigger.messageId)
-    ) {
-      messages.push(trigger);
-    }
-    return messages.slice(-24);
+    return messages;
   }
 
   private waveResultMessageId(waveId: string): string {

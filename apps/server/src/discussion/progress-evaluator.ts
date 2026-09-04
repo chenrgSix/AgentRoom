@@ -24,6 +24,10 @@ const disagreementRank: Record<
   medium: 2,
   high: 3
 };
+const minimumLexicalComparisonCodePoints = 20;
+const minimumLexicalLengthRatio = 0.8;
+const lexicalNearDuplicateThreshold = 0.8;
+const maximumPreviousRepliesCompared = 10;
 
 function stringList(value: unknown, maximum = 100): string[] | undefined {
   if (!Array.isArray(value) || value.length > maximum) {
@@ -118,6 +122,41 @@ export function hashDiscussionReply(reply: string): string {
   return createHash("sha256").update(normalized).digest("hex");
 }
 
+function normalizedLexicalCharacters(reply: string): string[] {
+  return Array.from(reply
+    .normalize("NFKC")
+    .toLocaleLowerCase("en-US")
+    .replace(/[^\p{L}\p{N}]+/gu, ""));
+}
+
+function characterBigrams(characters: readonly string[]): Set<string> {
+  const bigrams = new Set<string>();
+  for (let index = 0; index < characters.length - 1; index += 1) {
+    bigrams.add(characters[index]! + characters[index + 1]!);
+  }
+  return bigrams;
+}
+
+export function discussionReplySimilarity(left: string, right: string): number {
+  const leftCharacters = normalizedLexicalCharacters(left);
+  const rightCharacters = normalizedLexicalCharacters(right);
+  const shortestLength = Math.min(leftCharacters.length, rightCharacters.length);
+  const longestLength = Math.max(leftCharacters.length, rightCharacters.length);
+  if (
+    shortestLength < minimumLexicalComparisonCodePoints ||
+    shortestLength / longestLength < minimumLexicalLengthRatio
+  ) {
+    return 0;
+  }
+  const leftBigrams = characterBigrams(leftCharacters);
+  const rightBigrams = characterBigrams(rightCharacters);
+  let intersection = 0;
+  for (const bigram of leftBigrams) {
+    if (rightBigrams.has(bigram)) intersection += 1;
+  }
+  return (2 * intersection) / (leftBigrams.size + rightBigrams.size);
+}
+
 export interface ProgressEvaluation {
   snapshot: ProgressSnapshot;
   assessment: AgentAssessment | null;
@@ -131,6 +170,7 @@ export interface SuccessfulWaveResult {
   reply: string;
   assessment: unknown;
   speakerIsReviewer: boolean;
+  verifiedEvidenceRefs?: readonly string[];
 }
 
 export interface WaveMemberProgressEvaluation {
@@ -191,6 +231,7 @@ export function evaluateWaveProgress(input: {
   previous: ProgressSnapshot;
   successfulResults: readonly SuccessfulWaveResult[];
   policy: DiscussionPolicy;
+  previousReplies?: readonly string[];
 }): WaveProgressEvaluation {
   const sortedResults = sortSuccessfulResults(input.successfulResults);
   const members = sortedResults.map((result) => ({
@@ -223,14 +264,28 @@ export function evaluateWaveProgress(input: {
     ({ id }) => resolvedIds.has(id) && !openById.has(id)
   );
 
-  const evidenceBefore = new Set(input.previous.evidenceRefs);
-  const evidence = new Set(evidenceBefore);
+  const evidence = new Set(input.previous.evidenceRefs);
   for (const member of members) {
     for (const reference of member.assessment?.newEvidenceRefs ?? []) {
       evidence.add(reference);
     }
   }
   const evidenceRefs = [...evidence].sort((left, right) =>
+    left.localeCompare(right, "en-US")
+  );
+  const verifiedEvidenceBefore = new Set(
+    input.previous.verifiedEvidenceRefs ?? []
+  );
+  const verifiedEvidence = new Set(verifiedEvidenceBefore);
+  for (const [index, result] of sortedResults.entries()) {
+    const claimedReferences = new Set(
+      members[index]?.assessment?.newEvidenceRefs ?? []
+    );
+    for (const reference of result.verifiedEvidenceRefs ?? []) {
+      if (claimedReferences.has(reference)) verifiedEvidence.add(reference);
+    }
+  }
+  const verifiedEvidenceRefs = [...verifiedEvidence].sort((left, right) =>
     left.localeCompare(right, "en-US")
   );
 
@@ -279,23 +334,31 @@ export function evaluateWaveProgress(input: {
 
   const knownReplyHashes = new Set(input.previous.replyHashes);
   const replyHashes = [...input.previous.replyHashes];
+  const comparisonReplies = [...(input.previousReplies ?? [])]
+    .slice(-maximumPreviousRepliesCompared);
   let addedNovelReply = false;
   for (const [index, member] of members.entries()) {
-    const isNovel = !knownReplyHashes.has(member.replyHash);
-    if (isNovel) {
+    const isExactNovel = !knownReplyHashes.has(member.replyHash);
+    if (isExactNovel) {
       knownReplyHashes.add(member.replyHash);
       replyHashes.push(member.replyHash);
     }
+    const isLexicalNearDuplicate = comparisonReplies.some((previousReply) =>
+      discussionReplySimilarity(sortedResults[index]!.reply, previousReply) >=
+        lexicalNearDuplicateThreshold
+    );
+    const isNovel = isExactNovel && !isLexicalNearDuplicate;
     if (isNovel && member.assessment?.newInformationAdded !== false) {
       addedNovelReply = true;
     }
+    comparisonReplies.push(sortedResults[index]!.reply);
     // Keep the sorted result and member arrays structurally aligned.
     if (sortedResults[index]?.participantOrdinal !== member.participantOrdinal) {
       throw new Error("Wave progress member ordering invariant failed");
     }
   }
 
-  const newEvidence = evidence.size - evidenceBefore.size;
+  const newEvidence = verifiedEvidence.size - verifiedEvidenceBefore.size;
   const disagreementChanged =
     disagreementRemaining !== input.previous.disagreementRemaining;
   const madeProgress = addedNovelReply || resolvedQuestions.length > 0 ||
@@ -308,6 +371,7 @@ export function evaluateWaveProgress(input: {
       confidence,
       openQuestions,
       evidenceRefs,
+      verifiedEvidenceRefs,
       disagreementRemaining,
       reviewerApproved,
       plateauCount: madeProgress ? 0 : input.previous.plateauCount + 1,

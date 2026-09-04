@@ -54,7 +54,10 @@ import {
   evaluateWaveProgress
 } from "./progress-evaluator.js";
 import { DiscussionRecoveryService } from "./discussion-recovery-service.js";
-import { DiscussionEvidenceService } from "./discussion-evidence-service.js";
+import {
+  DiscussionEvidenceService,
+  type DiscussionEvidenceReferenceSources
+} from "./discussion-evidence-service.js";
 import type { DiscussionPlanProposalService } from
   "./discussion-plan-proposal-service.js";
 import { WaveSettlementService } from "./wave-settlement-service.js";
@@ -168,10 +171,17 @@ export class DiscussionOrchestrator {
     private readonly auth: AuthService,
     private readonly tasks: AgentTaskRepository,
     private readonly clock: () => string,
-    private readonly planProposals?: DiscussionPlanProposalService
+    private readonly planProposals?: DiscussionPlanProposalService,
+    referenceSources: DiscussionEvidenceReferenceSources = {}
   ) {
     this.recovery = new DiscussionRecoveryService(repository, runs, clock);
-    this.evidence = new DiscussionEvidenceService(core, repository, runs, clock);
+    this.evidence = new DiscussionEvidenceService(
+      core,
+      repository,
+      runs,
+      clock,
+      referenceSources
+    );
     this.settlement = new WaveSettlementService(core, repository, runs);
   }
 
@@ -827,13 +837,18 @@ export class DiscussionOrchestrator {
         participantOrdinal: turn.waveMemberOrdinal ?? 0,
         reply: output.content,
         assessment: turn.assessment,
-        speakerIsReviewer: participantByAgent.get(turn.speakerAgentId)?.role === "reviewer"
+        speakerIsReviewer: participantByAgent.get(turn.speakerAgentId)?.role === "reviewer",
+        verifiedEvidenceRefs: this.evidence.verifyEvidenceRefs(
+          discussion,
+          turn.assessment?.newEvidenceRefs ?? []
+        )
       }];
     });
     const evaluation = evaluateWaveProgress({
       previous: discussion.progress,
       successfulResults,
-      policy: discussion.policy
+      policy: discussion.policy,
+      previousReplies: this.evidence.recentAcceptedReplies(discussion, wave)
     });
     const nextInputMessageId = this.evidence.ensureWaveResultAnchor(
       discussion,

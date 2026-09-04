@@ -142,6 +142,17 @@ test("Discussion aggregate versions fence duplicate turn scheduling", async () =
       { discussionId: ids.discussion, ordinal: 1, agentId: ids.agent2, role: "reviewer" }
     ], initialBudgetEvent);
 
+    database.prepare(`
+      UPDATE discussions SET progress_json = ? WHERE discussion_id = ?
+    `).run(JSON.stringify({
+      ...emptyProgressSnapshot(),
+      evidenceRefs: ["artifact_historic_claim"],
+      verifiedEvidenceRefs: undefined
+    }), ids.discussion);
+    const legacyProgress = repository.get(ids.discussion)?.progress;
+    assert.deepEqual(legacyProgress?.evidenceRefs, ["artifact_historic_claim"]);
+    assert.deepEqual(legacyProgress?.verifiedEvidenceRefs, []);
+
     const turn = {
       turnId: "turn_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
       discussionId: ids.discussion,

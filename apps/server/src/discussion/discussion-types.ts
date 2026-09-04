@@ -87,6 +87,7 @@ export interface ProgressSnapshot {
   confidence: number | null;
   openQuestions: OpenQuestion[];
   evidenceRefs: string[];
+  verifiedEvidenceRefs: string[];
   disagreementRemaining: "unknown" | "none" | "low" | "medium" | "high";
   reviewerApproved: boolean;
   plateauCount: number;
@@ -290,6 +291,7 @@ export const emptyProgressSnapshot = (): ProgressSnapshot => ({
   confidence: null,
   openQuestions: [],
   evidenceRefs: [],
+  verifiedEvidenceRefs: [],
   disagreementRemaining: "unknown",
   reviewerApproved: false,
   plateauCount: 0,

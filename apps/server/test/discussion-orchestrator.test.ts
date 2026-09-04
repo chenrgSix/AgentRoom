@@ -1487,6 +1487,55 @@ test("bounded instructions preserve identity, task and assessment guidance", asy
   }
 });
 
+test("later Waves distinguish claimed and verified evidence references", async (t) => {
+  const value = await fixture(t);
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Keep evidence claims auditable without trusting opaque labels.",
+      participantAgentIds: value.agentIds,
+      policy: { allowAutomaticFinish: false }
+    });
+    const rootMessageId = result.discussion.rootMessageId;
+    const forgedReference = "artifact_forged_progress";
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: `Independent evidence contribution ${index}.`,
+        assessment: {
+          newEvidenceRefs: [index === 0 ? rootMessageId : forgedReference],
+          recommendation: "continue"
+        }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+
+    assert.deepEqual([...result.discussion.progress.evidenceRefs].sort(), [
+      forgedReference,
+      rootMessageId
+    ].sort());
+    assert.deepEqual(result.discussion.progress.verifiedEvidenceRefs, [rootMessageId]);
+    assert.ok(result.turns.some(({ assessment }) =>
+      assessment?.newEvidenceRefs?.includes(forgedReference)
+    ));
+    const nextInstruction = result.scheduledRuns[0]?.instruction ?? "";
+    const progressSection = nextInstruction.slice(
+      nextInstruction.indexOf("## Progress"),
+      nextInstruction.indexOf("## Remaining Lease")
+    );
+    assert.match(progressSection, new RegExp(rootMessageId, "u"));
+    assert.doesNotMatch(progressSection, new RegExp(forgedReference, "u"));
+    assert.match(
+      recentTranscript(nextInstruction),
+      new RegExp(`\\[${rootMessageId} \\|`, "u")
+    );
+  } finally {
+    value.close();
+  }
+});
+
 test("continue after an all-failed Wave uses a fresh system anchor", async (t) => {
   const value = await fixture(t);
   try {
@@ -2045,8 +2094,16 @@ test("Wave result anchors and next transcripts ignore callback and Room arrival 
   ].join("\n");
   assert.equal(forwardArrival.anchorContent, expectedAnchor);
   assert.equal(reverseArrival.anchorContent, expectedAnchor);
-  assert.deepEqual(reverseArrival.transcripts, forwardArrival.transcripts);
+  const withoutMessageIds = (transcript: string): string => transcript.replace(
+    /\[msg_[A-Za-z0-9_-]+ \|/gu,
+    "[message |"
+  );
+  assert.deepEqual(
+    reverseArrival.transcripts.map(withoutMessageIds),
+    forwardArrival.transcripts.map(withoutMessageIds)
+  );
   for (const transcript of forwardArrival.transcripts) {
+    assert.match(transcript, /^\[msg_[A-Za-z0-9_-]+ \|/u);
     assert.ok(
       transcript.indexOf("Coder contributes") < transcript.indexOf("Reviewer contributes")
     );
@@ -2167,7 +2224,7 @@ test("next Wave context keeps exactly the newest 24 participant-ordered messages
     assert.doesNotMatch(transcript, /Contribution 2-0\./u);
     assert.match(transcript, /Contribution 2-1\./u);
     assert.match(transcript, /Contribution 13-1\./u);
-    assert.match(transcript, /\[System\] 第 13 轮已收敛。/u);
+    assert.match(transcript, /\| System\] 第 13 轮已收敛。/u);
   } finally {
     value.close();
   }

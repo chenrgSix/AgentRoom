@@ -134,7 +134,7 @@ outside this quorum mode.
 | DiscussionTurn | ID, Wave, member ordinal, speaker, input Message, Run, output Message, terminal reason, assessment |
 | DiscussionWaveSeal | ID, Wave, policy threshold/deadline, required roles, ordered accepted Turn/Run/reply/Message sequence pins, digest |
 | DiscussionSupplementalEvidence | ID, offered operation, seal, original Device/Agent/Run/Turn, canonical late reply/Message sequence pins, digest |
-| ProgressSnapshot | version, goal coverage, open questions, decisions, evidence, disagreement, plateau count |
+| ProgressSnapshot | version, goal coverage, open questions, claimed and verified evidence, disagreement, plateau count |
 | BudgetLedger | limits, lease, logical Wave usage, committed member-slot usage, extensions, finalization reserve |
 | OrchestrationDecision | action, reason, next Wave or finalizer, output mode, input projection version |
 
@@ -221,10 +221,21 @@ itself is single-member.
 
 The MVP Progress Evaluator combines deterministic facts and Agent assessments.
 It writes one aggregate version per closed Wave. The standalone semantic
-contract is not consumed on this path. Plateau detection therefore compares
-Wave aggregates, not callback order. A typical plateau has no newly resolved
-important question, new evidence, changed decision, or reduced disagreement
-across consecutive Waves.
+contract is not consumed on this path. Claimed `newEvidenceRefs` remain on the
+Turn and in the claimed Progress union, but only Message, Run, Artifact,
+Result, Memory or Discussion records resolved in the exact Room and Task enter
+the verified union or count as new evidence. Missing and cross-scope claims do
+not fail a reply and cannot reset plateau; legacy snapshots start with an empty
+verified union rather than promoting historic strings.
+
+Plateau detection compares Wave aggregates, not callback order. In addition to
+exact normalized reply hashes, it conservatively treats long, similarly sized
+Unicode near copies as repetition using local character-bigram overlap. Each
+Wave compares only the ten newest accepted earlier replies plus earlier current
+members in frozen order. Quorum-excluded and supplemental late replies are not
+inputs. A typical plateau has no newly resolved important question, newly
+verified evidence, changed decision, reduced disagreement or lexically novel
+accepted reply across consecutive Waves.
 
 A plateau with no important unresolved issue may finalize automatically. A
 plateau with a high-priority unresolved issue moves to `waiting_human` and
@@ -305,7 +316,8 @@ State and reason are separate. Reasons include `goal_satisfied`,
 
 Every Wave member receives a bounded, named context containing the goal,
 speaker identity and Discussion role, participant roster, target audience,
-progress snapshot, important unresolved questions, recent transcript,
+progress snapshot with verified evidence, important unresolved questions,
+recent transcript with concrete Message IDs,
 checkpoint summary, remaining lease, exact current Task and complete optional
 assessment guidance. Members in one ordinary Wave receive the same frozen
 transcript anchor and cannot see peer replies from that Wave.

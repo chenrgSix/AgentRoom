@@ -153,6 +153,10 @@ interface SupplementalEvidenceRow {
 
 function mapDiscussion(row: DiscussionRow): DiscussionRecord {
   const policy = JSON.parse(row.policy_json) as Partial<DiscussionPolicy>;
+  const progress = JSON.parse(row.progress_json) as
+    Omit<ProgressSnapshot, "verifiedEvidenceRefs"> & {
+      verifiedEvidenceRefs?: string[];
+    };
   const budget = JSON.parse(row.budget_json) as Partial<BudgetSnapshot> & {
     turnsUsed: number;
   };
@@ -168,7 +172,10 @@ function mapDiscussion(row: DiscussionRow): DiscussionRecord {
     stateReason: row.state_reason,
     outputMode: row.output_mode,
     policy: { ...defaultDiscussionPolicy, ...policy },
-    progress: JSON.parse(row.progress_json) as ProgressSnapshot,
+    progress: {
+      ...progress,
+      verifiedEvidenceRefs: progress.verifiedEvidenceRefs ?? []
+    },
     budget: {
       ...budget,
       agentRunsUsed: budget.agentRunsUsed ?? budget.turnsUsed

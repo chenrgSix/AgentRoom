@@ -745,7 +745,12 @@ export async function createServerApp(
     auth,
     taskRepository,
     clock,
-    discussionPlanProposals
+    discussionPlanProposals,
+    {
+      artifacts: artifactRepository,
+      results: resultRepository,
+      memories: memoryEntries
+    }
   );
   let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
   let discussionSweepInFlight = false;

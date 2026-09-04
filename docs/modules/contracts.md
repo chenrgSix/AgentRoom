@@ -429,6 +429,12 @@ The Server-authored Discussion instruction enumerates the complete assessment
 shape and requires the designated Reviewer to report an explicit approval or
 rejection when the Runtime supports structured assessment. The value remains
 evidence; it cannot mutate Discussion state outside the policy engine.
+`newEvidenceRefs` is a claimed string list, not proof by itself. The aggregate
+retains those claims for audit while separately projecting only exact
+same-Room, same-Task Message, Run, Artifact, Result, Memory and Discussion
+records as verified evidence. Unknown, missing and cross-scope references do
+not reset Discussion plateau, and later instructions expose only the verified
+projection.
 
 Every `run.requested` carries a stable `deliveryAttemptId` and
 `idempotencyKey`, plus the central `traceId`. Task-capable requests add the
