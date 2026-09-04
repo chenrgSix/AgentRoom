@@ -622,6 +622,21 @@ Remote Forge work requires a separately approved task.
 | REPO-005 | DONE | Attest remote producer input evidence | REPO-003, CON-024, EXEC-009 | The [accepted remote-input goal](acceptance/repo-005-remote-input-attestation-goal.md) is implemented by the closed TypeScript/Go contracts, additive migration 0082, provider lookup-before-create observation, immutable attestation journal and adoption-first remote reuse companion; physical SQLite/Artifact/provider/restart/concurrency/tamper tests and the merged 563-test Server/full workspace/E2E/Bridge/docs/three-round lifecycle gates pass, while unattested, unbound, optional, external, ambiguous, gate-only or substituted inputs remain fail-closed and Git ancestry alone never satisfies provenance |
 | SEC-014 | DONE | Enforce remote provider outbound egress policy | REPO-003, SEC-010 | The [accepted egress goal](acceptance/sec-014-remote-provider-egress-goal.md) and 7 focused/563 merged Server tests prove one Server-owned direct transport rejects non-public/mixed/rebinding/proxy/redirect targets, pins and rechecks every unpooled connection before HTTP, preserves exact Host/TLS SNI/certificate validation, and keeps loopback behind a non-persistent marked test seam; 14-schema/258-fixture validation, all builds, 9 deterministic E2Es, 345 docs and isolated-root cleanup pass without a live provider or deployment claim |
 
+## Streamlined Distribution
+
+[ADR-0041](adr/0041-streamline-release-distribution.md) replaces the future
+default 22-asset Release shape without changing existing Releases. macOS and
+Windows use Desktop packages with a bundled advanced CLI helper, standalone CLI
+archives are Linux-only, and one checksum-closed Central source archive builds
+Server/Web locally through the existing controlled lifecycle.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-029 | DONE | Define the streamlined Release product boundary | QA-062, GOV-027 | Accepted ADR-0041 freezes the 12-asset target, Apple-silicon-only macOS product, Linux-only standalone Bridge CLI, Desktop-bundled advanced helper, one curated source-build Central archive, retained controller lifecycle and optional offline distribution boundary without changing old Releases |
+| BRG-075 | ACTIVE | Consolidate Bridge downloads around Desktop and Linux CLI | GOV-029, BRG-074 | pending implementation and package evidence |
+| OPS-017 | ACTIVE | Package one controlled source-build Central release | GOV-029, OPS-016 | pending implementation and lifecycle evidence |
+| QA-063 | PLANNED | Verify the streamlined Release workflow and closed asset set | BRG-075, OPS-017, QA-008 | workflow policy, package verification, clean-download and physical target-host evidence remain required; no Release publication is implied by implementation |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

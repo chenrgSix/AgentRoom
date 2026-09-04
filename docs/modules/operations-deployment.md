@@ -19,10 +19,11 @@ browser trust a private CA.
 
 ## Controller boundary
 
-`convenewirectl` is a small Go 1.26.7 CLI supporting Linux and macOS on amd64 and
-arm64. It invokes the existing Compose, startup migration, readiness, backup,
-and staged-restore paths. It does not contain a second SQL migration or SQLite
-copy implementation.
+`convenewirectl` is a small Go 1.26.7 CLI. New source-build Central archives
+carry checksum-covered helpers for Linux amd64/arm64 and macOS arm64 behind one
+host-selecting launcher. It invokes the existing Compose, startup migration,
+readiness, backup, and staged-restore paths. It does not contain a second SQL
+migration or SQLite copy implementation.
 
 An installation requires an extracted central release, its internal
 `SHA256SUMS`, and the separately published SHA-256 of that checksum file. The
@@ -31,7 +32,7 @@ to appear exactly once in `SHA256SUMS`, rejects symlinks and unchecked extras,
 and validates closed release metadata. Compose files are not executed before
 this verification passes.
 
-The release workflow builds one Linux OCI bundle per amd64/arm64 architecture
+OPS-013 release history built one Linux OCI bundle per amd64/arm64 architecture
 from the exact resolved Release commit, then embeds that same architecture's
 bundle unchanged in both its Linux and macOS controller archives. Each bundle
 contains the Server and pinned Caddy images, a strictly derived
@@ -48,7 +49,7 @@ partial or mixed Server/Caddy generation fails closed. OCI manifest digests
 remain the SBOM/provenance subjects. The images are never published under a
 mutable registry tag as an installation dependency.
 
-Each Central archive also contains the controller, Compose source context for
+Those image-backed Central archives also contain the controller, Compose source context for
 explicit schema-v1 compatibility, deployment scripts, license assets, closed
 release/target/schema metadata, and an exhaustive internal `SHA256SUMS`.
 Its companion `*.SHA256SUMS.sha256` asset pins that internal manifest; the
@@ -57,6 +58,19 @@ checks safe members, exact source commit, migration/schema agreement, file
 closure, binary version/architecture, license identity, forbidden runtime
 state, OCI descriptor/blob closure, image labels, attestations and identical
 per-architecture embedding before upload and after a clean download.
+
+ADR-0041 defines the new default distribution. One host-neutral
+`convenewire-central_<version>_source.tar.gz` contains the exact locked
+Server/Web/Contracts build context, Compose and Caddy files, backup/restore
+scripts, licenses, closed release metadata, three supported host controller
+helpers and an exhaustive internal checksum manifest. Its separately published
+pin and the outer Release checksum preserve the existing two-level verification
+boundary. Install and upgrade build the Server image locally with Docker from
+the verified source and inject the exact Release/source identity as build
+arguments. Runtime readiness rechecks that identity. The default Release no
+longer embeds an offline OCI bundle; missing digest-pinned base images therefore
+require operator-approved network access or a separately supplied optional
+offline extension.
 
 The schema-v2 installation manifest under
 `<data-root>/control/installation.json` records

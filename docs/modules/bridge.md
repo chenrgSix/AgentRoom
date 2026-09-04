@@ -1306,26 +1306,30 @@ signed/notarized distribution claim.
 
 ## Distribution
 
-End users install a prebuilt Bridge and do not need Go or Node.js. Publishing a
-GitHub Release triggers `.github/workflows/release-bridge.yml`, which tests and
-cross-compiles CGO-free CLI archives for macOS amd64/arm64, Windows amd64, and
-Linux amd64/arm64. Native macOS runners additionally build unsigned Wails GUI
-ZIPs for Apple Silicon and Intel, and a native Windows runner builds the
-unsigned Windows amd64 GUI archive and current-user installer. Native Windows
-CI additionally smoke-tests initial installation, in-place upgrade, uninstall,
-Start menu, uninstaller and Device pairing protocol registration, and
-owner-state preservation. The
-Release tag is injected into each binary; all Bridge packages share the outer
-Release `SHA256SUMS` with the separately owned Central packages. The combined
-release verifier keeps the Bridge and deployment asset sets closed without
-moving Central lifecycle ownership into the Bridge.
+End users install a prebuilt Bridge and do not need Go or Node.js. ADR-0041
+defines the future default Release shape: standalone CLI archives are published
+only for Linux amd64/arm64; native macOS publishes one Apple-silicon Desktop
+archive; and native Windows publishes one amd64 Desktop archive and current-user
+installer. The macOS and Windows Desktop payloads also contain a same-version,
+same-source CLI helper so advanced Artifact, Result, repository, grant,
+verification, integration and cleanup commands remain available without a
+second top-level download. Desktop is the ordinary entry point; the helper does
+not gain UI, Runtime, repository, or Owner authority by being bundled.
 
-Each archive contains the binary, client README, and an OS-specific launcher.
-The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
-ships an executable shell launcher. The launchers start `console`, which opens
-the token-authenticated loopback UI without requiring terminal configuration.
-The GUI archive contains **ConveneWire Bridge.app** and its license material; it
-does not contain or require an Apple signature or notarization ticket.
+Native Windows CI continues to smoke-test initial installation, in-place
+upgrade, uninstall, Start menu, uninstaller and Device pairing registration,
+owner-state preservation, and ownership of both packaged executables. Package
+verification checks the Release tag, exact source commit, target architecture,
+layout and licenses for the Desktop and helper binaries. The macOS arm64 bundle
+retains the BRG-067 declared/compiled minimum-system-version equality and remains
+unsigned and unnotarized.
+
+Linux CLI archives contain the binary, client README, and executable shell
+launcher. The launcher starts `console`, which opens the token-authenticated
+loopback UI without requiring terminal configuration. All Bridge packages share
+the outer Release `SHA256SUMS` with the separately owned Central source package.
+The combined verifier keeps the Bridge and deployment asset sets closed without
+moving Central lifecycle ownership into Bridge.
 
 The first release artifacts are unsigned. Desktop packages remain unsigned by
 product decision and rely on checksum verification plus explicit user trust.
