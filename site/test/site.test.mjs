@@ -151,19 +151,23 @@ test("home and guide have distinct truthful share metadata without an invented f
 test("product copy preserves release, authority, provider and license boundaries", () => {
   const home = textOnly(html["index.html"]);
   const guide = textOnly(html["guide/index.html"]);
-  assert.match(home, /v0\.5\.0-rc\.4 预发布版/u);
+  assert.match(home, /v0\.5\.0-rc\.5 预发布版/u);
   assert.match(home, /稳定 Latest 仍为 v0\.4\.2/u);
-  assert.match(guide, /v0\.5\.0-rc\.4 是预发布版/u);
+  assert.match(guide, /v0\.5\.0-rc\.5 是预发布版/u);
   assert.match(guide, /稳定 Latest v0\.4\.2/u);
   assert.match(guide, /评估 RC 前请备份中央数据库/u);
   for (const page of [html["index.html"], html["guide/index.html"]]) {
-    assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.4"));
+    assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.5"));
     assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2"));
+    assert.doesNotMatch(page, /releases\/tag\/v0\.5\.0-rc\.4/u);
     assert.doesNotMatch(page, /releases\/tag\/v0\.5\.0-rc\.3/u);
     assert.doesNotMatch(page, /releases\/tag\/v0\.4\.1/u);
   }
-  assert.match(home, /无论运行 Windows、macOS 还是 Linux/u);
+  assert.match(home, /Windows、macOS 或 Linux 都无需安装 CA/u);
+  assert.match(home, /Bridge、Device 与执行流量仍走单独固定的 HTTPS 通道/u);
   assert.match(guide, /Windows、macOS 和 Linux 都可作为客户端/u);
+  assert.match(guide, /可信局域网的浏览器 HTTP 入口无需安装 CA/u);
+  assert.match(guide, /Bridge“设置”的高级浏览器信任区域/u);
   assert.match(guide, /不会自动修改系统信任/u);
   assert.match(home, /不接管你的 Git 仓库或 Git 凭据/u);
   assert.match(guide, /不接管你的 Git 仓库或 Git 凭据/u);

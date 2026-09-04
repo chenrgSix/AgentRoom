@@ -26,7 +26,7 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Stable release:
   [ConveneWire v0.4.2](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2)
 - Current prerelease:
-  [ConveneWire v0.5.0-rc.4](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.4)
+  [ConveneWire v0.5.0-rc.5](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.5)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -40,14 +40,15 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 
 Stable v0.4.2 includes Central HTTP Agents and the
 [product experience iteration](docs/acceptance/qa-040-product-experience.md).
-The v0.5.0-rc.4 prerelease additionally packages
+The v0.5.0-rc.5 prerelease additionally packages
 [client owner collaboration entry](docs/adr/0035-connect-client-owners-to-team-collaboration.md)
 and the completed governed software-team execution route through its
 [final Core audit](docs/acceptance/qa-055-final-core-audit-goal.md), together
-with cross-platform private-browser trust preparation for another client
-computer. Install
+with explicit CA-free trusted-LAN browser HTTP, the neutral Graphite Central
+interface and an advanced private-HTTPS browser-trust assistant under Bridge
+settings. Install
 Central, Web and Bridge from the same release. Before evaluating the RC, read
-its [upgrade and verification notes](docs/releases/v0.5.0-rc.4.md), take a
+its [upgrade and verification notes](docs/releases/v0.5.0-rc.5.md), take a
 verified Central backup and retain the v0.4.2 packages and secrets. Website
 publication is not an application Release.
 
@@ -80,14 +81,15 @@ person and Device; another Device can reuse the same member identity.
 The paired client offers **进入 Team** and **选择房间 → 打开房间**. The browser
 shows the member identity and destination before confirmation. This entry has
 ordinary-member authority in that Team, even when the client owner is a Team
-Owner. Full administrator login remains separate. Browser certificate trust
-is still required when Central uses a private CA. In that mode, the paired
-Bridge/Desktop can prepare a browser on another Windows or macOS computer with
-an explicit, fingerprint-verified current-user command, so no certificate file
-has to be found or transferred manually. Linux remains supported with honest
-distribution/browser-specific guidance. Every persistent trust change still
-requires the target user to approve it; public-CA deployment is the only
-zero-install path for arbitrary browsers.
+Owner. Full administrator login remains separate. A Central configured for
+trusted-LAN browser HTTP needs no browser certificate. If the operator instead
+chooses direct private HTTPS, the paired Bridge/Desktop exposes an advanced
+browser-trust assistant under **Settings**. It prepares an explicit,
+fingerprint-verified current-user command for Windows or macOS, so no
+certificate file has to be found or transferred manually. Linux remains
+supported with honest distribution/browser-specific guidance. Every persistent
+trust change still requires the target user to approve it; public-CA deployment
+is the zero-install HTTPS path for arbitrary browsers.
 
 Adding an Agent in Room settings also selects its owner by default. Uncheck
 that person for Agent-only access. Removing the person remains effective after
