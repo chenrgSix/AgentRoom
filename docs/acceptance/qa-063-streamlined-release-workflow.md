@@ -1,8 +1,8 @@
 # QA-063 Streamlined Release Workflow
 
-Status: implementation accepted locally; native Windows, hosted Release and
-physical installation evidence remain open. Delivery state lives only in
-`docs/TASKS.md`.
+Status: implementation and native Windows lifecycle accepted; tagged hosted
+Release and physical Central installation evidence remain open. Delivery state
+lives only in `docs/TASKS.md`.
 
 ## Goal
 
@@ -31,6 +31,9 @@ This record does not authorize a tag, Draft or publication.
 - `612fd94` removed the default Central OCI and Intel-macOS Release jobs,
   reduced the standalone CLI matrix to Linux, changed CI to one Central source
   package and changed the combined verifier to the 12-asset closure.
+- `27bfc7c` made the Windows upgrade verifier preserve compatibility with the
+  previous stable installer while requiring and digest-checking the bundled CLI
+  helper after the candidate upgrade.
 
 The prior OCI builder, Docker verifier, schema-2 controller support and
 historical acceptance records remain in the repository as optional and
@@ -38,7 +41,7 @@ compatibility machinery. They are not invoked by the default Release graph.
 
 ## Local Evidence
 
-- The Release policy suite passes 21 tests. Its negative cases reject a
+- The Release policy suite passes 23 tests. Its negative cases reject a
   restored `central-image` job, Central matrix/OCI inputs, Darwin or Windows
   standalone CLI entries, Intel macOS Desktop and retired checksum entries.
 - Bridge output-path policy passes 3 tests. Full Bridge, Desktop-tag, controller
@@ -63,12 +66,28 @@ compatibility machinery. They are not invoked by the default Release graph.
   The separately running product-preview root was observed open by its live Node
   processes and was neither classified as residue nor removed by this task.
 
+## Native Windows Evidence
+
+Main CI run `33866803801` against exact commit `196b4a8` first proved that the
+candidate installer compiled both `ConveneWire Bridge.exe` and
+`convenewire-bridge.exe`, then failed closed while inspecting the installed
+previous stable `v0.4.2`: the verifier had incorrectly imposed the newly added
+helper on that historical package before performing the upgrade.
+
+Exact commit `27bfc7c` separates those lifecycle assertions explicitly. Main CI
+run `33867235971`, including native Windows job `101004829330`, passes the
+previous-stable install, owner-state fixture, in-place candidate upgrade,
+candidate GUI/helper version and digest checks, icon/shortcut/protocol and
+uninstaller checks, owner-state preservation and managed-payload removal. The
+same run also passes the repository, Go/Central and native Apple-silicon jobs.
+
 ## Open Admission Evidence
 
-`BRG-075` remains active until native Windows builds inspect both packaged
-executables and the installer proves helper preservation through install,
-stable-to-candidate upgrade and uninstall. Cross-compilation is not substituted
-for that evidence.
+`BRG-075` is complete. Its final evidence comes from the native Windows runner,
+not cross-compilation: both candidate executables are inspected, the historical
+stable package remains a valid upgrade source, the new helper appears after the
+candidate upgrade, and uninstall removes both managed executables without
+removing the retained owner-state fixture.
 
 `QA-063` remains active until an exact tagged candidate supplies:
 
