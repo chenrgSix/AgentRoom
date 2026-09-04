@@ -63,6 +63,12 @@ repository commands by itself. Remote Provider support is an optional,
 credential-free-by-default evidence extension, not a Core requirement or a
 grant of repository authority.
 
+For ordinary private-LAN use, ConveneWire can expose the human browser on HTTP
+without installing a private CA. Bridge, Device and execution traffic still use
+the separate pinned HTTPS origin. LAN HTTP is convenient but unencrypted; use
+`direct_https` with a publicly trusted certificate when traffic crosses an
+untrusted network or the public internet.
+
 ## Client Owner Entry
 
 In **设备 → 配对新设备**, keep **同时确认成员归属并启用客户端入口**
@@ -301,6 +307,26 @@ cd "${release_dir}"
 ./bin/convenewirectl doctor \
   --data-root /absolute/persistent/convenewire-central
 ```
+
+For an ordinary trusted private LAN, choose `--mode lan_http` instead. Keep the
+same non-loopback host in `--domain` and the HTTPS `--origin`; the HTTP port is
+the browser URL and the HTTPS port remains the pinned Bridge channel. Browsers
+do not install a CA in this mode:
+
+```bash
+./bin/convenewirectl install \
+  --release-dir "$PWD" \
+  --checksums-sha256 "${pin}" \
+  --data-root /absolute/persistent/convenewire-central \
+  --mode lan_http \
+  --domain central.local \
+  --origin https://central.local:9443 \
+  --http-port 9080 \
+  --https-port 9443
+```
+
+LAN browser HTTP is unencrypted. Use the `direct_https` example above for a
+public or otherwise untrusted network.
 
 Point public DNS at the host, allow the selected inbound ports and outbound
 ACME traffic, and ensure no other process owns those ports. For loopback-only

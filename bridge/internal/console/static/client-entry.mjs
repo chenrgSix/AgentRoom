@@ -100,8 +100,8 @@ export function createClientEntryController({
     trustButton.classList.toggle("hidden", !trustAvailable);
     help.textContent = available
       ? trustAvailable
-        ? "以客户端主人的普通成员身份进入协作。其他电脑尚未信任私有 CA 时，可先由本机准备其浏览器。"
-        : "以客户端主人的普通成员身份进入协作。浏览器会确认身份；私有 CA 仍需满足浏览器的证书要求。"
+        ? "直接以客户端主人的普通成员身份进入协作。普通局域网模式无需安装 CA；下方工具只用于高级私有 HTTPS 浏览器模式。"
+        : "直接以客户端主人的普通成员身份进入协作。浏览器会先确认身份；是否使用 HTTPS 由 Central 的部署模式决定。"
       : "此设备尚无成员入口。请让管理员确认实际主人，并使用新的成员配对链接重新配对；不会自动取得管理员身份。";
   }
 

@@ -104,7 +104,7 @@
               <p id="client-entry-help"></p>
               <div class="actions"><button class="primary" id="open-client-team" type="button">进入 Team</button><button class="secondary" id="load-client-rooms" type="button">选择房间</button></div>
               <div class="actions"><select class="hidden" id="client-room" aria-label="已授权房间"></select><button class="secondary hidden" id="open-client-room" type="button">打开房间</button></div>
-              <div class="actions"><button class="secondary hidden" id="prepare-private-browser" type="button">准备其他电脑浏览器</button></div>
+              <div class="actions"><button class="secondary hidden" id="prepare-private-browser" type="button">高级：为浏览器启用私有 HTTPS</button></div>
               <p id="client-entry-status" role="status"></p>
             </section>
             <div class="overview-statline">
@@ -504,12 +504,12 @@
 
     <dialog class="agent-modal browser-trust-dialog" id="browser-trust-dialog" aria-labelledby="browser-trust-title" aria-describedby="browser-trust-summary">
       <div class="section-heading">
-        <div><p class="eyebrow">PRIVATE BROWSER TRUST</p><h2 id="browser-trust-title">准备其他电脑浏览器</h2></div>
+        <div><p class="eyebrow">PRIVATE BROWSER TRUST</p><h2 id="browser-trust-title">高级私有 HTTPS 浏览器信任</h2></div>
         <button class="icon-button" id="close-browser-trust" type="button" aria-label="关闭浏览器信任设置">×</button>
       </div>
       <div class="guide-callout" id="browser-trust-summary">
-        <strong>不需要手工传 CA 文件</strong>
-        <p>Windows、macOS 或 Linux 上的浏览器只要尚未信任此私有 CA，都可能拒绝连接。请选择目标电脑的平台；命令只包含 Bridge 已验证的公开 CA 证书，会先核对完整 SHA-256，再写入当前用户信任库，不包含设备凭据、成员身份或房间入口。</p>
+        <strong>普通局域网模式无需执行这里的命令</strong>
+        <p>只有 Central 明确选择“浏览器使用私有 HTTPS”时，Windows、macOS 或 Linux 浏览器才需要额外信任。此高级工具不要求手工传 CA 文件：命令只包含 Bridge 已验证的公开 CA 证书，会先核对完整 SHA-256，再写入当前用户信任库，不包含设备凭据、成员身份或房间入口。</p>
       </div>
       <section class="guide-section" aria-labelledby="browser-trust-fingerprint-title">
         <h3 id="browser-trust-fingerprint-title">核对完整 CA 指纹</h3>

@@ -57,6 +57,7 @@ test("private browser setup is explicit, offline, copyable, and cleared on trust
   const {elements: e, controller} = fixture(t, async (...args) => calls.push(args), async (value) => copied.push(value));
   controller.render({...state, serverTrustEpoch: 2, browserTrustSetup: setup});
   assert.equal(e["prepare-private-browser"].classList.contains("hidden"), false);
+  assert.match(e["client-entry-help"].textContent, /普通局域网模式无需安装 CA/u);
   assert.equal(e["browser-trust-dialog"].hasAttribute("open"), false);
   assert.equal(calls.length, 0);
 
@@ -127,7 +128,8 @@ test("private browser setup fails closed and reports clipboard failure honestly"
 
 test("private browser guide is platform-neutral and retains trust, restart, removal, and no-ticket copy", () => {
   const html = readFileSync(new URL("./static/index.html", import.meta.url), "utf8");
-  assert.match(html, /准备其他电脑浏览器/u);
+  assert.match(html, /高级私有 HTTPS 浏览器信任/u);
+  assert.match(html, /普通局域网模式无需执行/u);
   assert.doesNotMatch(html, /准备另一台 Windows 浏览器/u);
   assert.match(html, /Windows、macOS 或 Linux/u);
   assert.match(html, /Linux 也可以使用/u);

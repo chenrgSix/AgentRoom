@@ -26,10 +26,28 @@ For a loopback-only first installation:
   --origin https://localhost:9443
 ```
 
-For a LAN or DNS origin, use `--mode direct_https`, make `--domain` and
-`--origin` name the same stable host, and explicitly expose the selected ports.
-Omitting `--tls-profile` selects fail-closed public ACME and normal system
-trust. For a private IP or name, explicitly select Bridge-scoped trust:
+For ordinary use on a trusted private LAN, use `--mode lan_http`. The browser
+uses the selected HTTP port without a CA installation, while Bridge, Device and
+execution traffic retain the same host's private-CA HTTPS origin:
+
+```sh
+./bin/convenewirectl install \
+  --release-dir "$PWD" \
+  --checksums-sha256 '<published internal checksum digest>' \
+  --data-root '/absolute/persistent/convenewire-central' \
+  --mode lan_http \
+  --domain central.local \
+  --origin https://central.local:9443 \
+  --http-port 9080 \
+  --https-port 9443
+```
+
+LAN browser HTTP is convenient but unencrypted. Do not use it across an
+untrusted network or the public internet. For those deployments use
+`--mode direct_https`, make `--domain` and `--origin` name the same stable host,
+and explicitly expose the selected ports. Omitting `--tls-profile` selects
+fail-closed public ACME and normal system trust. For advanced private-browser
+HTTPS on a private IP or name, explicitly select Bridge-scoped trust:
 
 ```sh
 ./bin/convenewirectl install \
@@ -59,6 +77,22 @@ failure. Update an existing current Bridge through Connection Settings after
 the Central move; it verifies the replacement hostname through the already
 pinned CA before retaining the Device credential. A new Bridge pairs directly
 against the hostname.
+
+Switch an existing ready scoped-private installation without changing its CA,
+Device credentials or data:
+
+```sh
+./bin/convenewirectl migrate-browser-transport \
+  --data-root '/absolute/persistent/convenewire-central' \
+  --mode lan_http
+
+./bin/convenewirectl migrate-browser-transport \
+  --data-root '/absolute/persistent/convenewire-central' \
+  --mode direct_https
+```
+
+The controller stages and checks both browser and Bridge ingress, commits the
+manifest last, and restores the previous files and topology on failure.
 
 `manual_ca` is advanced operator-managed compatibility; the controller never
 installs an OS root. It reports only the non-secret installation ID, TLS profile
