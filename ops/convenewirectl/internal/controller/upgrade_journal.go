@@ -170,6 +170,7 @@ func clearUpgradeReleaseFields(manifest *Manifest) {
 	manifest.ServerImage = ""
 	manifest.CaddyImage = ""
 	manifest.RuntimeImagePlatform = ""
+	manifest.SourceBuild = false
 	manifest.LastSuccessfulStep = ""
 	manifest.UpdatedAt = ""
 }

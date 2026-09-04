@@ -367,6 +367,20 @@ func createRelease(t *testing.T, parent, version string, dataSchema int) string 
 	return createReleaseForTarget(t, parent, version, dataSchema, "linux", "amd64")
 }
 
+func createSourceRelease(t *testing.T, parent, version string, dataSchema int) string {
+	t.Helper()
+	releaseDir := createReleaseForTarget(t, parent, version, dataSchema, "source", "multi")
+	metadata := fmt.Sprintf(
+		"{\"schemaVersion\":3,\"releaseVersion\":%q,\"dataSchemaVersion\":%d,\"sourceCommit\":%q,\"targetOS\":\"source\",\"targetArch\":\"multi\"}\n",
+		version, dataSchema, strings.Repeat("a", 40),
+	)
+	if err := os.WriteFile(filepath.Join(releaseDir, "convenewire-central-release.json"), []byte(metadata), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rewriteTestReleaseChecksums(t, releaseDir)
+	return releaseDir
+}
+
 func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int, targetOS, targetArch string) string {
 	t.Helper()
 	releaseDir := filepath.Join(parent, strings.ReplaceAll(version, ".", "_")+"_"+targetOS+"_"+targetArch)
@@ -1211,6 +1225,77 @@ func TestLegacyReleaseKeepsExplicitSourceBuildBoundary(t *testing.T) {
 	}
 	if !foundBuild {
 		t.Fatal("schema-v1 release did not preserve the source-build compatibility path")
+	}
+}
+
+func TestSourceReleaseBuildsAndVerifiesExactRuntimeIdentity(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createSourceRelease(t, root, "v1.3.0", 2)
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	installation, err := New(testDependencies(runner, &bytes.Buffer{})).Install(
+		context.Background(), installOptions(releaseDir, filepath.Join(root, "state")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !installation.Manifest.SourceBuild || hasPinnedRuntimeImages(installation.Manifest) ||
+		installation.Manifest.SourceCommit != strings.Repeat("a", 40) {
+		t.Fatalf("source release lost its build authority: %+v", installation.Manifest)
+	}
+	foundBuild := false
+	foundIdentityCheck := false
+	for _, command := range runner.commands {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "docker image load") {
+			t.Fatalf("source release unexpectedly loaded an OCI bundle: %s", joined)
+		}
+		foundBuild = foundBuild || strings.Contains(joined, " up -d --build")
+		foundIdentityCheck = foundIdentityCheck ||
+			(command.Name == "docker" && len(command.Args) > 1 && command.Args[0] == "exec")
+	}
+	if !foundBuild || !foundIdentityCheck {
+		t.Fatalf("source install omitted build or runtime identity verification: build=%t identity=%t", foundBuild, foundIdentityCheck)
+	}
+}
+
+func TestSourceReleaseFailsClosedOnRuntimeBuildIdentityDrift(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createSourceRelease(t, root, "v1.3.0", 2)
+	runner := &fakeRunner{
+		failOnce: map[string]int{},
+		runtimeBuildIdentity: "convenewire_build_info{release_version=\"v9.9.9\",source_commit=\"" +
+			strings.Repeat("f", 40) + "\"} 1\n",
+	}
+	_, err := New(testDependencies(runner, &bytes.Buffer{})).Install(
+		context.Background(), installOptions(releaseDir, filepath.Join(root, "state")),
+	)
+	requireActionCode(t, err, "INSTALL_RUNTIME_MISMATCH")
+	manifest, found, loadErr := loadManifest(installationPaths(filepath.Join(root, "state")).ManifestPath)
+	if loadErr != nil || !found || manifest.LastSuccessfulStep == "ready" {
+		t.Fatalf("source identity drift reached ready: %+v found=%t err=%v", manifest, found, loadErr)
+	}
+}
+
+func TestImageBackedInstallationUpgradesToSourceReleaseAfterBackup(t *testing.T) {
+	root := t.TempDir()
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	if _, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot)); err != nil {
+		t.Fatal(err)
+	}
+	targetRelease := createSourceRelease(t, root, "v1.3.0", 2)
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, found, err := loadManifest(installationPaths(dataRoot).ManifestPath)
+	if err != nil || !found || !manifest.SourceBuild || hasPinnedRuntimeImages(manifest) ||
+		manifest.ReleaseVersion != "v1.3.0" || runner.backupSequence != 1 {
+		t.Fatalf("image-to-source upgrade did not close: %+v found=%t backups=%d err=%v", manifest, found, runner.backupSequence, err)
 	}
 }
 

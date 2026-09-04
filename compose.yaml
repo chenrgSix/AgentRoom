@@ -119,6 +119,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        CONVENE_WIRE_RELEASE_VERSION: ${CONVENE_WIRE_RELEASE_VERSION:-development}
+        CONVENE_WIRE_SOURCE_COMMIT: ${CONVENE_WIRE_SOURCE_COMMIT:-unknown}
     cap_drop:
       - ALL
     depends_on:

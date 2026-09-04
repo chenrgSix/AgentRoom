@@ -328,7 +328,8 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 	if err != nil {
 		return err
 	}
-	if metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH {
+	if metadata.SchemaVersion != sourceReleaseSchemaVersion &&
+		(metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH) {
 		return actionError("RELEASE_TARGET_MISMATCH", "target release does not match this host", "Use the target Central archive published for this host operating system and architecture.", nil)
 	}
 	if recovering {
@@ -667,7 +668,8 @@ func (controller *Controller) verifyInstalledRelease(installation Installation) 
 	if err != nil {
 		return err
 	}
-	if metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH {
+	if metadata.SchemaVersion != sourceReleaseSchemaVersion &&
+		(metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH) {
 		return actionError("RELEASE_TARGET_MISMATCH", "installed release target no longer matches this host", "Use the installation on its original host architecture or perform a documented migration with the matching central release.", nil)
 	}
 	if metadata.ReleaseVersion != installation.Manifest.ReleaseVersion ||

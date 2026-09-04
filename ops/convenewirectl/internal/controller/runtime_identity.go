@@ -19,6 +19,9 @@ func (controller *Controller) verifyActiveRuntimeIdentity(
 	requireRunning bool,
 ) error {
 	manifest := installation.Manifest
+	if manifest.SourceBuild {
+		return controller.verifySourceBuildRuntimeIdentity(ctx, installation, environment, requireRunning)
+	}
 	if !hasPinnedRuntimeImages(manifest) {
 		return nil
 	}
@@ -93,10 +96,54 @@ func (controller *Controller) verifyActiveRuntimeIdentity(
 		}
 	}
 
+	return controller.verifyServerBuildIdentity(ctx, containerIDs["agentroom"], manifest)
+}
+
+func (controller *Controller) verifySourceBuildRuntimeIdentity(
+	ctx context.Context,
+	installation Installation,
+	environment map[string]string,
+	requireRunning bool,
+) error {
+	containerIDs := make(map[string]string, 2)
+	for _, service := range []string{"agentroom", "caddy"} {
+		containerOutput, err := controller.runCompose(
+			ctx,
+			installation,
+			environment,
+			"ps",
+			"--quiet",
+			service,
+		)
+		if err != nil {
+			return fmt.Errorf("resolve active %s container: %w", service, err)
+		}
+		containerID := strings.TrimSpace(containerOutput)
+		if containerID != "" && !containerIDPattern.MatchString(containerID) {
+			return fmt.Errorf("service %s does not have exactly one running container", service)
+		}
+		containerIDs[service] = containerID
+	}
+	serverRunning := containerIDs["agentroom"] != ""
+	caddyRunning := containerIDs["caddy"] != ""
+	if !serverRunning && !caddyRunning && !requireRunning {
+		return nil
+	}
+	if !serverRunning || !caddyRunning {
+		return fmt.Errorf("Server and Caddy are not both running")
+	}
+	return controller.verifyServerBuildIdentity(ctx, containerIDs["agentroom"], installation.Manifest)
+}
+
+func (controller *Controller) verifyServerBuildIdentity(
+	ctx context.Context,
+	containerID string,
+	manifest Manifest,
+) error {
 	metrics, err := controller.dependencies.Runner.Run(ctx, Command{
 		Name: "docker",
 		Args: []string{
-			"exec", containerIDs["agentroom"], "node", "-e",
+			"exec", containerID, "node", "-e",
 			`fetch("http://127.0.0.1:3000/api/metrics").then(async response => {
   if (!response.ok) process.exit(2);
   process.stdout.write(await response.text());

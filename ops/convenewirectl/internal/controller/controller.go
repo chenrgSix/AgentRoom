@@ -38,6 +38,7 @@ const (
 	manifestSchemaVersion       = 2
 	legacyReleaseSchemaVersion  = 1
 	releaseSchemaVersion        = 2
+	sourceReleaseSchemaVersion  = 3
 	minimumFreeBytes            = 1 << 30
 	defaultReadyTimeout         = 3 * time.Minute
 )
@@ -218,6 +219,7 @@ type Manifest struct {
 	ServerImage          string `json:"serverImage,omitempty"`
 	CaddyImage           string `json:"caddyImage,omitempty"`
 	RuntimeImagePlatform string `json:"runtimeImagePlatform,omitempty"`
+	SourceBuild          bool   `json:"sourceBuild,omitempty"`
 	LastSuccessfulStep   string `json:"lastSuccessfulStep"`
 	InstalledAt          string `json:"installedAt"`
 	UpdatedAt            string `json:"updatedAt"`
@@ -303,7 +305,8 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	if err != nil {
 		return Installation{}, err
 	}
-	if metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH {
+	if metadata.SchemaVersion != sourceReleaseSchemaVersion &&
+		(metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH) {
 		return Installation{}, actionError(
 			"RELEASE_TARGET_MISMATCH",
 			fmt.Sprintf("release targets %s/%s but this host is %s/%s", metadata.TargetOS, metadata.TargetArch, controller.dependencies.GOOS, controller.dependencies.GOARCH),
@@ -705,6 +708,7 @@ func applyRuntimeImages(manifest *Manifest, metadata ReleaseMetadata) {
 	manifest.ServerImage = ""
 	manifest.CaddyImage = ""
 	manifest.RuntimeImagePlatform = ""
+	manifest.SourceBuild = metadata.SchemaVersion == sourceReleaseSchemaVersion
 }
 
 func applySelectedRuntimeImages(
@@ -716,12 +720,14 @@ func applySelectedRuntimeImages(
 	manifest.ServerImage = serverReference
 	manifest.CaddyImage = caddyReference
 	manifest.RuntimeImagePlatform = metadata.RuntimeImages.Platform
+	manifest.SourceBuild = false
 }
 
 func runtimeImagesMatch(manifest Manifest, metadata ReleaseMetadata) bool {
 	if metadata.SchemaVersion != releaseSchemaVersion {
 		return manifest.ServerImage == "" && manifest.CaddyImage == "" &&
-			manifest.RuntimeImagePlatform == ""
+			manifest.RuntimeImagePlatform == "" &&
+			manifest.SourceBuild == (metadata.SchemaVersion == sourceReleaseSchemaVersion)
 	}
 	server, serverFound := metadata.RuntimeImages.Image(releaseimage.ServerRole)
 	caddy, caddyFound := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
@@ -763,7 +769,7 @@ func (controller *Controller) ensureReleaseImagesLoaded(
 	installation Installation,
 	metadata ReleaseMetadata,
 ) (Manifest, error) {
-	if metadata.SchemaVersion == legacyReleaseSchemaVersion {
+	if metadata.SchemaVersion != releaseSchemaVersion {
 		return installation.Manifest, nil
 	}
 	archive := filepath.Join(installation.Manifest.ReleaseDir, filepath.FromSlash(metadata.RuntimeImages.Archive))
@@ -1330,7 +1336,7 @@ func validateManifest(manifest Manifest) error {
 	}
 	if manifest.SchemaVersion == legacyManifestSchemaVersion {
 		if manifest.TLSProfile != "" || manifest.InstallationID != "" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" ||
-			manifest.ServerImage != "" || manifest.CaddyImage != "" || manifest.RuntimeImagePlatform != "" {
+			manifest.ServerImage != "" || manifest.CaddyImage != "" || manifest.RuntimeImagePlatform != "" || manifest.SourceBuild {
 			return fmt.Errorf("legacy manifest contains newer trust or runtime image fields")
 		}
 		return nil
@@ -1352,6 +1358,9 @@ func validateManifest(manifest Manifest) error {
 			!runtimePlatformPattern.MatchString(manifest.RuntimeImagePlatform) {
 			return fmt.Errorf("runtime image identity is incomplete or invalid")
 		}
+	}
+	if manifest.SourceBuild && (imageFieldCount != 0 || manifest.SourceCommit == "") {
+		return fmt.Errorf("source-build identity is incomplete or conflicts with runtime images")
 	}
 	if !installIDPattern.MatchString(manifest.InstallationID) {
 		return fmt.Errorf("installationId is invalid")
@@ -1552,14 +1561,23 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 	}
 	var metadata ReleaseMetadata
 	if err := decodeStrictJSON(metadataBytes, &metadata); err != nil ||
-		(metadata.SchemaVersion != legacyReleaseSchemaVersion && metadata.SchemaVersion != releaseSchemaVersion) ||
+		(metadata.SchemaVersion != legacyReleaseSchemaVersion && metadata.SchemaVersion != releaseSchemaVersion &&
+			metadata.SchemaVersion != sourceReleaseSchemaVersion) ||
 		!releasePattern.MatchString(metadata.ReleaseVersion) || metadata.DataSchemaVersion < 1 ||
-		!commitPattern.MatchString(metadata.SourceCommit) || !supportedTarget(metadata.TargetOS, metadata.TargetArch) {
+		!commitPattern.MatchString(metadata.SourceCommit) ||
+		!(supportedTarget(metadata.TargetOS, metadata.TargetArch) ||
+			(metadata.SchemaVersion == sourceReleaseSchemaVersion && metadata.TargetOS == "source" && metadata.TargetArch == "multi")) {
 		return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "central release metadata is invalid", "Use the metadata and checksums from one exact published release.", err)
 	}
 	if metadata.SchemaVersion == legacyReleaseSchemaVersion {
 		if metadata.ImageMetadata != "" {
 			return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "legacy central release metadata declares unsupported runtime images", "Use one intact published release archive without mixing schema versions.", nil)
+		}
+		return metadata, actualChecksumDigest, nil
+	}
+	if metadata.SchemaVersion == sourceReleaseSchemaVersion {
+		if metadataName != "convenewire-central-release.json" || metadata.ImageMetadata != "" {
+			return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "source-build central release metadata is invalid", "Use one intact source archive without image metadata or renamed files.", nil)
 		}
 		return metadata, actualChecksumDigest, nil
 	}

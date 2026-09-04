@@ -1,19 +1,22 @@
 # ConveneWire Central Controller
 
-Use the `convenewirectl` binary shipped in the Central archive for the host's
-operating system and architecture. Keep the extracted release directory
-unchanged: every lifecycle command re-verifies it before executing Compose or a
-release-owned script.
+Use the `bin/convenewirectl` launcher shipped in the host-neutral Central source
+archive. It selects the checksum-covered helper for Linux amd64/arm64 or macOS
+arm64. Keep the extracted release directory unchanged: every lifecycle command
+re-verifies it before executing Compose or a release-owned script.
 
 Default owner-state directories and the hidden Compose project, service,
 manifest, and database identities retain their released `AgentRoom` names so
 an in-place upgrade reopens the same installation. New archives, commands,
 images, and generated environment variables use ConveneWire naming.
 
-The separately downloaded `*.SHA256SUMS.sha256` asset contains the digest to
+The separately downloaded source-package `*.SHA256SUMS.sha256` asset contains the digest to
 pass with `--checksums-sha256`. It is not the same as the outer Release
 `SHA256SUMS`, which verifies downloaded assets.
 
+Install and upgrade build Server/Web locally from the verified package with
+Docker Compose. Docker and Compose are required; Go and Node.js are not. The
+digest-pinned Node base and Caddy images must already exist or be downloadable.
 For a loopback-only first installation:
 
 ```sh

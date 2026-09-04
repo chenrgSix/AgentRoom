@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+case "$(uname -s)/$(uname -m)" in
+  Linux/x86_64|Linux/amd64)
+    helper="${bin_dir}/linux_amd64/convenewirectl"
+    ;;
+  Linux/aarch64|Linux/arm64)
+    helper="${bin_dir}/linux_arm64/convenewirectl"
+    ;;
+  Darwin/arm64)
+    helper="${bin_dir}/darwin_arm64/convenewirectl"
+    ;;
+  *)
+    echo "Unsupported Central host: $(uname -s)/$(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+exec "${helper}" "$@"

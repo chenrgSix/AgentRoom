@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-func TestPackageCentralReleaseRunsSchemaV2VerifierForHost(t *testing.T) {
+func TestPackageCentralReleaseBuildsHostNeutralControllerHelpers(t *testing.T) {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		t.Skip("Central release packaging supports Darwin and Linux hosts")
 	}
@@ -39,67 +39,37 @@ func TestPackageCentralReleaseRunsSchemaV2VerifierForHost(t *testing.T) {
 	}
 	sourceCommit := strings.TrimSpace(string(sourceCommitBytes))
 
-	targetOS := "linux"
-	if runtime.GOOS == "linux" {
-		targetOS = "darwin"
-	}
-	targetArch := runtime.GOARCH
 	const releaseTag = "v0.0.0-host-tool-test"
 	version := strings.TrimPrefix(releaseTag, "v")
-	imageArchiveName := "convenewire-central-image_" + version + "_linux_" + targetArch + ".oci.tar"
-	imageMetadataName := "convenewire-central-image_" + version + "_linux_" + targetArch + ".metadata.json"
-
-	bundleDirectory := t.TempDir()
-	serverArchive := filepath.Join(bundleDirectory, "raw-server.oci.tar")
-	caddyArchive := filepath.Join(bundleDirectory, "raw-caddy.oci.tar")
-	fixtureOptions := rawOCIFixtureOptions{
-		platform:       "linux/" + targetArch,
-		releaseVersion: releaseTag,
-		sourceCommit:   sourceCommit,
-	}
-	fixtureOptions.repository = ServerRepository
-	writeRawBuildKitOCI(t, serverArchive, fixtureOptions)
-	fixtureOptions.repository = CaddyRepository
-	writeRawBuildKitOCI(t, caddyArchive, fixtureOptions)
-	_, err = Finalize(FinalizeOptions{
-		Images: []RawImage{
-			{Role: ServerRole, Repository: ServerRepository, Archive: serverArchive},
-			{Role: CaddyRole, Repository: CaddyRepository, Archive: caddyArchive},
-		},
-		OutputArchive:      filepath.Join(bundleDirectory, imageArchiveName),
-		OutputMetadata:     filepath.Join(bundleDirectory, imageMetadataName),
-		EmbeddedArchive:    "image/" + imageArchiveName,
-		ReleaseVersion:     releaseTag,
-		SourceCommit:       sourceCommit,
-		Platform:           "linux/" + targetArch,
-		BuilderID:          testBuilderID,
-		BuildInvocationURI: testBuilderID + "/attempts/host-tool-test",
-	})
-	if err != nil {
-		t.Fatalf("finalize schema-v2 fixture: %v", err)
-	}
 
 	outputDirectory := t.TempDir()
 	scriptPath := filepath.Join(repositoryRoot, "ops", "convenewirectl", "scripts", "package-central-release.sh")
 	command := exec.Command("bash", scriptPath)
 	command.Dir = repositoryRoot
 	command.Env = append(os.Environ(),
-		"CENTRAL_RELEASE_SCHEMA=2",
-		"CENTRAL_IMAGE_BUNDLE_DIR="+bundleDirectory,
 		"OUTPUT_DIR="+outputDirectory,
 		"RELEASE_TAG="+releaseTag,
 		"SOURCE_REF="+sourceCommit,
-		"GOOS="+targetOS,
-		"GOARCH="+targetArch,
 	)
 	output, err := command.CombinedOutput()
 	if err != nil {
-		t.Fatalf("cross-target schema-v2 package failed: %v\n%s", err, output)
+		t.Fatalf("host-neutral source package failed: %v\n%s", err, output)
 	}
 
-	packageName := "convenewire-central_" + version + "_" + targetOS + "_" + targetArch
+	packageName := "convenewire-central_" + version + "_source"
 	archivePath := filepath.Join(outputDirectory, packageName+".tar.gz")
-	assertPackagedControllerTarget(t, archivePath, packageName+"/bin/convenewirectl", targetOS, targetArch)
+	for _, target := range []struct {
+		path   string
+		goos   string
+		goarch string
+	}{
+		{path: "linux_amd64", goos: "linux", goarch: "amd64"},
+		{path: "linux_arm64", goos: "linux", goarch: "arm64"},
+		{path: "darwin_arm64", goos: "darwin", goarch: "arm64"},
+	} {
+		assertPackagedControllerTarget(t, archivePath,
+			packageName+"/bin/"+target.path+"/convenewirectl", target.goos, target.goarch)
+	}
 }
 
 func assertPackagedControllerTarget(t *testing.T, archivePath, controllerPath, targetOS, targetArch string) {
