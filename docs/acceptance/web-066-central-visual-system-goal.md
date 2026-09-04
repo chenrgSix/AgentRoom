@@ -95,7 +95,10 @@ The implementation is retained in independently reviewable commits:
 - `a22a3c1` adds the token authority, Central surface coverage and structural
   regressions; and
 - `f4e63e1` removes the final non-semantic green from Device and Member
-  management while retaining green for active authorization state.
+  management while retaining green for active authorization state; and
+- `2294358` removes the retired `rail-manage` class whose higher-specificity
+  light-theme rules tinted the inactive Work destination green, and adds a
+  structural regression that prevents the legacy selector from returning.
 
 ## Production-browser evidence
 
@@ -150,3 +153,11 @@ diagnostics remain non-blocking optimization debt; the production-browser
 console itself was empty. This delivery does not redesign Bridge Desktop or the
 product site, change behavior, publish a release or update an installed Central
 service.
+
+After the accepted browser review, a narrow light-theme screenshot exposed one
+remaining inactive Work-navigation tint. The follow-up fix passed 11/11 focused
+visual and real-App navigation tests plus strict TypeScript. A concurrent full
+Web run passed 279/282 tests; its three client-entry/history timing failures did
+not touch the changed navigation or CSS and all affected Work-navigation tests
+passed when rerun with the repository's supported Web TypeScript configuration
+at concurrency one. Its owned roots were removed after both runs.
