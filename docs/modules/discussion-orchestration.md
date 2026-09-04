@@ -32,9 +32,11 @@ A Discussion is not a Handoff. Handoff is a bounded delegation lineage that
 rejects revisiting an Agent. Discussion may use the same participants again in
 later Waves. A Reviewer contributes independently in the same ordinary Wave as
 the other participants and cannot inspect peer replies that did not exist when
-the Wave started. Its approval is evidence for a policy that requires review,
-and the role is preferred when selecting the separate finalization member; it
-does not create a serial review Wave.
+the Wave started. Its explicit current-Wave approval or rejection replaces the
+prior approval evidence; a missing or failed current Reviewer report preserves
+the prior value. Approval is evidence for a policy that requires review, and
+the role is preferred when selecting the separate finalization member; it does
+not create a serial review Wave.
 
 ## Authority Boundary
 
@@ -85,7 +87,10 @@ Runs, append Messages, or dispatch Bridge deliveries.
 The deterministic evaluator sorts successful reports by frozen participant
 ordinal, normalizes and hashes visible replies, combines valid structured
 question and evidence deltas, and treats missing or malformed assessment fields
-as reply-only evidence. Callback arrival order cannot change the projection.
+as reply-only evidence. An explicit current Reviewer opinion replaces the prior
+approval value; no explicit successful opinion retains it, and conflicting
+current opinions fail conservatively. Callback arrival order cannot change the
+projection.
 
 `DISC-011` is governed by the
 [frozen focused-selection goal](../acceptance/disc-011-focused-participant-selection-goal.md).
@@ -160,11 +165,17 @@ Runtime output contains a visible reply and optional structured evidence:
     "goalSatisfied": false,
     "confidence": 0.82,
     "resolvedQuestionIds": ["question_delivery"],
-    "addedQuestionIds": ["question_cancel_race"],
+    "openQuestions": [{
+      "id": "question_cancel_race",
+      "question": "Which cancellation race remains?",
+      "importance": "high"
+    }],
     "newEvidenceRefs": ["artifact_patch_1"],
-    "disagreementRemaining": "low"
-  },
-  "recommendation": "continue"
+    "disagreementRemaining": "low",
+    "newInformationAdded": true,
+    "reviewerApproved": false,
+    "recommendation": "continue"
+  }
 }
 ```
 
@@ -293,9 +304,10 @@ State and reason are separate. Reasons include `goal_satisfied`,
 ## Runtime Context
 
 Every Wave member receives a bounded, named context containing the goal,
-speaker identity, participant roster, target audience, progress snapshot,
-important unresolved questions, recent transcript, checkpoint summary, and
-remaining lease. Members in one ordinary Wave receive the same frozen
+speaker identity and Discussion role, participant roster, target audience,
+progress snapshot, important unresolved questions, recent transcript,
+checkpoint summary, remaining lease, exact current Task and complete optional
+assessment guidance. Members in one ordinary Wave receive the same frozen
 transcript anchor and cannot see peer replies from that Wave.
 
 When an ordinary Wave settles, the server idempotently appends a deterministic
@@ -306,16 +318,21 @@ in Wave/member ordinal order. Room Messages retain durable arrival order, so the
 visible timeline may differ from evaluation and instruction order.
 
 The server serializes this context into the Run instruction so existing managed
-and pull adapters participate without a client rewrite. It limits recent
-transcript to 24 Room Messages and retains the 20,000-character instruction
-boundary.
+and pull adapters participate without a client rewrite. It first reserves the
+current identity, Task, `Your Task`, assessment and structured finalization
+rules, bounds goal and progress sections, then admits only the newest accepted
+transcript lines that fit. The transcript remains limited to 24 Room Messages,
+and the whole instruction remains within 20,000 Unicode code points without
+splitting a code point.
 
 Managed adapters should emit structured assessments when supported. Generic or
 manual participants may emit reply-only output; policy remains safe under that
 capability downgrade. Codex and Generic CLI may append a final
 `<agentroom-assessment>{...}</agentroom-assessment>` envelope. The Bridge removes
 a valid envelope from the visible reply and sends it as optional assessment
-data. Invalid or missing envelopes remain reply-only output.
+data. The instruction names every supported optional field, requires justified
+values and tells the designated Reviewer to report `reviewerApproved`
+explicitly. Invalid or missing envelopes remain reply-only output.
 
 MVP finalization persists summaries, final answers, decision records, and
 unresolved issues as Messages. Selecting `artifact` asks the finalizer for a

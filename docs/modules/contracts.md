@@ -425,6 +425,10 @@ never appends a Room Message or counts as an Agent reply.
 evidence: goal satisfaction, confidence, question/evidence deltas,
 disagreement, Reviewer approval, and a recommendation. Clients that omit the
 field remain fully compatible and are evaluated as reply-only participants.
+The Server-authored Discussion instruction enumerates the complete assessment
+shape and requires the designated Reviewer to report an explicit approval or
+rejection when the Runtime supports structured assessment. The value remains
+evidence; it cannot mutate Discussion state outside the policy engine.
 
 Every `run.requested` carries a stable `deliveryAttemptId` and
 `idempotencyKey`, plus the central `traceId`. Task-capable requests add the

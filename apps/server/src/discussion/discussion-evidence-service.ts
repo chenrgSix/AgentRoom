@@ -1,5 +1,9 @@
 import type { CoreRepository, MessageRecord } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
+import {
+  exceedsUnicodeCodePointLimit,
+  truncateUnicodeCodePoints
+} from "../domain/unicode-length.js";
 import type { RunRepository } from "../run/run-repository.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type { DiscussionRepository } from "./discussion-repository.js";
@@ -9,6 +13,48 @@ import type {
   DiscussionTurn,
   DiscussionWave
 } from "./discussion-types.js";
+
+const maximumInstructionCodePoints = 20_000;
+const maximumGoalCodePoints = 8_000;
+const maximumProgressCodePoints = 6_000;
+const truncationMarker = "\n[... truncated to preserve required instruction sections ...]";
+
+function codePointLength(value: string): number {
+  let length = 0;
+  for (const _codePoint of value) length += 1;
+  return length;
+}
+
+function truncateSection(value: string, maximum: number): string {
+  if (!exceedsUnicodeCodePointLimit(value, maximum)) return value;
+  const markerLength = codePointLength(truncationMarker);
+  if (maximum <= markerLength) {
+    return truncateUnicodeCodePoints(value, maximum);
+  }
+  const contentLimit = maximum - markerLength;
+  return truncateUnicodeCodePoints(value, contentLimit) + truncationMarker;
+}
+
+function truncateTranscript(lines: readonly string[], maximum: number): string {
+  if (maximum <= 0) return "";
+  const selected: string[] = [];
+  let remaining = maximum;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]!;
+    const separatorLength = selected.length === 0 ? 0 : 1;
+    const lineLength = codePointLength(line);
+    if (lineLength + separatorLength <= remaining) {
+      selected.unshift(line);
+      remaining -= lineLength + separatorLength;
+      continue;
+    }
+    if (selected.length === 0) {
+      selected.unshift(truncateSection(line, remaining));
+    }
+    break;
+  }
+  return selected.join("\n");
+}
 
 export class DiscussionEvidenceService {
   public constructor(
@@ -73,11 +119,17 @@ export class DiscussionEvidenceService {
     wave: DiscussionWave,
     turn: DiscussionTurn
   ): string {
-    const participants = this.repository.listParticipants(discussion.discussionId)
+    const discussionParticipants = this.repository.listParticipants(discussion.discussionId);
+    const participants = discussionParticipants
       .map((participant) => {
         const agent = this.core.getAgent(participant.agentId);
         return `${agent?.name ?? participant.agentId} (${participant.role})`;
       });
+    const currentParticipant = discussionParticipants.find(
+      ({ agentId }) => agentId === turn.speakerAgentId
+    );
+    const currentAgent = this.core.getAgent(turn.speakerAgentId);
+    const currentRole = currentParticipant?.role ?? "participant";
     const trigger = this.core.getMessage(turn.inputMessageId);
     const transcript = this.discussionTranscript(discussion, wave, trigger);
     const remainingLease = Math.max(
@@ -89,9 +141,9 @@ export class DiscussionEvidenceService {
       : discussion.progress.openQuestions
         .map(({ question, importance }) => `- [${importance}] ${question}`)
         .join("\n");
-    const transcriptText = transcript.map((message) =>
+    const transcriptLines = transcript.map((message) =>
       `[${this.senderName(message)}] ${redactSensitiveText(message.content)}`
-    ).join("\n");
+    );
     const planProposalInstruction = turn.kind === "finalization" &&
       discussion.outputMode === "decision_record"
       ? [
@@ -112,41 +164,67 @@ export class DiscussionEvidenceService {
         (planProposalInstruction ? `\n${planProposalInstruction}` : "")
       : "Make an independent, useful contribution for this Wave. Resolve a question, add evidence, " +
         "or challenge the current conclusion; do not merely repeat agreement.";
-    return [
-      "# ConveneWire Discussion Context",
-      `Discussion ID: ${discussion.discussionId}`,
-      `Wave: ${wave.ordinal}`,
-      `Wave member: ${(turn.waveMemberOrdinal ?? 0) + 1}/${wave.expectedMembers}`,
-      `Mode: ${discussion.mode}`,
-      `Participants: ${participants.join(", ")}`,
-      "",
-      "## Goal",
-      discussion.goal,
-      "",
-      "## Progress",
+    const progress = truncateSection([
       `Confidence: ${discussion.progress.confidence ?? "unknown"}`,
       `Disagreement: ${discussion.progress.disagreementRemaining}`,
       `Plateau count: ${discussion.progress.plateauCount}`,
       "Important unresolved questions:",
-      unresolved,
+      unresolved
+    ].join("\n"), maximumProgressCodePoints);
+    const leading = [
+      "# ConveneWire Discussion Context",
+      `Discussion ID: ${discussion.discussionId}`,
+      `Task ID: ${discussion.taskId}`,
+      `Wave: ${wave.ordinal}`,
+      `Wave member: ${(turn.waveMemberOrdinal ?? 0) + 1}/${wave.expectedMembers}`,
+      `Mode: ${discussion.mode}`,
+      `Current Agent: ${currentAgent?.name ?? turn.speakerAgentId} (${currentRole})`,
+      `Participants: ${participants.join(", ")}`,
+      "",
+      "## Goal",
+      truncateSection(discussion.goal, maximumGoalCodePoints),
+      "",
+      "## Progress",
+      progress,
       "",
       "## Remaining Lease",
       `${remainingLease} ordinary waves; token and cost telemetry may be unknown.`,
       "",
-      "## Recent Room Transcript",
-      transcriptText,
-      "",
+      "## Recent Room Transcript"
+    ].join("\n");
+    const assessmentExample = "<agentroom-assessment>{\"goalSatisfied\":false," +
+      "\"confidence\":0.75,\"resolvedQuestionIds\":[\"q1\"]," +
+      "\"openQuestions\":[{\"id\":\"q2\",\"question\":\"What remains?\"," +
+      "\"importance\":\"high\"}],\"newEvidenceRefs\":[\"msg_example1\"]," +
+      "\"disagreementRemaining\":\"medium\",\"newInformationAdded\":true," +
+      "\"reviewerApproved\":false,\"recommendation\":\"continue\"}" +
+      "</agentroom-assessment>";
+    const trailing = [
       "## Your Task",
       task,
       "Other participants in this Wave run concurrently and cannot see this reply until the next Wave.",
       "The Orchestrator, not you, decides whether the Discussion continues. " +
         "A plain-text reply is always valid when structured assessment is unsupported.",
-      "When supported, append one final line exactly in this form: " +
-        "<agentroom-assessment>{\"goalSatisfied\":false," +
-        "\"confidence\":0.7,\"newInformationAdded\":true," +
-        "\"recommendation\":\"continue\"}</agentroom-assessment>. " +
-        "This is evidence only; it does not control the next action."
-    ].join("\n").slice(0, 20_000);
+      "When supported, append exactly one final line in this complete optional-field form:",
+      assessmentExample,
+      "Only report fields you can justify. Do not invent question IDs or evidence references.",
+      ...(currentRole === "reviewer"
+        ? ["As the designated Reviewer, always report reviewerApproved as true or false."]
+        : []),
+      "The assessment is evidence only; it does not control the next action."
+    ].join("\n");
+    const framingCodePoints = codePointLength(leading) + codePointLength(trailing) + 3;
+    if (framingCodePoints > maximumInstructionCodePoints) {
+      throw new Error("Required Discussion instruction exceeds its character boundary");
+    }
+    const transcriptBudget = maximumInstructionCodePoints - framingCodePoints;
+    const transcriptText = truncateTranscript(transcriptLines, transcriptBudget) ||
+      "None available.";
+    const instruction = `${leading}\n${transcriptText}\n\n${trailing}`;
+    if (exceedsUnicodeCodePointLimit(instruction, maximumInstructionCodePoints)) {
+      throw new Error("Discussion instruction exceeds its character boundary");
+    }
+    return instruction;
   }
 
   public ensureWaveResultAnchor(

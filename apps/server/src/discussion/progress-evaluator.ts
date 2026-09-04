@@ -251,10 +251,13 @@ export function evaluateWaveProgress(input: {
   const confidence = reportedConfidences.length === 0
     ? input.previous.confidence
     : Math.min(...reportedConfidences);
-  const reviewerApproved = input.previous.reviewerApproved || sortedResults.some(
-    (result, index) => result.speakerIsReviewer &&
-      members[index]?.assessment?.reviewerApproved === true
-  );
+  const currentReviewerOpinions = sortedResults.flatMap((result, index) => {
+    const opinion = members[index]?.assessment?.reviewerApproved;
+    return result.speakerIsReviewer && opinion !== undefined ? [opinion] : [];
+  });
+  const reviewerApproved = currentReviewerOpinions.length === 0
+    ? input.previous.reviewerApproved
+    : currentReviewerOpinions.every((approved) => approved);
 
   const completionAssessments = members
     .map(({ assessment }) => assessment)

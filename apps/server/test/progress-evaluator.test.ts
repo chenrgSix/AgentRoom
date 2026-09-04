@@ -209,3 +209,25 @@ test("Wave aggregation rejects duplicate participant ordinals", () => {
     policy: defaultDiscussionPolicy
   }), /Duplicate Wave participant ordinal/u);
 });
+
+test("the current explicit Reviewer opinion replaces stale approval", () => {
+  const evaluate = (
+    previousApproval: boolean,
+    opinions: Array<boolean | undefined>
+  ) => evaluateWaveProgress({
+    previous: { ...emptyProgressSnapshot(), reviewerApproved: previousApproval },
+    successfulResults: opinions.map((reviewerApproved, participantOrdinal) => ({
+      participantOrdinal,
+      reply: `Reviewer opinion ${participantOrdinal}.`,
+      assessment: reviewerApproved === undefined ? {} : { reviewerApproved },
+      speakerIsReviewer: true
+    })),
+    policy: defaultDiscussionPolicy
+  }).snapshot.reviewerApproved;
+
+  assert.equal(evaluate(true, [false]), false);
+  assert.equal(evaluate(false, [true]), true);
+  assert.equal(evaluate(true, [undefined]), true);
+  assert.equal(evaluate(false, [true, false]), false);
+  assert.equal(evaluate(false, [false, true]), false);
+});

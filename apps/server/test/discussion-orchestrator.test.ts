@@ -1396,7 +1396,7 @@ test("automatic completion waits for the Wave barrier then schedules one finaliz
       core: value.core,
       runs: value.runs,
       run: coder,
-      content: "The first persisted terminal state is authoritative.",
+      content: "The first persisted terminal state is authoritative. " + "C".repeat(9_000),
       assessment: completionAssessment
     });
     result = requireTerminalResult(value.orchestrator.onRunTerminal(coder.runId));
@@ -1407,7 +1407,8 @@ test("automatic completion waits for the Wave barrier then schedules one finaliz
       core: value.core,
       runs: value.runs,
       run: reviewer,
-      content: "The rule is deterministic and ready for a decision record.",
+      content: "The rule is deterministic and ready for a decision record. " +
+        "R".repeat(9_000),
       assessment: completionAssessment
     });
     result = requireTerminalResult(value.orchestrator.onRunTerminal(reviewer.runId));
@@ -1425,7 +1426,12 @@ test("automatic completion waits for the Wave barrier then schedules one finaliz
 
     const finalRun = result.scheduledRuns[0];
     assert.ok(finalRun);
+    assert.ok([...finalRun.instruction].length <= 20_000);
     assert.match(finalRun.instruction, /Produce the final decision record/);
+    assert.match(finalRun.instruction, /<convenewire-plan-proposal>/u);
+    assert.match(finalRun.instruction, /If you cannot produce a complete closed-schema draft/u);
+    assert.match(finalRun.instruction, /"resolvedQuestionIds"/u);
+    assert.match(finalRun.instruction, /<\/agentroom-assessment>\n/u);
     completeRun({
       core: value.core,
       runs: value.runs,
@@ -1437,6 +1443,45 @@ test("automatic completion waits for the Wave barrier then schedules one finaliz
     assert.equal(result.discussion.state, "completed");
     assert.equal(result.scheduledRuns.length, 0);
     assert.equal(result.waves[1]?.state, "completed");
+  } finally {
+    value.close();
+  }
+});
+
+test("bounded instructions preserve identity, task and assessment guidance", async (t) => {
+  const value = await fixture(t);
+  try {
+    const goalPrefix = "Keep every required instruction section. ";
+    const goal = goalPrefix + "😀".repeat(9_950);
+    const result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal,
+      participantAgentIds: value.agentIds,
+      mode: "review"
+    });
+    assert.equal(result.scheduledRuns.length, 2);
+    for (const run of result.scheduledRuns) {
+      assert.ok([...run.instruction].length <= 20_000);
+      assert.match(run.instruction, /## Goal\nKeep every required instruction section/u);
+      assert.match(run.instruction, /## Progress/u);
+      assert.match(run.instruction, new RegExp(`Task ID: ${result.discussion.taskId}`, "u"));
+      assert.match(run.instruction, /Current Agent:/u);
+      assert.match(run.instruction, /## Your Task/u);
+      assert.match(run.instruction, /"openQuestions"/u);
+      assert.match(run.instruction, /"newEvidenceRefs"/u);
+      assert.match(run.instruction, /"disagreementRemaining"/u);
+      assert.match(run.instruction, /"reviewerApproved"/u);
+      assert.match(run.instruction, /<\/agentroom-assessment>\n/u);
+      assert.match(run.instruction, /truncated to preserve required instruction sections/u);
+    }
+    assert.doesNotMatch(
+      result.scheduledRuns[0]!.instruction,
+      /As the designated Reviewer/u
+    );
+    assert.match(
+      result.scheduledRuns[1]!.instruction,
+      /As the designated Reviewer, always report reviewerApproved as true or false/u
+    );
   } finally {
     value.close();
   }
