@@ -27,6 +27,10 @@ Assert-ConveneWireReleaseUpgrade `
 $installer = (Resolve-Path -LiteralPath $InstallerPath).Path
 $candidateArchive = (Resolve-Path -LiteralPath $CandidateArchivePath).Path
 $candidateExecutable = (Resolve-Path -LiteralPath $CandidateExecutablePath).Path
+$candidateCLI = Join-Path (Split-Path $candidateExecutable -Parent) "convenewire-bridge.exe"
+if (-not (Test-Path -LiteralPath $candidateCLI)) {
+  throw "Candidate staged payload omits convenewire-bridge.exe"
+}
 $previousInstaller = (Resolve-Path -LiteralPath $PreviousInstallerPath).Path
 if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -eq
     (Get-FileHash -LiteralPath $previousInstaller -Algorithm SHA256).Hash) {
@@ -127,6 +131,12 @@ $archiveExecutableSHA256 = Get-SafeZipExecutableSHA256 `
 if ($archiveExecutableSHA256 -ne $candidateExecutableSHA256) {
   throw "Candidate ZIP executable differs from the staged executable"
 }
+$candidateCLISHA256 = (Get-FileHash -LiteralPath $candidateCLI -Algorithm SHA256).Hash
+$archiveCLISHA256 = Get-SafeZipExecutableSHA256 `
+  $candidateArchive "$candidatePackage/convenewire-bridge.exe"
+if ($archiveCLISHA256 -ne $candidateCLISHA256) {
+  throw "Candidate ZIP CLI helper differs from the staged executable"
+}
 
 function Invoke-CheckedProcess {
   param(
@@ -153,6 +163,7 @@ function Assert-InstalledPayload {
   $expectedVersion = $ExpectedReleaseTag.Substring(1)
   $required = @(
     "ConveneWire Bridge.exe",
+    "convenewire-bridge.exe",
     "README.md",
     "LICENSE",
     "NOTICE",
@@ -170,12 +181,22 @@ function Assert-InstalledPayload {
   if (-not $binaryText.Contains($ExpectedReleaseTag)) {
     throw "Installed Bridge does not contain $ExpectedReleaseTag"
   }
+  $cliText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $installDir "convenewire-bridge.exe")))
+  if (-not $cliText.Contains($ExpectedReleaseTag)) {
+    throw "Installed CLI helper does not contain $ExpectedReleaseTag"
+  }
   if (-not [string]::IsNullOrWhiteSpace($ExpectedExecutableSHA256)) {
     $installedDigest = (Get-FileHash `
       -LiteralPath (Join-Path $installDir "ConveneWire Bridge.exe") `
       -Algorithm SHA256).Hash
     if ($installedDigest -ne $ExpectedExecutableSHA256) {
       throw "Installed candidate executable differs from staging and ZIP"
+    }
+    $installedCLIDigest = (Get-FileHash `
+      -LiteralPath (Join-Path $installDir "convenewire-bridge.exe") `
+      -Algorithm SHA256).Hash
+    if ($installedCLIDigest -ne $candidateCLISHA256) {
+      throw "Installed candidate CLI helper differs from staging and ZIP"
     }
   }
   if (-not (Test-Path -LiteralPath $startMenuLink)) {
@@ -296,6 +317,9 @@ try {
   Invoke-CheckedProcess $uninstaller $uninstallArguments "Installer uninstall run" $uninstallLog
   if (Test-Path -LiteralPath (Join-Path $installDir "ConveneWire Bridge.exe")) {
     throw "Uninstaller left the managed Bridge executable behind"
+  }
+  if (Test-Path -LiteralPath (Join-Path $installDir "convenewire-bridge.exe")) {
+    throw "Uninstaller left the managed CLI helper behind"
   }
   if (Test-Path -LiteralPath $startMenuLink) {
     throw "Uninstaller left the managed Start menu shortcut behind"

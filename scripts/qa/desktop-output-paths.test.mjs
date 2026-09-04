@@ -21,9 +21,15 @@ if [ "$1" = env ]; then
   if [ "$2" = GOHOSTOS ]; then echo darwin; else echo arm64; fi
   exit 0
 fi
-case "$*" in *-extldflags=-mmacosx-version-min=12.0*) ;; *) exit 41 ;; esac
-[ "$MACOSX_DEPLOYMENT_TARGET" = 12.0 ] || exit 42
-case "$CGO_CFLAGS $CGO_CXXFLAGS $CGO_LDFLAGS" in *-mmacosx-version-min=12.0*) ;; *) exit 43 ;; esac
+case "$*" in
+  *cmd/convenewire-bridge-desktop*)
+    case "$*" in *-extldflags=-mmacosx-version-min=12.0*) ;; *) exit 41 ;; esac
+    [ "$MACOSX_DEPLOYMENT_TARGET" = 12.0 ] || exit 42
+    case "$CGO_CFLAGS $CGO_CXXFLAGS $CGO_LDFLAGS" in *-mmacosx-version-min=12.0*) ;; *) exit 43 ;; esac
+    ;;
+  *cmd/convenewire-bridge) ;;
+  *) exit 44 ;;
+esac
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -o ]; then shift; target="$1"; break; fi
   shift
@@ -48,7 +54,9 @@ chmod +x "$target"
       const archive = path.join(expected, `${packageName}.zip`);
       const entries = execFileSync("unzip", ["-Z1", archive], { encoding: "utf8" });
       assert.ok(entries.includes(`${packageName}/ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop`));
+      assert.ok(entries.includes(`${packageName}/ConveneWire Bridge.app/Contents/Resources/bin/convenewire-bridge`));
       assert.match(await readFile(path.join(expected, packageName, "ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop"), "utf8"), new RegExp(commit, "u"));
+      assert.match(await readFile(path.join(expected, packageName, "ConveneWire Bridge.app/Contents/Resources/bin/convenewire-bridge"), "utf8"), new RegExp(commit, "u"));
       assert.throws(() => execFileSync("bash", [darwinScript], { cwd, env, stdio: "pipe" }), /output already exists/u);
       for (const wrongMinimum of ["11.0", "26.0"]) {
         assert.throws(() => execFileSync("bash", [darwinScript], { cwd, stdio: "pipe",

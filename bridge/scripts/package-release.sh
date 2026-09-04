@@ -23,14 +23,11 @@ if [[ ! "${version}" =~ ^[0-9A-Za-z._-]+$ ]]; then
 fi
 
 case "${goos}/${goarch}" in
-  darwin/amd64|darwin/arm64|linux/amd64|linux/arm64)
+  linux/amd64|linux/arm64)
     archive_format=tar.gz
     ;;
-  windows/amd64)
-    archive_format=zip
-    ;;
   *)
-    echo "Unsupported Bridge release target: ${goos}/${goarch}" >&2
+    echo "Standalone Bridge releases support only linux/amd64 and linux/arm64; macOS and Windows use Desktop" >&2
     exit 1
     ;;
 esac
@@ -38,9 +35,6 @@ esac
 package="convenewire-bridge_${version}_${goos}_${goarch}"
 staging="${output_dir}/${package}"
 binary=convenewire-bridge
-if [[ "${goos}" == windows ]]; then
-  binary=convenewire-bridge.exe
-fi
 
 mkdir -p "${staging}"
 (
@@ -71,22 +65,9 @@ if [[ "${goos}/${goarch}" == "${host_os}/${host_arch}" ]]; then
   fi
 fi
 
-case "${goos}" in
-  darwin)
-    cp "${bridge_root}/release/start-convenewire-bridge.command" \
-      "${staging}/Start ConveneWire Bridge.command"
-    chmod +x "${staging}/Start ConveneWire Bridge.command"
-    ;;
-  linux)
-    cp "${bridge_root}/release/start-convenewire-bridge.sh" \
-      "${staging}/start-convenewire-bridge.sh"
-    chmod +x "${staging}/start-convenewire-bridge.sh"
-    ;;
-  windows)
-    cp "${bridge_root}/release/start-convenewire-bridge.cmd" \
-      "${staging}/Start ConveneWire Bridge.cmd"
-    ;;
-esac
+cp "${bridge_root}/release/start-convenewire-bridge.sh" \
+  "${staging}/start-convenewire-bridge.sh"
+chmod +x "${staging}/start-convenewire-bridge.sh"
 
 mkdir -p "${output_dir}"
 if [[ "${archive_format}" == zip ]]; then

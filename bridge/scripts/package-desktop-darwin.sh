@@ -25,8 +25,8 @@ if [[ ! "${bundle_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Desktop release tag must start with a three-part semantic version" >&2
   exit 1
 fi
-if [[ "${goarch}" != "arm64" && "${goarch}" != "amd64" ]]; then
-  echo "Unsupported macOS desktop architecture: ${goarch}" >&2
+if [[ "${goarch}" != "arm64" ]]; then
+  echo "macOS Desktop releases support Apple silicon (arm64) only" >&2
   exit 1
 fi
 
@@ -51,6 +51,7 @@ staging="${output_dir}/${package}"
 app="${staging}/ConveneWire Bridge.app"
 contents="${app}/Contents"
 binary="${contents}/MacOS/convenewire-bridge-desktop"
+helper="${contents}/Resources/bin/convenewire-bridge"
 archive="${output_dir}/${package}.zip"
 
 if [[ -e "${staging}" || -e "${archive}" ]]; then
@@ -58,7 +59,7 @@ if [[ -e "${staging}" || -e "${archive}" ]]; then
   exit 1
 fi
 
-mkdir -p "${contents}/MacOS" "${contents}/Resources"
+mkdir -p "${contents}/MacOS" "${contents}/Resources/bin"
 sed "s/__VERSION__/${bundle_version}/g" \
   "${bridge_root}/desktop/darwin/Info.plist" > "${contents}/Info.plist"
 
@@ -75,6 +76,14 @@ sed "s/__VERSION__/${bundle_version}/g" \
     -o "${binary}" \
     ./cmd/convenewire-bridge-desktop
 )
+(
+  cd "${bridge_root}"
+  CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+    -trimpath \
+    -ldflags="-s -w -X main.version=${release_tag} -X main.sourceCommit=${source_commit}" \
+    -o "${helper}" \
+    ./cmd/convenewire-bridge
+)
 # A dependency can override CGO linker flags. Verify the emitted Mach-O, not
 # just the plist or environment, before any archive can be distributed.
 build_target=$(xcrun vtool -show-build "${binary}")
@@ -86,6 +95,10 @@ if [[ "${compiled_minimum}" != "${minimum_macos}" || "${compiled_platform}" != "
 fi
 if ! strings "${binary}" | grep -F "${source_commit}" >/dev/null; then
   echo "Built desktop Bridge omits the exact source commit ${source_commit}" >&2
+  exit 1
+fi
+if ! strings "${helper}" | grep -F "${source_commit}" >/dev/null; then
+  echo "Built CLI helper omits the exact source commit ${source_commit}" >&2
   exit 1
 fi
 
@@ -100,6 +113,11 @@ plutil -lint "${contents}/Info.plist"
 built_version=$("${binary}" --version)
 if [[ "${built_version}" != "${release_tag}" ]]; then
   echo "Built desktop Bridge reports ${built_version}, expected ${release_tag}" >&2
+  exit 1
+fi
+helper_version=$("${helper}" version)
+if [[ "${helper_version}" != "${release_tag}" ]]; then
+  echo "Built CLI helper reports ${helper_version}, expected ${release_tag}" >&2
   exit 1
 fi
 

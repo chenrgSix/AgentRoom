@@ -86,6 +86,7 @@ Invoke-WindowsResourceCheck -Mode check
 $package = "convenewire-bridge-desktop_${version}_windows_${GoArch}"
 $staging = Join-Path $OutputDir $package
 $binary = Join-Path $staging "ConveneWire Bridge.exe"
+$cliBinary = Join-Path $staging "convenewire-bridge.exe"
 $archive = Join-Path $OutputDir "${package}.zip"
 $installerBase = "${package}_setup"
 $installer = Join-Path $OutputDir "${installerBase}.exe"
@@ -115,6 +116,17 @@ try {
     & go @buildArguments
     if ($LASTEXITCODE -ne 0) {
       throw "Windows Desktop build failed"
+    }
+    $cliBuildArguments = @(
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w -X=main.version=$ReleaseTag -X=main.sourceCommit=$sourceCommit",
+      "-o", $cliBinary,
+      "./cmd/convenewire-bridge"
+    )
+    & go @cliBuildArguments
+    if ($LASTEXITCODE -ne 0) {
+      throw "Windows CLI helper build failed"
     }
   }
   finally {
@@ -155,6 +167,25 @@ if (-not $binaryText.Contains($ReleaseTag)) {
 if (-not $binaryText.Contains($sourceCommit)) {
   throw "Built desktop Bridge does not contain the injected source commit $sourceCommit"
 }
+$cliBytes = [IO.File]::ReadAllBytes($cliBinary)
+if ($cliBytes.Length -lt 64 -or $cliBytes[0] -ne 0x4d -or $cliBytes[1] -ne 0x5a) {
+  throw "Built CLI helper is not a valid Windows PE executable"
+}
+$cliPEOffset = [BitConverter]::ToInt32($cliBytes, 0x3c)
+if ($cliPEOffset -lt 0 -or $cliPEOffset + 6 -gt $cliBytes.Length -or
+    $cliBytes[$cliPEOffset] -ne 0x50 -or $cliBytes[$cliPEOffset + 1] -ne 0x45 -or
+    $cliBytes[$cliPEOffset + 2] -ne 0 -or $cliBytes[$cliPEOffset + 3] -ne 0 -or
+    [BitConverter]::ToUInt16($cliBytes, $cliPEOffset + 4) -ne 0x8664) {
+  throw "Built CLI helper has an invalid or non-amd64 PE header"
+}
+$cliText = [Text.Encoding]::ASCII.GetString($cliBytes)
+if (-not $cliText.Contains($ReleaseTag) -or -not $cliText.Contains($sourceCommit)) {
+  throw "Built CLI helper omits the injected version or source commit"
+}
+$cliVersion = (& $cliBinary version).Trim()
+if ($LASTEXITCODE -ne 0 -or $cliVersion -ne $ReleaseTag) {
+  throw "Built CLI helper reports '$cliVersion', expected $ReleaseTag"
+}
 
 Invoke-WindowsResourceCheck -Mode verify -ExecutablePath $binary
 Assert-ConveneWireNativeIcon -ExecutablePath $binary -IconPath $productIcon
@@ -191,6 +222,7 @@ try {
   $members = @($zip.Entries | ForEach-Object { $_.FullName })
   $requiredMembers = @(
     "$package/ConveneWire Bridge.exe",
+    "$package/convenewire-bridge.exe",
     "$package/README.md",
     "$package/LICENSE",
     "$package/NOTICE",
@@ -202,24 +234,29 @@ try {
       throw "Windows Desktop archive is missing $requiredMember"
     }
   }
-  $binaryEntries = @($zip.Entries | Where-Object {
-    $_.FullName.Replace("\", "/") -eq "$package/ConveneWire Bridge.exe"
-  })
-  if ($binaryEntries.Count -ne 1) {
-    throw "Windows Desktop archive must contain exactly one managed executable"
-  }
-  $entryStream = $binaryEntries[0].Open()
-  $sha256 = [Security.Cryptography.SHA256]::Create()
-  try {
-    $entryDigest = [BitConverter]::ToString($sha256.ComputeHash($entryStream)).Replace("-", "")
-  }
-  finally {
-    $sha256.Dispose()
-    $entryStream.Dispose()
-  }
-  $stagedDigest = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash
-  if ($entryDigest -ne $stagedDigest) {
-    throw "Windows Desktop archive executable differs from the staged payload"
+  foreach ($executable in @(
+      @{ Member = "$package/ConveneWire Bridge.exe"; Path = $binary },
+      @{ Member = "$package/convenewire-bridge.exe"; Path = $cliBinary }
+    )) {
+    $binaryEntries = @($zip.Entries | Where-Object {
+      $_.FullName.Replace("\", "/") -eq $executable.Member
+    })
+    if ($binaryEntries.Count -ne 1) {
+      throw "Windows Desktop archive must contain exactly one $($executable.Member)"
+    }
+    $entryStream = $binaryEntries[0].Open()
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+      $entryDigest = [BitConverter]::ToString($sha256.ComputeHash($entryStream)).Replace("-", "")
+    }
+    finally {
+      $sha256.Dispose()
+      $entryStream.Dispose()
+    }
+    $stagedDigest = (Get-FileHash -LiteralPath $executable.Path -Algorithm SHA256).Hash
+    if ($entryDigest -ne $stagedDigest) {
+      throw "Windows Desktop archive executable differs from the staged payload: $($executable.Member)"
+    }
   }
 }
 finally {

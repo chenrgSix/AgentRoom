@@ -7,11 +7,11 @@ for headless environments and diagnostics.
 
 ## Install
 
-End users download the archive matching their operating system and CPU from
+End users download the Desktop package or Linux CLI archive matching their
+operating system and CPU from
 [GitHub Releases](https://github.com/chenrgSix/ConveneWire/releases). macOS users
-need macOS 12 Monterey or newer with the pinned Go 1.26 desktop build, and
-should choose `convenewire-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
-`convenewire-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
+need an Apple-silicon Mac running macOS 12 Monterey or newer and should choose
+`convenewire-bridge-desktop_*_darwin_arm64.zip`. Extract it, move
 **ConveneWire Bridge.app** to `/Applications`, and open it. Go, Node.js, and a
 terminal session are not required. Windows users can run the current-user
 `convenewire-bridge-desktop_*_windows_amd64_setup.exe` installer, or choose the
@@ -50,10 +50,13 @@ configuration and credentials.
 Windows login startup is not part of this preview, so the Settings page retains
 an explicit manual-start notice. Updates remain manual on both platforms.
 
-The portable CLI archives remain available. On macOS, double-click **Start
-ConveneWire Bridge.command**; on Windows, double-click **Start ConveneWire
-Bridge.cmd**; on Linux, run `./start-convenewire-bridge.sh`. Each launcher starts
-the Bridge and opens the local configuration Console in the default browser.
+Standalone CLI archives are published only for Linux amd64/arm64; run
+`./start-convenewire-bridge.sh` to open the local configuration Console. The
+macOS application contains its advanced helper at **ConveneWire
+Bridge.app/Contents/Resources/bin/convenewire-bridge**. The Windows Desktop ZIP
+and installer place **convenewire-bridge.exe** beside the GUI executable. These
+helpers preserve terminal-only Artifact, Result, repository, grant, verifier,
+integration and cleanup commands without requiring another download.
 
 The portable binaries are currently unsigned. macOS users may need to approve
 the first launch in system security settings. The `go run` commands below are
@@ -109,9 +112,9 @@ built separately from the CGO-free CLI so
 headless builds do not acquire GUI runtime requirements. Wails is pinned to
 `v3.0.0-beta.12`; desktop tests compile with the explicit `desktop` build tag.
 
-Current macOS desktop builds are unsigned and unnotarized by design. Apple
-Silicon and Intel packages are built on native GitHub-hosted macOS runners and
-published with the same `SHA256SUMS` file as the portable CLI archives. The
+Current macOS desktop builds are unsigned and unnotarized by design. The Apple
+silicon package is built on a native GitHub-hosted macOS runner and published
+with the same `SHA256SUMS` file as the Linux CLI archives. The
 Windows amd64 preview is built and tested on a native GitHub-hosted Windows
 runner, uses the system WebView2 Runtime, and ships as both an unsigned portable
 ZIP and an unsigned current-user installer. Native CI performs an initial

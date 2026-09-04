@@ -14,7 +14,7 @@ $end = $source.IndexOf('if ([string]::IsNullOrWhiteSpace($ReleaseTag))')
 if ($start -lt 0 -or $end -le $start) { throw "Missing output initialization" }
 $initialize = $source.Substring($start, $end - $start)
 $assignments = @{}
-foreach ($name in @("package", "staging", "binary", "archive", "installerBase", "installer", "buildArguments", "compilerArguments")) {
+foreach ($name in @("package", "staging", "binary", "cliBinary", "archive", "installerBase", "installer", "buildArguments", "cliBuildArguments", "compilerArguments")) {
   $matches = @($ast.FindAll({ param($node)
     $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq ('$' + $name)
   }, $true))
@@ -43,7 +43,7 @@ try {
           $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($requested)
         }
         Invoke-Expression $initialize
-        foreach ($name in @("package", "staging", "binary", "archive", "installerBase", "installer", "buildArguments", "compilerArguments")) {
+        foreach ($name in @("package", "staging", "binary", "cliBinary", "archive", "installerBase", "installer", "buildArguments", "cliBuildArguments", "compilerArguments")) {
           Invoke-Expression $assignments[$name]
         }
         Push-Location $otherDirectory
@@ -51,12 +51,13 @@ try {
           if ($OutputDir -ne $expected -or -not [IO.Path]::IsPathFullyQualified($OutputDir)) {
             throw "Output did not resolve against caller: '$requested'"
           }
-          foreach ($artifact in @($binary, $archive, $installer)) {
+          foreach ($artifact in @($binary, $cliBinary, $archive, $installer)) {
             if (-not [IO.Path]::IsPathFullyQualified($artifact) -or -not $artifact.StartsWith($expected + [IO.Path]::DirectorySeparatorChar)) {
               throw "Artifact escaped normalized output: $artifact"
             }
           }
           if ($buildArguments[$buildArguments.IndexOf("-o") + 1] -ne $binary -or
+              $cliBuildArguments[$cliBuildArguments.IndexOf("-o") + 1] -ne $cliBinary -or
               $compilerArguments -notcontains "/DSourceDir=$staging" -or
               $compilerArguments -notcontains "/DOutputDir=$expected") {
             throw "Go/ISCC did not receive absolute output paths"
