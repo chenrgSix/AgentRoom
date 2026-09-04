@@ -1494,6 +1494,14 @@ Contracts, Registry publication, Security pairing, and Runtime Adapters.
 
 ADR-0035 adds explicit Team/Room entry to the authenticated local Console. Its independent human-access key lives in a separate owner-only file and never enters Runtime inputs, Device credential serialization, diagnostics or status. Entry uses a one-use fragment ticket and does not bypass browser TLS. Existing ownership is confirmed through deliberate re-pairing; canceled or superseded pairing and Central switching cannot carry human grants across identities.
 
+ADR-0040 keeps the ticket request on the configured exact HTTPS Bridge origin
+but lets a new Server advertise an exact browser origin in an authenticated
+response header. Bridge accepts only the configured origin or a same-host HTTP
+origin, performs existing ticket expiry and pairing-state checks before launch,
+and treats an absent header as released single-origin behavior. It never sends
+its Device credential, client-access secret, Runtime traffic or Evidence over
+the browser HTTP origin.
+
 BRG-072 adds an optional private-browser trust assistant to that same local
 Console. For a currently validated `private_scoped_ca` credential, Bridge may
 derive a self-contained Windows PowerShell command from the exact retained

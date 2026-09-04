@@ -52,7 +52,7 @@ domain services still authorize through stable User and Member IDs.
 
 The local bootstrap exists only in `local` auth mode, whose process must bind
 to loopback. `trusted-team` mode disables `/api/bootstrap` and requires an
-HTTPS public origin plus an Owner recovery secret read from a
+exact browser origin plus an Owner recovery secret read from a
 permission-restricted file. The secret is at least 32 bytes, never appears in a
 URL, response, database, browser storage, or log, and is used only for initial
 setup, explicit Owner recovery, or domain-separated wrapping of ADR-0026 Hosted
@@ -73,8 +73,13 @@ Owner recovery, but remains the unchanged Hosted wrapping root. Neither that
 file nor provider envelopes are rewritten. A lost key and lost sessions require
 an offline operator recovery, never an anonymous reset endpoint.
 
-Trusted Web sessions use a `Secure`, `HttpOnly`, `SameSite=Strict`, host-only
-Cookie, and trusted Web APIs reject legacy Web Bearer sessions. Mutations must
+Trusted Web sessions on HTTPS use the released `Secure`, `HttpOnly`,
+`SameSite=Strict`, host-only `__Host-` Cookie. ADR-0040's explicit `lan_http`
+browser origin uses a different host-only Cookie without `Secure` or the
+reserved `__Host-` prefix; the Server never accepts one transport's Cookie as
+the other. This LAN Cookie and page content are vulnerable to an on-path LAN
+attacker, which exact Origin and `SameSite` cannot prevent. Trusted Web APIs
+reject legacy Web Bearer sessions in both profiles. Mutations must
 carry the configured same-origin `Origin`; Bridge and MCP Bearer authentication
 remains unchanged. Initial setup creates an Owner or safely adopts the single
 existing local Owner/bootstrap User, while ambiguous legacy identities fail

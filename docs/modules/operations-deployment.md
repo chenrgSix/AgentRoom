@@ -143,14 +143,27 @@ available only through an explicitly installed and paired Bridge.
 
 `local` binds Caddy ports to loopback and requires an exact loopback HTTPS
 origin. `direct_https` binds the selected ports for external ingress and
-requires one matching non-loopback HTTPS origin. Caddy remains certificate and
-redirect authority. Public-profile readiness uses only the system trust store
+requires one matching non-loopback HTTPS origin. [ADR-0040](../adr/0040-separate-lan-browser-and-bridge-transports.md)
+adds explicit `lan_http`: the recorded `publicOrigin` remains the private-CA
+HTTPS Bridge origin, while Operations derives a same-host HTTP browser origin
+from the recorded HTTP port and selects an application-serving HTTP Caddy
+profile. Existing modes keep the redirect profile, and no mode silently falls
+back to HTTP. Caddy remains certificate and redirect authority. Public-profile
+readiness uses only the system trust store
 and cannot consume a Caddy-local fallback. Local, advanced manual and explicitly
 private profiles may add the installation root; private readiness also requires
 its DER digest to agree with the manifest. This is host diagnostic behavior,
 not evidence that a second-machine Bridge has safe trust.
 An unauthenticated WebSocket upgrade must reach the Server authentication
 boundary and return 401/403; a generic HTTP success is not sufficient.
+
+`lan_http` readiness proves both paths independently: the exact HTTPS origin
+must pass CA, hostname, health and WebSocket authentication checks, and the
+derived HTTP browser origin must pass application health through Caddy. The
+controller owns an explicit rollback-safe transport migration only between
+`direct_https/private_scoped_ca` and `lan_http`; it does not rewrite
+public/manual TLS deployments or preserve browser login Cookies across the
+transport change.
 
 For private local self-hosting, the exact origin should be a stable DNS or mDNS
 hostname rather than a literal DHCP address. The hostname remains the TLS and

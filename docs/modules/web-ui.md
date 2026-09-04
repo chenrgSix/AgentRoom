@@ -608,6 +608,14 @@ clears it immediately after the request. Member invitation tokens are read
 from the URL fragment, removed before network activity, and exchanged for an
 HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 
+ADR-0040 permits the same trusted-team surface on one explicitly configured
+same-host LAN HTTP browser origin while Bridge traffic remains private-CA
+HTTPS. The Server, not browser JavaScript, selects the Cookie name and transport
+attributes and enforces the exact browser Origin. Product copy identifies this
+as convenient but unencrypted, does not suggest disabling certificate
+revocation, and keeps private-browser CA installation only on the advanced
+private-HTTPS path.
+
 ## Interaction and Security Rules
 
 - Exact Mention commands resolve only against registered current-Room Agent
