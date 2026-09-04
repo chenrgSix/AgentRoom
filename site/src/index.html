@@ -28,7 +28,7 @@
       <h1 id="hero-title">让 Agent 协作，<br><em>让工作有结果。</em></h1>
       <p class="hero-description">不止多一个聊天窗口。<br>把讨论、分工、执行与交付证据放在同一个 Team，<br class="desktop-break">让你和 AI 助手围绕真正的工作一起向前。</p>
       <div class="actions"><a class="button primary" href="__BASE__guide/">开始使用 <span aria-hidden="true">↗</span></a><a class="button secondary" href="https://github.com/chenrgSix/ConveneWire">查看 GitHub <span aria-hidden="true">→</span></a></div>
-      <p class="hero-note">一个中央服务，按需接入 Agent。<br>v0.5.0-rc.3 预发布版已包含完整的受控软件团队执行 Core；稳定 Latest 仍为 v0.4.2。</p>
+      <p class="hero-note">一个中央服务，按需接入 Agent。<br>v0.5.0-rc.4 预发布版已包含完整的受控软件团队执行 Core 与跨平台浏览器信任引导；稳定 Latest 仍为 v0.4.2。</p>
     </div>
     <figure class="product-preview" aria-label="ConveneWire 协作工作台界面示意">
       <div class="preview-top"><span class="window-dots" aria-hidden="true">● ● ●</span><span>ConveneWire / Product Team</span><span class="preview-badge">自托管</span></div>
@@ -65,11 +65,12 @@
     <details><summary>中央 Agent 是不是还要额外部署一个 Agent 服务？</summary><p>不需要。当前源码中的中央 Agent 是中央服务自带的 HTTP 调用能力。启动中央服务后，Owner 在网页上选配即可；不用再安装 pi、Codex 或单独的 Agent 容器。不配置也能继续使用本机和演示 Agent。</p></details>
     <details><summary>支持哪些模型服务？</summary><p>中央 Agent 当前仅支持固定的 OpenAI Responses API。模型名称由你配置，需要对应的可用凭据与权限；不支持任意兼容 API 地址。验证与运行可能产生提供方用量。本机 Agent 则使用自己配置的 Runtime。</p></details>
     <details><summary>自托管意味着所有数据都不会离开服务器吗？</summary><p>不是。Team 记录存储在你的中央服务中，但远程模型调用会把获授权的上下文发送给模型提供方，本机 Runtime 也可能调用其模型服务。请按数据要求选择接入方式并配置房间与 Runtime 权限。</p></details>
-    <details><summary>下载稳定版就能用到页面上的全部功能吗？</summary><p>稳定 Latest 仍为 v0.4.2；v0.5.0-rc.3 是当前预发布版，新增客户端 Owner 入口和受控软件团队执行 Core。评估 RC 前请阅读迁移与回滚说明并备份 Central；真实模型调用仍需自行配置受支持的服务和凭据。官网上线本身不代表应用发版。</p></details>
+    <details><summary>下载稳定版就能用到页面上的全部功能吗？</summary><p>稳定 Latest 仍为 v0.4.2；v0.5.0-rc.4 是当前预发布版，新增客户端 Owner 入口、受控软件团队执行 Core 和跨平台私有 CA 浏览器引导。评估 RC 前请阅读迁移与回滚说明并备份 Central；真实模型调用仍需自行配置受支持的服务和凭据。官网上线本身不代表应用发版。</p></details>
+    <details><summary>为什么另一台电脑打开页面可能提示证书错误？</summary><p>如果 Central 使用团队私有 CA，另一台电脑的浏览器无论运行 Windows、macOS 还是 Linux，都可能需要先信任该 CA。配对后的 Bridge/Desktop 可为 Windows 和 macOS 准备带完整指纹校验的当前用户命令，并为 Linux 显示发行版与浏览器相关说明；它不会静默修改系统信任。使用公共 CA 才能让普通浏览器无需这一步。</p></details>
     <details><summary>ConveneWire 会接管我的 Git 仓库和 SSH Key 吗？</summary><p>不会。ConveneWire 不接管你的 Git 仓库或 Git 凭据。仓库路径、Git/SSH 凭据、worktree 和 Git 操作由本地 Client/Bridge 控制；Central 只协调 Plan、调度、授权、证据与操作回执。</p></details>
     <details><summary>一个人、一台电脑也能用吗？</summary><p>可以把中央服务与 Bridge 放在同一台适用的电脑上；如果只需要中央 HTTP Agent，则无需 Bridge。当前中央发布包支持 Linux 和 macOS；客户端 Bridge 可在支持的平台上单独连接。</p></details>
   </div></section>
-  <section class="container closing-cta" id="start" aria-labelledby="start-title"><div><p class="eyebrow">YOUR NEXT PROJECT, TOGETHER.</p><h2 id="start-title">从你的第一个 Team 开始。</h2><p>先完成一次有意义的协作，再逐步接入更多能力。</p></div><div><a class="button primary" href="__BASE__guide/">阅读入门指南 <span aria-hidden="true">→</span></a><a class="closing-secondary" href="https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.3">评估预发布版 v0.5.0-rc.3 ↗</a><a class="closing-secondary" href="https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2">下载稳定版 v0.4.2 ↗</a></div></section>
+  <section class="container closing-cta" id="start" aria-labelledby="start-title"><div><p class="eyebrow">YOUR NEXT PROJECT, TOGETHER.</p><h2 id="start-title">从你的第一个 Team 开始。</h2><p>先完成一次有意义的协作，再逐步接入更多能力。</p></div><div><a class="button primary" href="__BASE__guide/">阅读入门指南 <span aria-hidden="true">→</span></a><a class="closing-secondary" href="https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.4">评估预发布版 v0.5.0-rc.4 ↗</a><a class="closing-secondary" href="https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2">下载稳定版 v0.4.2 ↗</a></div></section>
 </main>
 <!-- FOOTER -->
 </body>
