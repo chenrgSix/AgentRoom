@@ -264,7 +264,8 @@ func writePrivateCaddyProfiles(installation Installation, caIDs ...string) error
 
 func validatePrivateRotationInstallation(installation Installation) error {
 	manifest := installation.Manifest
-	if manifest.SchemaVersion != manifestSchemaVersion || manifest.Mode != "direct_https" ||
+	if manifest.SchemaVersion != manifestSchemaVersion ||
+		(manifest.Mode != "direct_https" && manifest.Mode != "lan_http") ||
 		manifest.TLSProfile != "private_scoped_ca" || manifest.TrustEpoch < 1 ||
 		!hashPattern.MatchString(manifest.CACertificateSHA256) ||
 		manifest.LastSuccessfulStep != "ready" {
@@ -582,6 +583,7 @@ func (controller *Controller) ActivatePrivateCARotation(ctx context.Context, dat
 		) {
 		readiness := ReadinessInput{
 			PublicOrigin:     installation.Manifest.PublicOrigin,
+			BrowserOrigin:    browserOrigin(installation.Manifest.Mode, installation.Manifest.Domain, installation.Manifest.HTTPPort, installation.Manifest.PublicOrigin),
 			LocalCARoot:      privateCARootPath(installation.Manifest, activePrivateCAID(installation.Manifest)),
 			TLSProfile:       "private_scoped_ca",
 			ExpectedCADigest: installation.Manifest.CACertificateSHA256,
@@ -657,9 +659,10 @@ func (controller *Controller) ActivatePrivateCARotation(ctx context.Context, dat
 		return rollback(err)
 	}
 	readiness := ReadinessInput{
-		PublicOrigin: installation.Manifest.PublicOrigin,
-		LocalCARoot:  privateCARootPath(installation.Manifest, nextID),
-		TLSProfile:   "private_scoped_ca", ExpectedCADigest: offer.NextTrust.CACertificateSHA256,
+		PublicOrigin:  installation.Manifest.PublicOrigin,
+		BrowserOrigin: browserOrigin(installation.Manifest.Mode, installation.Manifest.Domain, installation.Manifest.HTTPPort, installation.Manifest.PublicOrigin),
+		LocalCARoot:   privateCARootPath(installation.Manifest, nextID),
+		TLSProfile:    "private_scoped_ca", ExpectedCADigest: offer.NextTrust.CACertificateSHA256,
 		Timeout: defaultReadyTimeout,
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, readiness); err != nil {

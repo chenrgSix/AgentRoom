@@ -48,8 +48,11 @@ func (controller *Controller) Status(ctx context.Context, dataRoot string) error
 		return actionError("STATUS_FAILED", "could not read the ConveneWire Compose state", "Check Docker access and run convenewirectl doctor with the same data root.", err)
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"Release: %s\nOrigin: %s\nTLS profile: %s\nInstallation ID: %s\nLast successful step: %s\nCompose state:\n%s",
-		installation.Manifest.ReleaseVersion, installation.Manifest.PublicOrigin,
+		"Release: %s\nBrowser: %s\nBridge: %s\n%s\nTLS profile: %s\nInstallation ID: %s\nLast successful step: %s\nCompose state:\n%s",
+		installation.Manifest.ReleaseVersion,
+		browserOrigin(installation.Manifest.Mode, installation.Manifest.Domain, installation.Manifest.HTTPPort, installation.Manifest.PublicOrigin),
+		installation.Manifest.PublicOrigin,
+		browserTransportNotice(installation.Manifest.Mode),
 		manifestTLSProfile(installation.Manifest), printableInstallationID(installation.Manifest),
 		installation.Manifest.LastSuccessfulStep, ensureTrailingNewline(output),
 	)
@@ -93,6 +96,7 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 	}
 	readiness := ReadinessInput{
 		PublicOrigin:     installation.Manifest.PublicOrigin,
+		BrowserOrigin:    browserOrigin(installation.Manifest.Mode, installation.Manifest.Domain, installation.Manifest.HTTPPort, installation.Manifest.PublicOrigin),
 		LocalCARoot:      privateCARootPath(installation.Manifest, activePrivateCAID(installation.Manifest)),
 		TLSProfile:       installation.Manifest.TLSProfile,
 		ExpectedCADigest: installation.Manifest.CACertificateSHA256,
@@ -107,8 +111,10 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 		return actionError("READINESS_FAILED", "HTTPS readiness or WebSocket ingress is unavailable", "Inspect docker compose logs for caddy and agentroom; check DNS, ports, certificate trust, and public-origin agreement.", err)
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"PASS: %s at %s\nRelease checksums, private files, Compose model, HTTPS readiness, and WebSocket ingress are valid.\n",
-		installation.Manifest.ReleaseVersion, installation.Manifest.PublicOrigin,
+		"PASS: %s\nBrowser: %s\nBridge: %s\n%s\nRelease checksums, private files, Compose model, browser readiness, HTTPS readiness, and WebSocket ingress are valid.\n",
+		installation.Manifest.ReleaseVersion,
+		browserOrigin(installation.Manifest.Mode, installation.Manifest.Domain, installation.Manifest.HTTPPort, installation.Manifest.PublicOrigin),
+		installation.Manifest.PublicOrigin, browserTransportNotice(installation.Manifest.Mode),
 	)
 	return nil
 }
@@ -537,6 +543,7 @@ func (controller *Controller) continueUpgrade(
 	}
 	readiness := ReadinessInput{
 		PublicOrigin:     target.Manifest.PublicOrigin,
+		BrowserOrigin:    browserOrigin(target.Manifest.Mode, target.Manifest.Domain, target.Manifest.HTTPPort, target.Manifest.PublicOrigin),
 		LocalCARoot:      privateCARootPath(target.Manifest, activePrivateCAID(target.Manifest)),
 		TLSProfile:       target.Manifest.TLSProfile,
 		ExpectedCADigest: target.Manifest.CACertificateSHA256,

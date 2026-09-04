@@ -139,7 +139,8 @@ for target in "${targets[@]}"; do
 
   required_paths=(
     convenewire-central-release.json CENTRAL-INSTALL.md bin/convenewirectl \
-    compose.yaml Dockerfile package.json package-lock.json deploy/Caddyfile \
+    compose.yaml Dockerfile package.json package-lock.json deploy/Caddyfile deploy/app.caddy \
+    deploy/http/redirect.caddy deploy/http/lan-app.caddy \
     deploy/tls/public-ca.caddy deploy/tls/private-scoped-ca.caddy deploy/tls/internal-ca.caddy deploy/tls/legacy-auto.caddy deploy/tls/pki-none.caddy \
     scripts/compose-backup.sh scripts/compose-restore.sh \
     LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md

@@ -39,7 +39,8 @@ func (controller *Controller) MigratePrivateHostname(
 		return err
 	}
 	manifest := installation.Manifest
-	if manifest.SchemaVersion != manifestSchemaVersion || manifest.Mode != "direct_https" ||
+	if manifest.SchemaVersion != manifestSchemaVersion ||
+		(manifest.Mode != "direct_https" && manifest.Mode != "lan_http") ||
 		manifest.TLSProfile != "private_scoped_ca" || manifest.LastSuccessfulStep != "ready" ||
 		manifest.TrustEpoch < 1 || !hashPattern.MatchString(manifest.CACertificateSHA256) ||
 		net.ParseIP(manifest.Domain) == nil {
@@ -93,7 +94,7 @@ func (controller *Controller) MigratePrivateHostname(
 		ChecksumsSHA256:   manifest.ReleaseDigest,
 		DataRoot:          manifest.DataRoot,
 		Mode:              manifest.Mode,
-		TLSProfile:        manifest.TLSProfile,
+		TLSProfile:        "",
 		Domain:            hostname,
 		PublicOrigin:      targetOrigin,
 		HTTPPort:          manifest.HTTPPort,
@@ -102,6 +103,10 @@ func (controller *Controller) MigratePrivateHostname(
 		ProjectName:       manifest.ProjectName,
 	}
 	options, err = controller.normalizeInstallOptions(options)
+	if err != nil {
+		return err
+	}
+	options, err = resolveInstallTLSProfile(options, manifest, true)
 	if err != nil {
 		return err
 	}
@@ -149,6 +154,7 @@ func (controller *Controller) MigratePrivateHostname(
 			if restartErr == nil {
 				readinessErr = controller.dependencies.CheckReadiness(ctx, ReadinessInput{
 					PublicOrigin:     manifest.PublicOrigin,
+					BrowserOrigin:    browserOrigin(manifest.Mode, manifest.Domain, manifest.HTTPPort, manifest.PublicOrigin),
 					LocalCARoot:      privateCARootPath(manifest, activePrivateCAID(manifest)),
 					TLSProfile:       manifest.TLSProfile,
 					ExpectedCADigest: manifest.CACertificateSHA256,
@@ -183,6 +189,7 @@ func (controller *Controller) MigratePrivateHostname(
 	}
 	targetReadiness := ReadinessInput{
 		PublicOrigin:     candidateManifest.PublicOrigin,
+		BrowserOrigin:    browserOrigin(candidateManifest.Mode, candidateManifest.Domain, candidateManifest.HTTPPort, candidateManifest.PublicOrigin),
 		LocalCARoot:      privateCARootPath(candidateManifest, activePrivateCAID(candidateManifest)),
 		TLSProfile:       candidateManifest.TLSProfile,
 		ExpectedCADigest: candidateManifest.CACertificateSHA256,

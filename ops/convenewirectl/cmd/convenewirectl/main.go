@@ -36,7 +36,7 @@ func main() {
 
 func run(ctx context.Context, arguments []string) error {
 	if len(arguments) == 0 {
-		return fmt.Errorf("usage: convenewirectl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|migrate-private-hostname|uninstall|version>")
+		return fmt.Errorf("usage: convenewirectl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|migrate-private-hostname|migrate-browser-transport|uninstall|version>")
 	}
 	if arguments[0] == "version" {
 		fmt.Println(version)
@@ -51,11 +51,11 @@ func run(ctx context.Context, arguments []string) error {
 		checksums := flags.String("checksums", "", "SHA256SUMS inside the release root")
 		checksumPin := flags.String("checksums-sha256", "", "published SHA-256 of SHA256SUMS")
 		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
-		mode := flags.String("mode", "local", "local or direct_https")
-		tlsProfile := flags.String("tls-profile", "", "direct_https TLS profile: public_ca (default), private_scoped_ca, or manual_ca")
+		mode := flags.String("mode", "local", "local, lan_http, or direct_https")
+		tlsProfile := flags.String("tls-profile", "", "direct_https TLS profile: public_ca (default), private_scoped_ca, or manual_ca; omit for lan_http")
 		domain := flags.String("domain", "localhost", "exact HTTPS host name or IP")
 		origin := flags.String("origin", "https://localhost:9443", "exact public HTTPS origin")
-		httpPort := flags.Int("http-port", 9080, "published HTTP redirect/ACME port")
+		httpPort := flags.Int("http-port", 9080, "published LAN browser or HTTP redirect/ACME port")
 		httpsPort := flags.Int("https-port", 9443, "published application HTTPS port")
 		legacyToken := flags.Bool("legacy-server-token", false, "generate a private legacy Bridge Server Token")
 		projectName := flags.String("project-name", "agentroom", "stable Docker Compose project identity")
@@ -176,6 +176,21 @@ func run(ctx context.Context, arguments []string) error {
 		return control.MigratePrivateHostname(ctx, controller.PrivateHostnameMigrationOptions{
 			DataRoot: *dataRoot,
 			Hostname: *hostname,
+		})
+	case "migrate-browser-transport":
+		flags := flag.NewFlagSet("migrate-browser-transport", flag.ContinueOnError)
+		flags.SetOutput(os.Stderr)
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
+		mode := flags.String("mode", "", "target browser transport: lan_http or direct_https")
+		if err := flags.Parse(arguments[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 || (*mode != "lan_http" && *mode != "direct_https") {
+			return fmt.Errorf("migrate-browser-transport requires --mode lan_http or --mode direct_https and accepts flags only")
+		}
+		return control.MigrateBrowserTransport(ctx, controller.BrowserTransportMigrationOptions{
+			DataRoot: *dataRoot,
+			Mode:     *mode,
 		})
 	default:
 		return fmt.Errorf("unknown command %q", arguments[0])

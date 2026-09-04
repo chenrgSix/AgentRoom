@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -379,6 +380,9 @@ func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int
 		"package.json":                       "{}\n",
 		"package-lock.json":                  "{}\n",
 		"deploy/Caddyfile":                   "https://example.invalid {}\n",
+		"deploy/app.caddy":                   "reverse_proxy agentroom:3000\n",
+		"deploy/http/redirect.caddy":         "redir https://example.invalid{uri}\n",
+		"deploy/http/lan-app.caddy":          "import /etc/caddy/app-profile.caddy\n",
 		"deploy/tls/public-ca.caddy":         "tls {\n  issuer acme\n}\n",
 		"deploy/tls/private-scoped-ca.caddy": "tls internal\n",
 		"deploy/tls/internal-ca.caddy":       "tls internal\n",
@@ -1328,6 +1332,35 @@ func TestReadinessDialsLocalIngressWhileVerifyingRecordedHostname(t *testing.T) 
 	}
 }
 
+func TestReadinessRequiresTheSeparateLANBrowserIngressWithoutFollowingRedirects(t *testing.T) {
+	now := time.Now().UTC()
+	origin, caPath, digest := startHostReadinessServer(
+		t, "central-unresolvable.invalid", now,
+	)
+	status := http.StatusOK
+	browserServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+	}))
+	defer browserServer.Close()
+	browserURL, err := url.Parse(browserServer.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserOrigin := "http://central-unresolvable.invalid:" + browserURL.Port()
+	input := ReadinessInput{
+		PublicOrigin: origin, BrowserOrigin: browserOrigin, LocalCARoot: caPath,
+		TLSProfile: "private_scoped_ca", ExpectedCADigest: digest,
+		Timeout: 2 * time.Second,
+	}
+	if err := checkReadiness(context.Background(), input); err != nil {
+		t.Fatalf("separate LAN browser readiness failed: %v", err)
+	}
+	status = http.StatusPermanentRedirect
+	if err := checkReadiness(context.Background(), input); err == nil || !strings.Contains(err.Error(), "HTTP 308") {
+		t.Fatalf("LAN browser redirect was accepted: %v", err)
+	}
+}
+
 func TestBackupPassesCurrentAndLegacyReleaseEnvironmentAliases(t *testing.T) {
 	root := t.TempDir()
 	releaseDir := createRelease(t, root, "v1.2.3", 1)
@@ -1538,6 +1571,63 @@ func TestSupportedHostAndNetworkModeValidation(t *testing.T) {
 	if !bytes.Contains(value, []byte("CONVENE_WIRE_BIND_ADDRESS=0.0.0.0")) {
 		t.Fatal("direct_https did not publish through the direct bind boundary")
 	}
+}
+
+func TestLANHTTPInstallKeepsPrivateHTTPSBridgeAndRendersSeparateBrowserIngress(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "lan-http")
+	fixedNow := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	var readiness ReadinessInput
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	runner.hook = func(command Command) {
+		if !strings.Contains(command.Name+" "+strings.Join(command.Args, " "), " up ") {
+			return
+		}
+		manifest, found, loadErr := loadManifest(installationPaths(dataRoot).ManifestPath)
+		if loadErr != nil || !found {
+			t.Fatalf("load LAN manifest: found=%v err=%v", found, loadErr)
+		}
+		caPath := privateCARootPath(manifest, activePrivateCAID(manifest))
+		if _, statErr := os.Stat(caPath); errors.Is(statErr, os.ErrNotExist) {
+			writeTestCA(t, caPath, fixedNow)
+		}
+	}
+	dependencies := testDependencies(runner, &bytes.Buffer{})
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		readiness = input
+		return nil
+	}
+	options := installOptions(releaseDir, dataRoot)
+	options.Mode = "lan_http"
+	options.Domain = "central.local"
+	options.PublicOrigin = "https://central.local:19443"
+	installation, err := New(dependencies).Install(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installation.Manifest.Mode != "lan_http" || installation.Manifest.TLSProfile != "private_scoped_ca" ||
+		readiness.PublicOrigin != options.PublicOrigin || readiness.BrowserOrigin != "http://central.local:19080" {
+		t.Fatalf("LAN transport identity was not separated: manifest=%+v readiness=%+v", installation.Manifest, readiness)
+	}
+	environment, err := os.ReadFile(installation.EnvironmentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`CONVENE_WIRE_BROWSER_ORIGIN="http://central.local:19080"`,
+		`CONVENE_WIRE_PUBLIC_ORIGIN="https://central.local:19443"`,
+		`deploy/http/lan-app.caddy`,
+	} {
+		if !bytes.Contains(environment, []byte(expected)) {
+			t.Fatalf("LAN environment omitted %q:\n%s", expected, environment)
+		}
+	}
+	invalid := options
+	invalid.DataRoot = filepath.Join(root, "invalid-lan")
+	invalid.TLSProfile = "public_ca"
+	_, err = New(dependencies).normalizeInstallOptions(invalid)
+	requireActionCode(t, err, "TLS_PROFILE_INVALID")
 }
 
 func TestBackupRestoreAndUninstallDelegateWithoutPurgingData(t *testing.T) {

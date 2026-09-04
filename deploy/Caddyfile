@@ -5,24 +5,10 @@
 }
 
 http://{$CONVENE_WIRE_DOMAIN} {
-	redir {$CONVENE_WIRE_PUBLIC_ORIGIN}{uri} permanent
+	import /etc/caddy/http-profile.caddy
 }
 
 https://{$CONVENE_WIRE_DOMAIN} {
 	import /etc/caddy/tls-profile.caddy
-
-	encode zstd gzip
-
-	@metrics path /api/metrics
-	respond @metrics 404
-
-	header {
-		-Server
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-		Referrer-Policy "same-origin"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-	}
-
-	reverse_proxy agentroom:3000
+	import /etc/caddy/app-profile.caddy
 }

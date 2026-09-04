@@ -14,6 +14,8 @@ const baseEnvironment = {
   CONVENE_WIRE_HTTP_PORT: "80",
   CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: "./deploy/secrets/owner_recovery_token",
   CONVENE_WIRE_PUBLIC_ORIGIN: "https://team.example.com:9443",
+  CONVENE_WIRE_BROWSER_ORIGIN: "https://team.example.com:9443",
+  CONVENE_WIRE_CADDY_HTTP_PROFILE_FILE: "./deploy/http/redirect.caddy",
   CONVENE_WIRE_CADDY_TLS_PROFILE_FILE: "./deploy/tls/public-ca.caddy",
   CONVENE_WIRE_CADDY_PKI_PROFILE_FILE: "./deploy/tls/pki-none.caddy"
 };
@@ -42,11 +44,21 @@ assert.equal(
   defaultConfiguration.services.caddy.environment.CONVENE_WIRE_PUBLIC_ORIGIN,
   "https://team.example.com:9443"
 );
+assert.equal(
+  defaultConfiguration.services.agentroom.environment.CONVENE_WIRE_BROWSER_ORIGIN,
+  "https://team.example.com:9443"
+);
 assert.match(
   defaultConfiguration.services.caddy.volumes.find(
     ({ target }) => target === "/etc/caddy/tls-profile.caddy"
   ).source,
   /deploy\/tls\/public-ca\.caddy$/u
+);
+assert.match(
+  defaultConfiguration.services.caddy.volumes.find(
+    ({ target }) => target === "/etc/caddy/http-profile.caddy"
+  ).source,
+  /deploy\/http\/redirect\.caddy$/u
 );
 assert.equal(defaultConfiguration.services.agentroom.user, undefined);
 assert.deepEqual(defaultConfiguration.services.agentroom.cap_drop, ["ALL"]);
@@ -96,20 +108,43 @@ assert.equal(
 );
 
 const caddyfile = readFileSync(new URL("../deploy/Caddyfile", import.meta.url), "utf8");
+const appProfile = readFileSync(new URL("../deploy/app.caddy", import.meta.url), "utf8");
+const redirectProfile = readFileSync(new URL("../deploy/http/redirect.caddy", import.meta.url), "utf8");
+const lanProfile = readFileSync(new URL("../deploy/http/lan-app.caddy", import.meta.url), "utf8");
 assert.match(caddyfile, /auto_https disable_redirects/u);
 assert.match(caddyfile, /default_sni \{\$CONVENE_WIRE_DOMAIN\}/u);
-assert.match(caddyfile, /reverse_proxy agentroom:3000/u);
+assert.match(caddyfile, /import \/etc\/caddy\/http-profile\.caddy/u);
+assert.match(caddyfile, /import \/etc\/caddy\/app-profile\.caddy/u);
+assert.match(appProfile, /reverse_proxy agentroom:3000/u);
 assert.match(
-  caddyfile,
+  redirectProfile,
   /redir \{\$CONVENE_WIRE_PUBLIC_ORIGIN\}\{uri\} permanent/u
 );
+assert.match(lanProfile, /import \/etc\/caddy\/app-profile\.caddy/u);
 assert.match(caddyfile, /import \/etc\/caddy\/tls-profile\.caddy/u);
 assert.match(caddyfile, /import \/etc\/caddy\/pki-profile\.caddy/u);
 assert.match(
-  caddyfile,
+  appProfile,
   /Content-Security-Policy "[^"]*img-src 'self' data:;[^"]*object-src 'none'[^"]*"/u
 );
-assert.doesNotMatch(caddyfile, /img-src[^;]*(?:https?:|\*)/u);
+assert.doesNotMatch(appProfile, /img-src[^;]*(?:https?:|\*)/u);
+
+const lanEnvironment = {
+  ...baseEnvironment,
+  CONVENE_WIRE_BROWSER_ORIGIN: "http://team.example.com",
+  CONVENE_WIRE_CADDY_HTTP_PROFILE_FILE: "./deploy/http/lan-app.caddy"
+};
+const lanConfiguration = renderCompose(lanEnvironment);
+assert.equal(
+  lanConfiguration.services.agentroom.environment.CONVENE_WIRE_BROWSER_ORIGIN,
+  "http://team.example.com"
+);
+assert.match(
+  lanConfiguration.services.caddy.volumes.find(
+    ({ target }) => target === "/etc/caddy/http-profile.caddy"
+  ).source,
+  /deploy\/http\/lan-app\.caddy$/u
+);
 
 const publicProfile = readFileSync(
   new URL("../deploy/tls/public-ca.caddy", import.meta.url),
@@ -180,6 +215,33 @@ for (const profile of ["public-ca", "private-scoped-ca", "internal-ca", "legacy-
       env: {
         ...baseEnvironment,
         CONVENE_WIRE_CADDY_TLS_PROFILE_FILE: `./deploy/tls/${profile}.caddy`
+      },
+      stdio: "inherit"
+    }
+  );
+}
+
+for (const profile of ["redirect", "lan-app"]) {
+  execFileSync(
+    "docker",
+    [
+      "compose",
+      "run",
+      "--rm",
+      "--no-deps",
+      "caddy",
+      "caddy",
+      "validate",
+      "--config",
+      "/etc/caddy/Caddyfile",
+      "--adapter",
+      "caddyfile"
+    ],
+    {
+      cwd: repositoryRoot,
+      env: {
+        ...baseEnvironment,
+        CONVENE_WIRE_CADDY_HTTP_PROFILE_FILE: `./deploy/http/${profile}.caddy`
       },
       stdio: "inherit"
     }

@@ -242,6 +242,7 @@ type Installation struct {
 
 type ReadinessInput struct {
 	PublicOrigin     string
+	BrowserOrigin    string
 	LocalCARoot      string
 	TLSProfile       string
 	ExpectedCADigest string
@@ -494,6 +495,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	}
 	readiness := ReadinessInput{
 		PublicOrigin:     options.PublicOrigin,
+		BrowserOrigin:    browserOrigin(options.Mode, options.Domain, options.HTTPPort, options.PublicOrigin),
 		LocalCARoot:      privateCARootPath(manifest, activePrivateCAID(manifest)),
 		TLSProfile:       options.TLSProfile,
 		ExpectedCADigest: manifest.CACertificateSHA256,
@@ -525,8 +527,9 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		trustSummary += " (CA " + redactedDigest(manifest.CACertificateSHA256) + ")"
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"ConveneWire %s is ready at %s\nData root: %s\nOwner recovery file: %s\nTLS profile: %s\nInstallation ID: %s\nNext: open the origin and claim the Owner using the recovery file.\n",
-		manifest.ReleaseVersion, manifest.PublicOrigin, manifest.DataRoot,
+		"ConveneWire %s is ready.\nBrowser: %s\nBridge: %s\n%s\nData root: %s\nOwner recovery file: %s\nTLS profile: %s\nInstallation ID: %s\nNext: open the browser origin and claim the Owner using the recovery file.\n",
+		manifest.ReleaseVersion, browserOrigin(manifest.Mode, manifest.Domain, manifest.HTTPPort, manifest.PublicOrigin),
+		manifest.PublicOrigin, browserTransportNotice(manifest.Mode), manifest.DataRoot,
 		installation.OwnerSecretPath, trustSummary, manifest.InstallationID,
 	)
 	return installation, nil
@@ -558,8 +561,8 @@ func (controller *Controller) normalizeInstallOptions(raw InstallOptions) (Insta
 	if !hashPattern.MatchString(options.ChecksumsSHA256) {
 		return InstallOptions{}, actionError("CHECKSUM_PIN_INVALID", "a published SHA256SUMS digest is required", "Pass the 64-character SHA-256 value published separately for this exact central release.", nil)
 	}
-	if options.Mode != "local" && options.Mode != "direct_https" {
-		return InstallOptions{}, actionError("NETWORK_MODE_INVALID", "network mode must be local or direct_https", "Use local for loopback-only access or direct_https for a stable LAN/domain origin.", nil)
+	if options.Mode != "local" && options.Mode != "direct_https" && options.Mode != "lan_http" {
+		return InstallOptions{}, actionError("NETWORK_MODE_INVALID", "network mode must be local, lan_http, or direct_https", "Use local for loopback-only access, lan_http for convenient private-LAN browser access, or direct_https for end-to-end browser HTTPS.", nil)
 	}
 	options.TLSProfile = strings.TrimSpace(options.TLSProfile)
 	if options.TLSProfile != "" && options.TLSProfile != "public_ca" &&
@@ -568,6 +571,9 @@ func (controller *Controller) normalizeInstallOptions(raw InstallOptions) (Insta
 	}
 	if options.Mode == "local" && options.TLSProfile != "" {
 		return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "local mode does not accept a TLS profile", "Omit --tls-profile for loopback-only local mode.", nil)
+	}
+	if options.Mode == "lan_http" && options.TLSProfile != "" {
+		return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "lan_http automatically retains private_scoped_ca for Bridge traffic", "Omit --tls-profile; choose direct_https when the browser itself must use HTTPS.", nil)
 	}
 	options.ProjectName = strings.TrimSpace(options.ProjectName)
 	if options.ProjectName == "" {
@@ -604,8 +610,8 @@ func (controller *Controller) normalizeInstallOptions(raw InstallOptions) (Insta
 	if options.Mode == "local" && !loopback {
 		return InstallOptions{}, actionError("LOCAL_ORIGIN_INVALID", "local mode requires a loopback origin", "Use localhost or 127.0.0.1, or select direct_https.", nil)
 	}
-	if options.Mode == "direct_https" && loopback {
-		return InstallOptions{}, actionError("DIRECT_ORIGIN_INVALID", "direct_https requires a non-loopback stable origin", "Use the LAN IP or owned DNS name clients will verify.", nil)
+	if options.Mode != "local" && loopback {
+		return InstallOptions{}, actionError("DIRECT_ORIGIN_INVALID", "LAN and direct HTTPS modes require a non-loopback stable origin", "Use the LAN IP or owned DNS name clients will verify.", nil)
 	}
 	options.PublicOrigin = origin.String()
 	return options, nil
@@ -624,6 +630,8 @@ func resolveInstallTLSProfile(options InstallOptions, existing Manifest, exists 
 	if !exists && options.TLSProfile == "" {
 		if options.Mode == "local" {
 			options.TLSProfile = "local"
+		} else if options.Mode == "lan_http" {
+			options.TLSProfile = "private_scoped_ca"
 		} else {
 			options.TLSProfile = "public_ca"
 		}
@@ -633,6 +641,9 @@ func resolveInstallTLSProfile(options InstallOptions, existing Manifest, exists 
 			return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "local installations must retain loopback-local TLS", "Omit --tls-profile for local mode.", nil)
 		}
 		return options, nil
+	}
+	if options.Mode == "lan_http" && options.TLSProfile != "private_scoped_ca" {
+		return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "lan_http must retain private_scoped_ca for Bridge traffic", "Use the controller-selected private trust profile or migrate explicitly back to direct_https.", nil)
 	}
 	if options.TLSProfile == "public_ca" && !publicCAHostname(options.Domain) {
 		return InstallOptions{}, actionError("PUBLIC_CA_HOST_INVALID", "public_ca requires a DNS hostname eligible for public certificate issuance", "Use an owned public DNS hostname, or explicitly select private_scoped_ca for a private IP or name.", nil)
@@ -1086,6 +1097,10 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 	if err != nil {
 		return err
 	}
+	httpProfilePath := filepath.Join(options.ReleaseDir, "deploy", "http", "redirect.caddy")
+	if options.Mode == "lan_http" {
+		httpProfilePath = filepath.Join(options.ReleaseDir, "deploy", "http", "lan-app.caddy")
+	}
 	deploymentTrustFile := ""
 	deploymentTrustRotationFile := ""
 	if options.TLSProfile == "private_scoped_ca" {
@@ -1099,6 +1114,7 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 	environment := strings.Join([]string{
 		"CONVENE_WIRE_DOMAIN=" + dotenvQuote(options.Domain),
 		"CONVENE_WIRE_PUBLIC_ORIGIN=" + dotenvQuote(options.PublicOrigin),
+		"CONVENE_WIRE_BROWSER_ORIGIN=" + dotenvQuote(browserOrigin(options.Mode, options.Domain, options.HTTPPort, options.PublicOrigin)),
 		"CONVENE_WIRE_BIND_ADDRESS=" + bindAddress,
 		"CONVENE_WIRE_HTTP_PORT=" + strconv.Itoa(options.HTTPPort),
 		"CONVENE_WIRE_HTTPS_PORT=" + strconv.Itoa(options.HTTPSPort),
@@ -1109,6 +1125,7 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		"CONVENE_WIRE_CADDY_IMAGE=" + dotenvQuote(installation.Manifest.CaddyImage),
 		"CONVENE_WIRE_DATABASE_PATH=/data/agent-room.sqlite",
 		"CONVENE_WIRE_CADDY_TLS_PROFILE_FILE=" + dotenvQuote(tlsProfilePath),
+		"CONVENE_WIRE_CADDY_HTTP_PROFILE_FILE=" + dotenvQuote(httpProfilePath),
 		"CONVENE_WIRE_CADDY_PKI_PROFILE_FILE=" + dotenvQuote(caddyPKIProfilePath(options, installation)),
 		"CONVENE_WIRE_DEPLOYMENT_TRUST_FILE=" + dotenvQuote(deploymentTrustFile),
 		"CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE=" + dotenvQuote(deploymentTrustRotationFile),
@@ -1197,6 +1214,24 @@ func caddyTLSProfilePath(releaseDir, profile string) (string, error) {
 		return "", fmt.Errorf("unsupported TLS profile %q", profile)
 	}
 	return filepath.Join(releaseDir, "deploy", "tls", name), nil
+}
+
+func browserOrigin(mode, domain string, httpPort int, publicOrigin string) string {
+	if mode != "lan_http" {
+		return publicOrigin
+	}
+	host := domain
+	if httpPort != 80 {
+		host = net.JoinHostPort(domain, strconv.Itoa(httpPort))
+	}
+	return (&url.URL{Scheme: "http", Host: host}).String()
+}
+
+func browserTransportNotice(mode string) string {
+	if mode == "lan_http" {
+		return "Browser transport: LAN HTTP is convenient but unencrypted; use it only on a trusted private LAN."
+	}
+	return "Browser transport: HTTPS."
 }
 
 func caddyPKIProfilePath(options InstallOptions, installation Installation) string {
@@ -1327,8 +1362,11 @@ func validateManifest(manifest Manifest) error {
 		}
 		return nil
 	}
-	if manifest.Mode != "direct_https" {
+	if manifest.Mode != "direct_https" && manifest.Mode != "lan_http" {
 		return fmt.Errorf("network mode is invalid")
+	}
+	if manifest.Mode == "lan_http" && manifest.TLSProfile != "private_scoped_ca" {
+		return fmt.Errorf("lan_http manifest must retain private scoped trust")
 	}
 	switch manifest.TLSProfile {
 	case "public_ca", "manual_ca":
@@ -1669,7 +1707,8 @@ func checkReadiness(ctx context.Context, input ReadinessInput) error {
 			return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", port))
 		},
 	}
-	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	deadline := time.Now().Add(input.Timeout)
 	var lastError error
 	for time.Now().Before(deadline) {
@@ -1695,6 +1734,24 @@ func checkReadiness(ctx context.Context, input ReadinessInput) error {
 	}
 	if lastError != nil {
 		return lastError
+	}
+	browser := input.BrowserOrigin
+	if browser == "" {
+		browser = input.PublicOrigin
+	}
+	if browser != input.PublicOrigin {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, browser+"/api/health/ready", nil)
+		if err != nil {
+			return err
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			return fmt.Errorf("browser ingress probe failed: %w", err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return fmt.Errorf("browser ingress returned HTTP %d", response.StatusCode)
+		}
 	}
 	key := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
