@@ -773,6 +773,15 @@ live reconciliation to the changed Room. Reducer tests cover ordered reasoning
 and tool lifecycle, while Team-change tests cover aggregated Room hints and the
 full-refresh compatibility fallback.
 
+`WEB-066` owns a presentation-only Graphite Control Plane redesign. A shared
+dark/light token system makes canvas and structural surfaces neutral, assigns
+brand/selection/primary interaction to indigo, and reserves green for healthy
+or successful state. Shell, navigation, forms, cards, overlays, Room, Work,
+Plan, Evidence and management surfaces must share legible typography and one
+focus/semantic-state hierarchy without changing component ownership, commands,
+authorization, navigation or authoritative fact order. Its frozen acceptance
+goal is `docs/acceptance/web-066-central-visual-system-goal.md`.
+
 ## Dependencies
 
 Team/Room, Task Collaboration, Registry, Run Orchestration, Runtime Adapters,
