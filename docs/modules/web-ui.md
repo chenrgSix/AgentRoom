@@ -408,6 +408,16 @@ installation, and cannot make another browser trust a private certificate; the
 UI never asks a user to click through a certificate warning or install a root as
 the normal path.
 
+The configured local Bridge/Desktop Console may separately offer the BRG-072
+private-browser trust assistant. It is not part of pairing and never appears in
+the Central Web UI. It requires a deliberate local click, displays the complete
+CA fingerprint and warns that installing a root is persistent current-user
+trust. Copying its self-contained Windows command performs no network request,
+does not issue or include a client-entry ticket and does not mutate trust by
+itself. A paired-Central or trust change closes the assistant and clears the
+stale command. Public CA remains the normal browser path; neither surface asks
+the user to bypass a certificate warning.
+
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The
 timeline shows one logical round without a hard-limit denominator. While its

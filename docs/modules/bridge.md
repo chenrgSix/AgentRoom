@@ -1493,3 +1493,21 @@ Contracts, Registry publication, Security pairing, and Runtime Adapters.
 ## Client owner collaboration entry
 
 ADR-0035 adds explicit Team/Room entry to the authenticated local Console. Its independent human-access key lives in a separate owner-only file and never enters Runtime inputs, Device credential serialization, diagnostics or status. Entry uses a one-use fragment ticket and does not bypass browser TLS. Existing ownership is confirmed through deliberate re-pairing; canceled or superseded pairing and Central switching cannot carry human grants across identities.
+
+BRG-072 adds an optional private-browser trust assistant to that same local
+Console. For a currently validated `private_scoped_ca` credential, Bridge may
+derive a self-contained Windows PowerShell command from the exact retained
+public CA certificate and its full canonical DER SHA-256 digest. The command
+may install only that exact certificate into the invoking user's root store,
+after rechecking the digest, and must remove its uniquely owned temporary file
+on success or failure. Bridge never executes the command or silently mutates an
+OS trust store.
+
+This projection is compatibility guidance, not Team or login authority. It
+contains no private key, Device/Server token, pairing proof, client-entry
+ticket, member or Room identity, repository value, Runtime setting or local
+path. It is invalidated when the paired Central identity, trust epoch or CA
+digest changes. Generating a one-use client-entry ticket remains a separate
+explicit action after the target browser has been restarted. Public CA remains
+the normal zero-setup browser path; native trust-store success requires
+platform evidence and is never inferred from copying the command.

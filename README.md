@@ -73,7 +73,12 @@ The paired client offers **进入 Team** and **选择房间 → 打开房间**. 
 shows the member identity and destination before confirmation. This entry has
 ordinary-member authority in that Team, even when the client owner is a Team
 Owner. Full administrator login remains separate. Browser certificate trust
-is still required when Central uses a private CA.
+is still required when Central uses a private CA. In that mode, the paired
+Bridge/Desktop can prepare another Windows browser with an explicit,
+fingerprint-verified current-user PowerShell command, so no certificate file
+has to be found or transferred manually. The command still requires the user
+to approve the persistent trust change; public-CA deployment is the only
+zero-install path for arbitrary browsers.
 
 Adding an Agent in Room settings also selects its owner by default. Uncheck
 that person for Agent-only access. Removing the person remains effective after
