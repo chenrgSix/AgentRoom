@@ -1,0 +1,930 @@
+/*
+ * WEB-066 Graphite Control Plane
+ *
+ * This file is deliberately loaded after every feature stylesheet. It is the
+ * presentation authority for shared color, type, surface and interaction
+ * roles while older feature CSS continues to own layout.
+ */
+:root {
+  --cw-canvas: #0a0c10;
+  --cw-canvas-subtle: #0e1117;
+  --cw-sidebar: #0c0f15;
+  --cw-surface: #12161d;
+  --cw-surface-raised: #171c24;
+  --cw-surface-inset: #0d1117;
+  --cw-surface-hover: #1d2330;
+  --cw-surface-active: #242947;
+  --cw-border-subtle: #202632;
+  --cw-border: #2b3340;
+  --cw-border-strong: #3b4658;
+  --cw-text: #f2f4f7;
+  --cw-text-secondary: #a8b1c0;
+  --cw-text-muted: #7d8797;
+  --cw-accent: #7c83ff;
+  --cw-accent-hover: #969bff;
+  --cw-accent-ink: #ffffff;
+  --cw-accent-soft: rgb(124 131 255 / 14%);
+  --cw-accent-border: rgb(124 131 255 / 42%);
+  --cw-focus: #a5a9ff;
+  --cw-success: #42cf91;
+  --cw-success-soft: rgb(66 207 145 / 13%);
+  --cw-success-border: rgb(66 207 145 / 38%);
+  --cw-warning: #e8b45d;
+  --cw-warning-soft: rgb(232 180 93 / 13%);
+  --cw-warning-border: rgb(232 180 93 / 38%);
+  --cw-danger: #f0787f;
+  --cw-danger-soft: rgb(240 120 127 / 12%);
+  --cw-danger-border: rgb(240 120 127 / 38%);
+  --cw-info: #6eafff;
+  --cw-info-soft: rgb(110 175 255 / 12%);
+  --cw-shadow-float: 0 24px 70px rgb(0 0 0 / 42%);
+  --cw-shadow-subtle: 0 12px 34px rgb(0 0 0 / 16%);
+  --cw-radius-control: 9px;
+  --cw-radius-panel: 13px;
+  --cw-font-sans: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cw-font-mono: "SFMono-Regular", "Cascadia Code", Consolas, ui-monospace, monospace;
+  color: var(--cw-text);
+  background: var(--cw-canvas);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --cw-canvas: #f4f6f9;
+  --cw-canvas-subtle: #eef1f6;
+  --cw-sidebar: #f8f9fc;
+  --cw-surface: #ffffff;
+  --cw-surface-raised: #fbfcfe;
+  --cw-surface-inset: #eff2f6;
+  --cw-surface-hover: #f0f2fb;
+  --cw-surface-active: #e8eaff;
+  --cw-border-subtle: #e5e8ef;
+  --cw-border: #d7dce6;
+  --cw-border-strong: #bdc5d2;
+  --cw-text: #171a21;
+  --cw-text-secondary: #566171;
+  --cw-text-muted: #7a8494;
+  --cw-accent: #5e65e8;
+  --cw-accent-hover: #4f56d8;
+  --cw-accent-ink: #ffffff;
+  --cw-accent-soft: rgb(94 101 232 / 10%);
+  --cw-accent-border: rgb(94 101 232 / 34%);
+  --cw-focus: #4f56d8;
+  --cw-success: #16875a;
+  --cw-success-soft: rgb(22 135 90 / 9%);
+  --cw-success-border: rgb(22 135 90 / 28%);
+  --cw-warning: #9b6613;
+  --cw-warning-soft: rgb(183 119 17 / 9%);
+  --cw-warning-border: rgb(155 102 19 / 28%);
+  --cw-danger: #c74450;
+  --cw-danger-soft: rgb(199 68 80 / 8%);
+  --cw-danger-border: rgb(199 68 80 / 26%);
+  --cw-info: #176fc1;
+  --cw-info-soft: rgb(23 111 193 / 9%);
+  --cw-shadow-float: 0 24px 64px rgb(31 39 55 / 18%);
+  --cw-shadow-subtle: 0 10px 28px rgb(31 39 55 / 7%);
+  color-scheme: light;
+}
+
+body {
+  background: var(--cw-canvas);
+  color: var(--cw-text);
+  font-family: var(--cw-font-sans);
+}
+
+::selection {
+  background: var(--cw-accent);
+  color: var(--cw-accent-ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--cw-font-sans);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline-color: var(--cw-focus);
+}
+
+/* Product shell and navigation */
+:root[data-theme] .product-shell {
+  --shell-panel: var(--cw-sidebar);
+  --shell-border: var(--cw-border-subtle);
+  --shell-muted: var(--cw-text-secondary);
+  --shell-hover: var(--cw-surface-hover);
+  --shell-active: var(--cw-surface-active);
+  --shell-ink: var(--cw-text);
+  --shell-accent: var(--cw-accent-hover);
+  background: var(--cw-canvas);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .product-sidebar {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-sidebar);
+}
+
+:root[data-theme] .product-brand {
+  color: var(--cw-text);
+  font-weight: 720;
+  letter-spacing: -.025em;
+}
+
+:root[data-theme] .product-brand .brand-mark {
+  border-color: var(--cw-accent-border);
+  background: linear-gradient(145deg, #767dff, #535ae0);
+  box-shadow: 0 10px 28px rgb(92 100 232 / 22%);
+  color: #fff;
+}
+
+:root[data-theme] .product-team-picker select,
+:root[data-theme] .product-room-picker,
+:root[data-theme] .inventory-toolbar input,
+:root[data-theme] .inventory-toolbar select {
+  border-color: var(--cw-border);
+  background: var(--cw-surface);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .product-area-switch {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-surface-inset);
+}
+
+:root[data-theme] .product-area-switch [aria-current],
+:root[data-theme] .product-destinations button[aria-current],
+:root[data-theme] .product-room-list button[aria-current] {
+  background: var(--cw-accent-soft);
+  box-shadow: inset 3px 0 0 var(--cw-accent);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .product-area-switch [aria-current] {
+  box-shadow: inset 0 0 0 1px var(--cw-accent-border);
+}
+
+:root[data-theme] .product-sidebar button:hover:not(:disabled) {
+  background: var(--cw-surface-hover);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .product-section-heading,
+:root[data-theme] .product-sidebar-note,
+:root[data-theme] .product-participants > summary {
+  color: var(--cw-text-muted);
+  font-size: 11px;
+}
+
+:root[data-theme] .product-participants {
+  border-color: var(--cw-border-subtle);
+}
+
+:root[data-theme] .product-shell .workspace {
+  background: var(--cw-canvas);
+}
+
+:root[data-theme] .product-shell .workspace-header {
+  border-color: var(--cw-border-subtle);
+  background: color-mix(in srgb, var(--cw-canvas) 88%, transparent);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 2%);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+:root[data-theme] .product-shell .workspace-header h2,
+:root[data-theme] .management-intro h3,
+:root[data-theme] .work-intro h3,
+:root[data-theme] .work-detail-header h3 {
+  color: var(--cw-text);
+  letter-spacing: -.035em;
+}
+
+:root[data-theme] .header-account {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .header-chat,
+:root[data-theme] .header-locale,
+:root[data-theme] .header-theme,
+:root[data-theme] .header-sign-out,
+:root[data-theme] .header-room-create button,
+:root[data-theme] .header-room-more {
+  border-color: var(--cw-border);
+  background: var(--cw-surface);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .header-chat:hover,
+:root[data-theme] .header-chat.active,
+:root[data-theme] .header-locale:hover,
+:root[data-theme] .header-theme:hover,
+:root[data-theme] .header-sign-out:hover,
+:root[data-theme] .header-room-more:hover,
+:root[data-theme] .header-room-more[aria-expanded="true"] {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .header-room-menu,
+:root[data-theme] .product-dialog,
+:root[data-theme] .modal-card {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-raised);
+  box-shadow: var(--cw-shadow-float);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .header-room-menu button {
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .header-room-menu button:hover:not(:disabled) {
+  background: var(--cw-surface-hover);
+  color: var(--cw-text);
+}
+
+/* Controls */
+:root[data-theme] .product-shell input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme] .product-shell select,
+:root[data-theme] .product-shell textarea,
+:root[data-theme] .access-shell input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme] .access-shell select,
+:root[data-theme] .access-shell textarea,
+:root[data-theme] .modal-card input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme] .modal-card select,
+:root[data-theme] .modal-card textarea {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-inset);
+  color: var(--cw-text);
+  caret-color: var(--cw-accent);
+}
+
+:root[data-theme] input::placeholder,
+:root[data-theme] textarea::placeholder {
+  color: var(--cw-text-muted);
+}
+
+:root[data-theme] .product-shell button,
+:root[data-theme] .access-shell button,
+:root[data-theme] .modal-card button {
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+:root[data-theme] :is(
+  .work-create-task,
+  .primary-action,
+  .composer-send,
+  .task-context > button,
+  .access-primary,
+  .access-form button,
+  .onboarding-form button,
+  .action-card button,
+  .approval-form > div > button,
+  .device-pairing-start button,
+  .pairing-actions button.primary-action,
+  .provisioning-code-row button,
+  .product-room-form button,
+  .hosted-form-actions button:last-child,
+  .agent-setup-choice.hosted > button
+) {
+  border-color: var(--cw-accent);
+  background: var(--cw-accent);
+  color: var(--cw-accent-ink);
+  box-shadow: 0 7px 18px rgb(92 100 232 / 18%);
+}
+
+:root[data-theme] :is(
+  .work-create-task,
+  .primary-action,
+  .composer-send,
+  .task-context > button,
+  .access-primary,
+  .access-form button,
+  .onboarding-form button,
+  .action-card button,
+  .approval-form > div > button,
+  .device-pairing-start button,
+  .pairing-actions button.primary-action,
+  .provisioning-code-row button,
+  .product-room-form button,
+  .hosted-form-actions button:last-child,
+  .agent-setup-choice.hosted > button
+):hover:not(:disabled) {
+  border-color: var(--cw-accent-hover);
+  background: var(--cw-accent-hover);
+  transform: translateY(-1px);
+}
+
+:root[data-theme] :is(
+  .secondary-action,
+  .work-back,
+  .work-inline-link,
+  .work-refresh,
+  .work-panel-card button,
+  .work-run-list button,
+  .work-review-controls button,
+  .work-follow-ups button,
+  .work-plan-toolbar button,
+  .work-plan-surface section button,
+  .work-evidence-toolbar button,
+  .work-evidence-command button,
+  .task-criteria-templates button,
+  .first-reply-guide button,
+  .history-toolbar button,
+  .agent-setup-choice > button,
+  .hosted-room-links button,
+  .management-page-actions button,
+  .account-preference button,
+  .member-actions > button,
+  .agent-inventory-row > button,
+  .owner-recovery-dialog button
+) {
+  border-color: var(--cw-border-strong);
+  background: var(--cw-surface-raised);
+  color: var(--cw-text-secondary);
+  box-shadow: none;
+}
+
+:root[data-theme] :is(
+  .secondary-action,
+  .work-back,
+  .work-inline-link,
+  .work-refresh,
+  .work-panel-card button,
+  .work-run-list button,
+  .work-review-controls button,
+  .work-follow-ups button,
+  .work-plan-toolbar button,
+  .work-plan-surface section button,
+  .work-evidence-toolbar button,
+  .work-evidence-command button,
+  .task-criteria-templates button,
+  .first-reply-guide button,
+  .history-toolbar button,
+  .agent-setup-choice > button,
+  .hosted-room-links button,
+  .management-page-actions button,
+  .account-preference button,
+  .member-actions > button,
+  .agent-inventory-row > button,
+  .owner-recovery-dialog button
+):hover:not(:disabled) {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .danger-action,
+:root[data-theme] .device-card > button,
+:root[data-theme] .header-room-menu button.archive-room-action {
+  border-color: var(--cw-danger-border);
+  background: var(--cw-danger-soft);
+  color: var(--cw-danger);
+}
+
+/* Shared surfaces and readable metadata */
+:root[data-theme] :is(
+  .metric-card,
+  .work-card,
+  .control-panel,
+  .agent-card,
+  .device-card,
+  .member-card,
+  .action-card,
+  .agent-inventory-row,
+  .agent-setup-choice,
+  .hosted-profile-card,
+  .hosted-create-form,
+  .work-panel-card,
+  .work-run-detail,
+  .work-result-card,
+  .work-artifact-list article,
+  .work-discussion-list article,
+  .work-audit,
+  .artifact-snapshot-card,
+  .memory-candidate-review,
+  .pairing-issued-grid,
+  .provisioning-form,
+  .provisioning-request-list li,
+  .lifecycle-resource-row
+) {
+  border-color: var(--cw-border);
+  background: var(--cw-surface);
+  box-shadow: none;
+  color: var(--cw-text);
+}
+
+:root[data-theme] :is(.metric-card, .work-card, .agent-card, .device-card, .member-card, .agent-inventory-row) {
+  border-radius: var(--cw-radius-panel);
+}
+
+:root[data-theme] :is(.work-card, .agent-card, .device-card, .member-card, .agent-inventory-row):hover {
+  border-color: var(--cw-border-strong);
+}
+
+:root[data-theme] .agent-avatar,
+:root[data-theme] .integration-badge {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .integration-badge.manual,
+:root[data-theme] .status-badge.manual {
+  border-color: color-mix(in srgb, var(--cw-info) 38%, transparent);
+  background: var(--cw-info-soft);
+  color: var(--cw-info);
+}
+
+:root[data-theme] .status-badge {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-inset);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .status-badge:is(.ready, .online) {
+  border-color: var(--cw-success-border);
+  background: var(--cw-success-soft);
+  color: var(--cw-success);
+}
+
+:root[data-theme] :is(
+  .management-intro p,
+  .work-intro p,
+  .work-detail-header p,
+  .inventory-help,
+  .inventory-toolbar > span,
+  .agent-inventory-name p,
+  .account-workspace p,
+  .work-card footer,
+  .work-card-open small,
+  .work-plan-surface dt,
+  .work-evidence-plan-identity dt,
+  .work-evidence-grid dt,
+  .work-evidence-node > header span,
+  .work-evidence-next small,
+  .task-delivery-options p,
+  .task-delivery-options small,
+  .agent-setup-choice > p,
+  .agent-setup-choice > small,
+  .hosted-submit-help,
+  .hosted-room-guidance
+) {
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] :is(
+  .work-facts dt,
+  .work-panel-card dt,
+  .work-run-detail dt,
+  .work-audit dt
+) {
+  color: var(--cw-text-muted);
+}
+
+:root[data-theme] :is(
+  .work-facts dd,
+  .work-panel-card dd,
+  .work-run-detail dd,
+  .work-audit dd
+) {
+  color: var(--cw-text);
+  font-size: 12px;
+}
+
+:root[data-theme] .work-panel-card > p,
+:root[data-theme] .work-panel-card :is(ol, ul) {
+  color: var(--cw-text-secondary);
+  font-size: 12px;
+}
+
+:root[data-theme] .work-panel-card li span {
+  color: var(--cw-text-muted);
+  font-size: 10px;
+}
+
+:root[data-theme] :is(
+  .work-priority,
+  .work-state-row span,
+  .work-attention-list li,
+  .work-detail-badges span,
+  .integration-badge,
+  .policy-badge,
+  .current-user-badge,
+  .work-panel-card dt,
+  .work-run-detail dt,
+  .work-audit dt,
+  .work-facts dt
+) {
+  font-size: 11px;
+}
+
+:root[data-theme] :is(.work-plan-digest, .work-evidence-plan-identity dd, .work-evidence-grid dd, code) {
+  font-family: var(--cw-font-mono);
+}
+
+/* Work, Plan and proof surfaces */
+:root[data-theme] .work-home,
+:root[data-theme] .work-workspace,
+:root[data-theme] .management-workspace {
+  background: var(--cw-canvas);
+}
+
+:root[data-theme] .work-card {
+  background: var(--cw-surface-raised);
+  box-shadow: var(--cw-shadow-subtle);
+}
+
+:root[data-theme] .work-card-open strong,
+:root[data-theme] .work-group > header h4,
+:root[data-theme] .work-empty strong,
+:root[data-theme] .work-panel-card h4,
+:root[data-theme] .work-run-detail h4,
+:root[data-theme] .work-audit h4,
+:root[data-theme] .work-plan-surface h5,
+:root[data-theme] .work-evidence-node h5,
+:root[data-theme] .work-evidence-node h6 {
+  color: var(--cw-text);
+}
+
+:root[data-theme] .work-task-number,
+:root[data-theme] .work-card-open:hover strong,
+:root[data-theme] .work-back,
+:root[data-theme] .work-inline-link {
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .work-facts > div,
+:root[data-theme] .work-panel-card dl > div,
+:root[data-theme] .work-run-detail dl > div,
+:root[data-theme] .work-audit dl > div,
+:root[data-theme] .agent-policy-summary,
+:root[data-theme] .hosted-profile-facts > div {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-surface-inset);
+}
+
+:root[data-theme] .work-tabs,
+:root[data-theme] .connection-tabs,
+:root[data-theme] .work-scope {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-surface-inset);
+}
+
+:root[data-theme] .work-tabs button,
+:root[data-theme] .connection-tabs button,
+:root[data-theme] .work-scope button {
+  color: var(--cw-text-muted);
+  font-size: 12px;
+}
+
+:root[data-theme] .work-tabs button[aria-selected="true"],
+:root[data-theme] .connection-tabs button[aria-selected="true"],
+:root[data-theme] .work-scope button[aria-pressed="true"] {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--cw-accent-border);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] :is(
+  .work-plan-facts article,
+  .work-plan-blockers,
+  .work-plan-graph,
+  .work-plan-diff,
+  .work-plan-editor,
+  .work-plan-review,
+  .work-plan-receipts,
+  .work-plan-pending,
+  .work-plan-empty,
+  .work-plan-error,
+  .work-plan-supersession,
+  .work-evidence-plan-identity > div,
+  .work-evidence-node,
+  .work-evidence-error,
+  .work-evidence-warning
+) {
+  border-color: var(--cw-border);
+  background: var(--cw-surface);
+  color: var(--cw-text);
+}
+
+:root[data-theme] :is(
+  .work-plan-graph article,
+  .work-plan-receipts > ol > li,
+  .work-plan-latest-receipt,
+  .work-plan-supersession-command,
+  .work-plan-supersession-candidate,
+  .work-plan-delegations,
+  .work-plan-delegations > ol > li,
+  .work-evidence-grid > section
+) {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-surface-raised);
+}
+
+:root[data-theme] :is(
+  .work-plan-supersession-pins,
+  .work-plan-supersession-candidate > dl,
+  .work-plan-carry li,
+  .work-plan-diff code,
+  .work-plan-supersession-diff code
+) {
+  background: var(--cw-surface-inset);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .work-plan-graph article header span,
+:root[data-theme] .work-plan-graph > ol span,
+:root[data-theme] .work-detail-badges span,
+:root[data-theme] .work-state-row span,
+:root[data-theme] .work-priority {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-inset);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .work-plan-carry li {
+  border-left-color: var(--cw-accent);
+}
+
+:root[data-theme] .work-plan-diff ins,
+:root[data-theme] .work-plan-supersession-diff ins {
+  background: var(--cw-success-soft);
+  color: var(--cw-success);
+}
+
+:root[data-theme] .work-plan-diff del,
+:root[data-theme] .work-plan-supersession-diff del {
+  background: var(--cw-danger-soft);
+  color: var(--cw-danger);
+}
+
+:root[data-theme] .work-plan-blockers,
+:root[data-theme] .work-plan-pending,
+:root[data-theme] .work-evidence-next,
+:root[data-theme] .work-evidence-command,
+:root[data-theme] .work-evidence-warning,
+:root[data-theme] .work-attention-list li.primary {
+  border-color: var(--cw-warning-border);
+  background: var(--cw-warning-soft);
+  color: var(--cw-warning);
+}
+
+:root[data-theme] .work-evidence-error,
+:root[data-theme] .work-error,
+:root[data-theme] .work-command-error,
+:root[data-theme] .error-banner,
+:root[data-theme] .access-error,
+:root[data-theme] .provisioning-error,
+:root[data-theme] .hosted-feedback.error {
+  border-color: var(--cw-danger-border);
+  background: var(--cw-danger-soft);
+  color: var(--cw-danger);
+}
+
+/* Room and execution activity */
+:root[data-theme] .timeline,
+:root[data-theme] .room-main,
+:root[data-theme] .room-stage {
+  background: var(--cw-canvas);
+}
+
+:root[data-theme] .message .avatar {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-raised);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .message .avatar.agent {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .message .avatar.member {
+  border-color: var(--cw-border-strong);
+  background: var(--cw-surface-hover);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .message-card {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-surface);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .agent-message > .message-card {
+  border-color: var(--cw-border-subtle);
+  background: transparent;
+}
+
+:root[data-theme] .member-message > .message-card {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  box-shadow: none;
+}
+
+:root[data-theme] .system-message > .message-card,
+:root[data-theme] .agent-run-activity,
+:root[data-theme] .agent-run-activity-item,
+:root[data-theme] .run-card {
+  border-color: var(--cw-border-subtle);
+  background: var(--cw-surface-inset);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .mention-pill {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .room-policy-summary button {
+  border-color: var(--cw-border-strong);
+  background: transparent;
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .room-policy-summary button:hover:not(:disabled) {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .policy-mode,
+:root[data-theme] .task-state.working {
+  border-color: var(--cw-accent-border);
+  background: var(--cw-accent-soft);
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .task-state.completed {
+  border-color: var(--cw-success-border);
+  background: var(--cw-success-soft);
+  color: var(--cw-success);
+}
+
+:root[data-theme] .composer-retain-mentions,
+:root[data-theme] .composer-preference-hint {
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .composer,
+:root[data-theme] .room-dock {
+  border-color: var(--cw-border);
+  background: color-mix(in srgb, var(--cw-surface-raised) 94%, transparent);
+  box-shadow: 0 -18px 44px rgb(0 0 0 / 12%);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+:root[data-theme] .composer textarea {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-inset);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .streaming-cursor,
+:root[data-theme] .agent-run-activity.active .agent-run-activity-pulse,
+:root[data-theme] .run-dot.working,
+:root[data-theme] .run-dot.delivered {
+  background: var(--cw-accent);
+  box-shadow: 0 0 0 4px var(--cw-accent-soft);
+}
+
+:root[data-theme] .presence-dot,
+:root[data-theme] .run-dot.completed {
+  border-color: var(--cw-success-border);
+  background: var(--cw-success);
+  color: var(--cw-success);
+  box-shadow: 0 0 0 4px var(--cw-success-soft);
+}
+
+:root[data-theme] .hosted-feedback.success {
+  border-color: var(--cw-success-border);
+  background: var(--cw-success-soft);
+  color: var(--cw-success);
+  box-shadow: none;
+}
+
+:root[data-theme] .presence-dot.busy {
+  background: var(--cw-warning);
+  box-shadow: 0 0 0 4px var(--cw-warning-soft);
+}
+
+:root[data-theme] .presence-dot.degraded,
+:root[data-theme] .run-dot.failed,
+:root[data-theme] .run-dot.expired,
+:root[data-theme] .run-dot.outcome_unknown {
+  background: var(--cw-danger);
+  box-shadow: 0 0 0 4px var(--cw-danger-soft);
+}
+
+:root[data-theme] .presence-dot.manual {
+  background: var(--cw-info);
+  box-shadow: 0 0 0 4px var(--cw-info-soft);
+}
+
+:root[data-theme] .presence-dot.offline {
+  background: var(--cw-text-muted);
+  box-shadow: none;
+}
+
+/* Setup, access and overlays */
+:root[data-theme] .access-shell {
+  background:
+    radial-gradient(circle at 50% 0%, rgb(109 117 255 / 15%), transparent 34%),
+    var(--cw-canvas);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .access-toolbar button,
+:root[data-theme] .access-card,
+:root[data-theme] .access-note {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-raised);
+  color: var(--cw-text);
+}
+
+:root[data-theme] .access-card {
+  box-shadow: var(--cw-shadow-float);
+}
+
+:root[data-theme] .orb,
+:root[data-theme] .step-badge,
+:root[data-theme] .method-icon {
+  border-color: var(--cw-accent-border);
+  background: linear-gradient(145deg, var(--cw-surface-active), var(--cw-surface-raised));
+  color: var(--cw-accent-hover);
+  box-shadow: var(--cw-shadow-subtle);
+}
+
+:root[data-theme] .modal-backdrop,
+:root[data-theme] .product-dialog-backdrop {
+  background: rgb(5 7 12 / 72%);
+}
+
+:root[data-theme] .first-reply-guide,
+:root[data-theme] .agent-setup-choice.hosted,
+:root[data-theme] .hosted-agent-boundary,
+:root[data-theme] .member-invitation-result,
+:root[data-theme] .pairing-trust-note,
+:root[data-theme] .room-policy-editor,
+:root[data-theme] .participant-editor-list label,
+:root[data-theme] .room-policy-switch {
+  border-color: var(--cw-border);
+  background: var(--cw-surface-raised);
+  color: var(--cw-text-secondary);
+}
+
+:root[data-theme] .agent-setup-number,
+:root[data-theme] .task-delivery-options summary,
+:root[data-theme] .connection-setup summary {
+  color: var(--cw-accent-hover);
+}
+
+:root[data-theme] .pairing-verification,
+:root[data-theme] .pairing-phrase,
+:root[data-theme] .pairing-trust-note.private,
+:root[data-theme] .demo-warning,
+:root[data-theme] .hosted-profile-fence {
+  border-color: var(--cw-warning-border);
+  background: var(--cw-warning-soft);
+  color: var(--cw-warning);
+}
+
+:root[data-theme] .pairing-qr-card {
+  background: #fff;
+  color: #171a21;
+}
+
+@media (max-width: 760px) {
+  :root[data-theme] .product-sidebar {
+    background: color-mix(in srgb, var(--cw-sidebar) 96%, transparent);
+    backdrop-filter: blur(18px) saturate(130%);
+  }
+
+  :root[data-theme] .product-shell .workspace-header {
+    min-height: 68px;
+  }
+
+  :root[data-theme] .product-shell :is(button, input, select, textarea) {
+    font-size: max(12px, 1em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme] .product-shell *,
+  :root[data-theme] .access-shell *,
+  :root[data-theme] .modal-card * {
+    scroll-behavior: auto;
+    transition-duration: .01ms;
+  }
+}
