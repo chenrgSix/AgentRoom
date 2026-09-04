@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import { createClientEntryController } from "./static/client-entry.mjs";
 
 function fixture(t, request, copyText = async () => {}) {
-  const dom = new JSDOM('<button id="open-client-team"></button><button id="load-client-rooms"></button><select id="client-room"></select><button id="open-client-room"></button><p id="client-entry-status"></p><p id="client-entry-help"></p><button id="prepare-private-browser"></button><dialog id="browser-trust-dialog"></dialog><code id="browser-trust-fingerprint"></code><button id="browser-trust-platform-windows"></button><button id="browser-trust-platform-macos"></button><div id="browser-trust-windows"></div><div id="browser-trust-macos" class="hidden"></div><textarea id="browser-trust-command"></textarea><textarea id="browser-trust-removal-command"></textarea><textarea id="browser-trust-macos-command"></textarea><textarea id="browser-trust-macos-removal-command"></textarea><button id="copy-browser-trust-command"></button><button id="copy-browser-trust-removal-command"></button><button id="copy-browser-trust-macos-command"></button><button id="copy-browser-trust-macos-removal-command"></button><p id="browser-trust-status"></p><button id="close-browser-trust"></button><button id="acknowledge-browser-trust"></button>');
+  const dom = new JSDOM('<button id="open-client-team"></button><button id="load-client-rooms"></button><select id="client-room"></select><button id="open-client-room"></button><p id="client-entry-status"></p><p id="client-entry-help"></p><details id="browser-trust-settings"><button id="prepare-private-browser"></button></details><dialog id="browser-trust-dialog"></dialog><code id="browser-trust-fingerprint"></code><button id="browser-trust-platform-windows"></button><button id="browser-trust-platform-macos"></button><div id="browser-trust-windows"></div><div id="browser-trust-macos" class="hidden"></div><textarea id="browser-trust-command"></textarea><textarea id="browser-trust-removal-command"></textarea><textarea id="browser-trust-macos-command"></textarea><textarea id="browser-trust-macos-removal-command"></textarea><button id="copy-browser-trust-command"></button><button id="copy-browser-trust-removal-command"></button><button id="copy-browser-trust-macos-command"></button><button id="copy-browser-trust-macos-removal-command"></button><p id="browser-trust-status"></p><button id="close-browser-trust"></button><button id="acknowledge-browser-trust"></button>');
   t.after(() => dom.window.close());
   const elements = Object.fromEntries([...dom.window.document.querySelectorAll("[id]")].map((node) => [node.id, node]));
   const controller = createClientEntryController({elements, request, copyText});
@@ -56,8 +56,9 @@ test("private browser setup is explicit, offline, copyable, and cleared on trust
   };
   const {elements: e, controller} = fixture(t, async (...args) => calls.push(args), async (value) => copied.push(value));
   controller.render({...state, serverTrustEpoch: 2, browserTrustSetup: setup});
+  assert.equal(e["browser-trust-settings"].classList.contains("hidden"), false);
   assert.equal(e["prepare-private-browser"].classList.contains("hidden"), false);
-  assert.match(e["client-entry-help"].textContent, /普通局域网模式无需安装 CA/u);
+  assert.match(e["client-entry-help"].textContent, /选择 Team 或具体房间即可/u);
   assert.equal(e["browser-trust-dialog"].hasAttribute("open"), false);
   assert.equal(calls.length, 0);
 
@@ -100,6 +101,7 @@ test("private browser setup fails closed and reports clipboard failure honestly"
     throw new Error("clipboard denied");
   });
   controller.render({...state, browserTrustSetup: {caCertificateSha256: "short", windowsPowerShellCommand: "unsafe"}});
+  assert.equal(e["browser-trust-settings"].classList.contains("hidden"), true);
   assert.equal(e["prepare-private-browser"].classList.contains("hidden"), true);
   e["prepare-private-browser"].click();
   assert.equal(e["browser-trust-dialog"].hasAttribute("open"), false);
@@ -122,12 +124,23 @@ test("private browser setup fails closed and reports clipboard failure honestly"
     macosShellCommand: "install macos",
     macosRemovalShellCommand: "remove macos"
   }});
+  assert.equal(e["browser-trust-settings"].classList.contains("hidden"), true);
   assert.equal(e["prepare-private-browser"].classList.contains("hidden"), true);
   assert.equal(e["browser-trust-dialog"].hasAttribute("open"), false);
 });
 
 test("private browser guide is platform-neutral and retains trust, restart, removal, and no-ticket copy", () => {
   const html = readFileSync(new URL("./static/index.html", import.meta.url), "utf8");
+  const overviewStart = html.indexOf('id="overview-page"');
+  const settingsStart = html.indexOf('id="settings-page"');
+  const trustSettings = html.indexOf('id="browser-trust-settings"');
+  const trustAction = html.indexOf('id="prepare-private-browser"');
+  assert.ok(overviewStart >= 0 && settingsStart > overviewStart);
+  assert.ok(trustSettings > settingsStart && trustAction > trustSettings);
+  assert.doesNotMatch(html.slice(overviewStart, settingsStart), /prepare-private-browser/u);
+  assert.match(html, /高级浏览器信任/u);
+  assert.match(html, /仅用于私有 HTTPS Central/u);
+  assert.match(html, /普通局域网 HTTP 模式无需安装 CA/u);
   assert.match(html, /高级私有 HTTPS 浏览器信任/u);
   assert.match(html, /普通局域网模式无需执行/u);
   assert.doesNotMatch(html, /准备另一台 Windows 浏览器/u);

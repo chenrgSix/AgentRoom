@@ -104,7 +104,6 @@
               <p id="client-entry-help"></p>
               <div class="actions"><button class="primary" id="open-client-team" type="button">进入 Team</button><button class="secondary" id="load-client-rooms" type="button">选择房间</button></div>
               <div class="actions"><select class="hidden" id="client-room" aria-label="已授权房间"></select><button class="secondary hidden" id="open-client-room" type="button">打开房间</button></div>
-              <div class="actions"><button class="secondary hidden" id="prepare-private-browser" type="button">高级：为浏览器启用私有 HTTPS</button></div>
               <p id="client-entry-status" role="status"></p>
             </section>
             <div class="overview-statline">
@@ -154,6 +153,12 @@
                 <div><dt>最后连接</dt><dd id="last-connected">—</dd></div>
               </dl>
             </section>
+
+            <details class="settings-card disclosure-card hidden" id="browser-trust-settings">
+              <summary><span><strong>高级浏览器信任</strong><small>仅用于私有 HTTPS Central</small></span><span aria-hidden="true">⌄</span></summary>
+              <p class="runtime-policy">普通局域网 HTTP 模式无需安装 CA；公开 CA 由系统直接信任。仅当你主动使用私有 CA 的 HTTPS 浏览器入口时，才需要在目标电脑配置此信任。</p>
+              <div class="actions"><button class="secondary hidden" id="prepare-private-browser" type="button">配置其他电脑的浏览器信任</button></div>
+            </details>
 
             <section class="settings-card">
               <div class="setting-heading"><div><h3>中央创建 Agent</h3><p>只有通过本机管理码后，中央服务才能按现有 Agent 模板创建新的本机 Agent。</p></div></div>

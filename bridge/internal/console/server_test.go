@@ -627,6 +627,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="app-sidebar"`, `id="overview-page"`, `id="agents-page"`,
 		`id="settings-page"`, `id="connection-summary"`, `id="overview-agent-list"`,
 		`id="connection-state"`, `id="trust-mode"`, `id="login-startup"`,
+		`id="browser-trust-settings"`, `id="prepare-private-browser"`,
 		`id="login-startup-unsupported"`,
 		`id="export-diagnostics"`, `id="check-update"`, `id="bridge-version"`,
 		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
