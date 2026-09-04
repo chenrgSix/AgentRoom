@@ -70,6 +70,29 @@ test("trusted-team configuration requires an HTTPS origin and strong file secret
   );
 });
 
+test("trusted-team configuration permits only a same-host LAN HTTP browser origin", async () => {
+  const token = "r".repeat(32);
+  const load = (browserOrigin: string) => loadWebAuthConfiguration({
+    env: {
+      CONVENE_WIRE_BROWSER_ORIGIN: browserOrigin,
+      CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: "/secret",
+      CONVENE_WIRE_PUBLIC_ORIGIN: "https://central.local:40000",
+      CONVENE_WIRE_WEB_AUTH_MODE: "trusted-team"
+    },
+    loadFile: async () => token
+  });
+  assert.deepEqual(await load("http://central.local:40080"), {
+    mode: "trusted-team",
+    ownerRecoveryToken: token,
+    publicOrigin: "https://central.local:40000",
+    browserOrigin: "http://central.local:40080"
+  });
+  await assert.rejects(load("http://other.local:40080"), /same non-loopback host/u);
+  await assert.rejects(load("http://localhost:40080"), /same non-loopback host/u);
+  await assert.rejects(load("https://central.local:4443"), /must equal/u);
+  await assert.rejects(load("ftp://central.local"), /same non-loopback host/u);
+});
+
 test("unknown Web auth modes and missing recovery files fail closed", async () => {
   await assert.rejects(
     loadWebAuthConfiguration({

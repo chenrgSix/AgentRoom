@@ -11,6 +11,7 @@ import {
   sessionCookie
 } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
+import { trustedWebOrigins } from "../security/web-auth-config.js";
 
 export function registerAuthRoutes({
   app,
@@ -24,6 +25,9 @@ export function registerAuthRoutes({
   trustedWeb,
   webAuth
 }: ServerRouteContext): void {
+  const secureCookies = webAuth.mode === "trusted-team"
+    ? trustedWebOrigins(webAuth).secureCookies
+    : true;
   app.get("/api/auth/status", async (request, reply) => {
     noStore(reply);
     const actor = optionalPrincipal(request);
@@ -58,7 +62,7 @@ export function registerAuthRoutes({
     const actor = principal(request);
     auth.revokeWebSession(actor.sessionId, clock());
     if (webAuth.mode === "trusted-team") {
-      void reply.header("set-cookie", clearSessionCookie());
+      void reply.header("set-cookie", clearSessionCookie(secureCookies));
     }
     return { status: "signed_out" };
   });
@@ -75,7 +79,7 @@ export function registerAuthRoutes({
       result: ReturnType<TrustedWebAccessService["recover"]>
     ) => {
       noStore(reply);
-      void reply.header("set-cookie", sessionCookie(result.session));
+      void reply.header("set-cookie", sessionCookie(result.session, secureCookies));
       return {
         user: { ...result.user, canManageOwnerRecovery: trustedWeb.isInstallationOwner(result.user.userId) },
         session: { expiresAt: result.session.expiresAt }
@@ -122,7 +126,7 @@ export function registerAuthRoutes({
         clock()
       );
       noStore(reply);
-      void reply.header("set-cookie", sessionCookie(result.session));
+      void reply.header("set-cookie", sessionCookie(result.session, secureCookies));
       return {
         member: result.member,
         user: result.user,
@@ -137,7 +141,7 @@ export function registerAuthRoutes({
       const result = trustedWeb.claimMemberRecovery(
         requiredString(body.token, "token", 128), clock()
       );
-      void reply.header("set-cookie", sessionCookie(result.session));
+      void reply.header("set-cookie", sessionCookie(result.session, secureCookies));
       return {
         member: result.member,
         user: result.user,

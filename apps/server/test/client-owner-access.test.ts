@@ -15,21 +15,26 @@ const secret = () => randomBytes(32).toString("base64url");
 const operation = () => `op_${randomBytes(12).toString("hex")}`;
 const cookie = (response: { headers: Record<string, unknown> }) => String(response.headers["set-cookie"]).split(";")[0]!;
 
-async function fixture(t: TestContext) {
+async function fixture(t: TestContext, origins = {
+  publicOrigin: origin,
+  browserOrigin: origin
+}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-client-owner-"));
   const databasePath = path.join(directory, "central.sqlite");
   let now = initialNow;
   const options = { databasePath, clock: () => now, webAuth: {
-    mode: "trusted-team" as const, publicOrigin: origin, ownerRecoveryToken: "recovery-" + "r".repeat(43)
+    mode: "trusted-team" as const, publicOrigin: origins.publicOrigin,
+    ...(origins.browserOrigin === origins.publicOrigin ? {} : { browserOrigin: origins.browserOrigin }),
+    ownerRecoveryToken: "recovery-" + "r".repeat(43)
   } };
   let app = await createServerApp(options);
   const database = new Database(databasePath);
   database.pragma("foreign_keys = ON");
   t.after(async () => { await app.close(); database.close(); await rm(directory, { recursive: true, force: true }); });
   const setup = await app.inject({ method: "POST", url: "/api/auth/setup",
-    headers: { origin, "x-agent-room-recovery-token": options.webAuth.ownerRecoveryToken }, payload: { displayName: "Alice" } });
+    headers: { origin: origins.browserOrigin, "x-agent-room-recovery-token": options.webAuth.ownerRecoveryToken }, payload: { displayName: "Alice" } });
   assert.equal(setup.statusCode, 200, setup.body);
-  const headers = { cookie: cookie(setup), origin };
+  const headers = { cookie: cookie(setup), origin: origins.browserOrigin };
   const team = await app.inject({ method: "POST", url: "/api/teams", headers, payload: { name: "Builders" } });
   assert.equal(team.statusCode, 200, team.body);
   const teamId = team.json().team.teamId as string;
@@ -68,10 +73,28 @@ async function fixture(t: TestContext) {
   const issue = (deviceHeaders: { authorization: string }, key: string, roomId?: string) => app.inject({
     method: "POST", url: "/api/client-access/tickets", headers: deviceHeaders,
     payload: { clientAccessSecret: key, ...(roomId ? { roomId } : {}) } });
-  const consume = (ticket: string) => app.inject({ method: "POST", url: "/api/auth/client-entry/claim", headers: { origin }, payload: { ticket } });
+  const consume = (ticket: string) => app.inject({ method: "POST", url: "/api/auth/client-entry/claim", headers: { origin: origins.browserOrigin }, payload: { ticket } });
   return { get app() { return app; }, database, headers, teamId, ownerMemberId, rooms, pairing, pair, issue, consume,
     setNow(value: string) { now = value; }, async restart() { await app.close(); app = await createServerApp(options); } };
 }
+
+test("LAN HTTP advertises its browser origin and issues only the LAN Cookie", async (t) => {
+  const browserOrigin = "http://central.example:40080";
+  const f = await fixture(t, {
+    publicOrigin: "https://central.example:40000",
+    browserOrigin
+  });
+  const flow = await f.pair({ displayName: "LAN member", roomIds: [f.rooms[0]!] });
+  const issued = await f.issue(flow.deviceHeaders, flow.clientAccessSecret, f.rooms[0]);
+  assert.equal(issued.statusCode, 200, issued.body);
+  assert.equal(issued.headers["convenewire-browser-origin"], browserOrigin);
+  const signedIn = await f.consume(issued.json().ticket);
+  assert.equal(signedIn.statusCode, 200, signedIn.body);
+  const header = String(signedIn.headers["set-cookie"]);
+  assert.match(header, /^agentroom_lan_session=/u);
+  assert.match(header, /HttpOnly; SameSite=Strict/u);
+  assert.doesNotMatch(header, /; Secure(?:;|$)/u);
+});
 
 test("approval atomically connects the actual person, selected Rooms and independent human entry", async (t) => {
   const f = await fixture(t);

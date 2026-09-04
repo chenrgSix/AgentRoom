@@ -65,9 +65,10 @@ import {
   bearerToken,
   cookieValue,
   isLoopbackHost,
-  trustedSessionCookie,
+  sessionCookieName,
   unsafeHttpMethods
 } from "./http/http-helpers.js";
+import { trustedWebOrigins } from "./security/web-auth-config.js";
 import { registerDiscussionRoutes } from "./http/discussion-routes.js";
 import { registerDevicePairingSessionRoutes } from
   "./http/device-pairing-session-routes.js";
@@ -307,9 +308,12 @@ export async function createServerApp(
   const auth = new AuthService(database);
   const bridgeServerToken = normalizeBridgeServerToken(options.bridgeServerToken);
   const webAuth = options.webAuth ?? { mode: "local" as const };
+  const trustedOrigins = webAuth.mode === "trusted-team"
+    ? trustedWebOrigins(webAuth)
+    : undefined;
   const deploymentTrust = createDeploymentTrustProvider(
     options.deploymentTrustFile,
-    webAuth.mode === "trusted-team" ? webAuth.publicOrigin : undefined
+    trustedOrigins?.publicOrigin
   );
   const deploymentTrustRotation = createDeploymentTrustRotationProvider(
     options.deploymentTrustRotationFile,
@@ -325,7 +329,7 @@ export async function createServerApp(
         database,
         core,
         auth,
-        webAuth.publicOrigin,
+        trustedOrigins!.browserOrigin,
         webAuth.ownerRecoveryToken
       )
     : undefined;
@@ -990,7 +994,7 @@ export async function createServerApp(
   const requireTrustedOrigin = (request: FastifyRequest): void => {
     if (
       webAuth.mode !== "trusted-team" ||
-      request.headers.origin !== webAuth.publicOrigin
+      request.headers.origin !== trustedOrigins?.browserOrigin
     ) {
       throw new AuthorizationError("FORBIDDEN", "Trusted Web origin required");
     }
@@ -999,7 +1003,7 @@ export async function createServerApp(
     if (webAuth.mode === "local") {
       return auth.authenticateWebSession(bearerToken(request), clock());
     }
-    const token = cookieValue(request, trustedSessionCookie);
+    const token = cookieValue(request, sessionCookieName(trustedOrigins!.secureCookies));
     if (!token) {
       throw new AuthorizationError("UNAUTHENTICATED", "Web session required");
     }

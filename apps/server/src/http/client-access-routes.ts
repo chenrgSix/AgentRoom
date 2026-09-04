@@ -1,6 +1,9 @@
 import { AuthorizationError } from "../security/auth-service.js";
 import { bearerToken, bodyObject, isLoopbackHost, noStore, requiredString, sessionCookie } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
+import { trustedWebOrigins } from "../security/web-auth-config.js";
+
+export const clientBrowserOriginHeader = "convenewire-browser-origin";
 
 function checkedBody(request: Parameters<typeof bodyObject>[0], keys: string[]) {
   const body = bodyObject(request);
@@ -11,6 +14,9 @@ function checkedBody(request: Parameters<typeof bodyObject>[0], keys: string[]) 
 export function registerClientAccessRoutes({
   app, auth, clientAccess, clock, limitAnonymous, principal, requireTrustedOrigin, webAuth
 }: ServerRouteContext): void {
+  const trustedOrigins = webAuth.mode === "trusted-team"
+    ? trustedWebOrigins(webAuth)
+    : undefined;
   for (const action of ["rooms", "tickets"] as const) {
     app.post(`/api/client-access/${action}`, async (request, reply) => {
       noStore(reply);
@@ -18,9 +24,12 @@ export function registerClientAccessRoutes({
       const device = auth.authenticateDevice(bearerToken(request), clock());
       const body = checkedBody(request, action === "rooms" ? ["clientAccessSecret"] : ["clientAccessSecret", "roomId"]);
       const secret = requiredString(body.clientAccessSecret, "clientAccessSecret", 128);
-      return action === "rooms" ? clientAccess.list(device, secret, clock()) :
-        clientAccess.issue(device, secret,
-          body.roomId === undefined ? undefined : requiredString(body.roomId, "roomId", 140), clock());
+      if (action === "rooms") return clientAccess.list(device, secret, clock());
+      if (trustedOrigins) {
+        void reply.header(clientBrowserOriginHeader, trustedOrigins.browserOrigin);
+      }
+      return clientAccess.issue(device, secret,
+        body.roomId === undefined ? undefined : requiredString(body.roomId, "roomId", 140), clock());
     });
   }
   for (const action of ["preview", "claim"] as const) {
@@ -40,7 +49,7 @@ export function registerClientAccessRoutes({
       const ticket = requiredString(body.ticket, "ticket", 128);
       if (action === "preview") return clientAccess.preview(ticket, clock());
       const result = clientAccess.consume(ticket, clock());
-      if (webAuth.mode === "trusted-team") void reply.header("set-cookie", sessionCookie(result.session));
+      if (trustedOrigins) void reply.header("set-cookie", sessionCookie(result.session, trustedOrigins.secureCookies));
       return {
         identity: result.identity,
         user: { ...result.user, canManageOwnerRecovery: false, clientTeamId: result.identity.teamId },

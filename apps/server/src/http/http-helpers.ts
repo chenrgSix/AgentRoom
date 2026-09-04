@@ -7,6 +7,7 @@ import {
 
 // Keep the released cookie name so the product rename does not sign Owners out.
 export const trustedSessionCookie = "__Host-agentroom_session";
+export const lanSessionCookie = "agentroom_lan_session";
 export const unsafeHttpMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
 
 export function isLoopbackHost(host: string | undefined): boolean {
@@ -28,24 +29,31 @@ export function cookieValue(
   return undefined;
 }
 
-export function sessionCookie(credential: IssuedCredential): string {
+export function sessionCookieName(secure: boolean): string {
+  return secure ? trustedSessionCookie : lanSessionCookie;
+}
+
+export function sessionCookie(
+  credential: IssuedCredential,
+  secure = true
+): string {
   if (!credential.expiresAt) throw new Error("Web session expiry is required");
   return [
-    `${trustedSessionCookie}=${credential.secret}`,
+    `${sessionCookieName(secure)}=${credential.secret}`,
     "Path=/",
     "HttpOnly",
-    "Secure",
+    ...(secure ? ["Secure"] : []),
     "SameSite=Strict",
     `Expires=${new Date(credential.expiresAt).toUTCString()}`
   ].join("; ");
 }
 
-export function clearSessionCookie(): string {
+export function clearSessionCookie(secure = true): string {
   return [
-    `${trustedSessionCookie}=`,
+    `${sessionCookieName(secure)}=`,
     "Path=/",
     "HttpOnly",
-    "Secure",
+    ...(secure ? ["Secure"] : []),
     "SameSite=Strict",
     "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
     "Max-Age=0"

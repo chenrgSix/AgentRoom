@@ -8,6 +8,7 @@ export type WebAuthConfiguration =
       mode: "trusted-team";
       ownerRecoveryToken: string;
       publicOrigin: string;
+      browserOrigin?: string;
     };
 
 export interface WebAuthEnvironmentOptions {
@@ -16,28 +17,62 @@ export interface WebAuthEnvironmentOptions {
   loadFile?: (filename: string) => Promise<string>;
 }
 
-function trustedOrigin(source: string | undefined): string {
+function exactOrigin(source: string | undefined, label: string): URL {
   const value = source?.trim();
   if (!value) {
-    throw new Error("CONVENE_WIRE_PUBLIC_ORIGIN is required in trusted-team mode");
+    throw new Error(`${label} is required in trusted-team mode`);
   }
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error("CONVENE_WIRE_PUBLIC_ORIGIN must be an absolute HTTPS origin");
+    throw new Error(`${label} must be an absolute origin`);
   }
   if (
-    parsed.protocol !== "https:" ||
     parsed.username !== "" ||
     parsed.password !== "" ||
     parsed.pathname !== "/" ||
     parsed.search !== "" ||
     parsed.hash !== ""
   ) {
+    throw new Error(`${label} must be an absolute origin`);
+  }
+  return parsed;
+}
+
+export function trustedWebOrigins(configuration: Extract<
+  WebAuthConfiguration,
+  { mode: "trusted-team" }
+>): { browserOrigin: string; publicOrigin: string; secureCookies: boolean } {
+  const publicOrigin = exactOrigin(
+    configuration.publicOrigin,
+    "CONVENE_WIRE_PUBLIC_ORIGIN"
+  );
+  if (publicOrigin.protocol !== "https:") {
     throw new Error("CONVENE_WIRE_PUBLIC_ORIGIN must be an absolute HTTPS origin");
   }
-  return parsed.origin;
+  const browserOrigin = exactOrigin(
+    configuration.browserOrigin ?? publicOrigin.origin,
+    "CONVENE_WIRE_BROWSER_ORIGIN"
+  );
+  if (browserOrigin.protocol === "https:") {
+    if (browserOrigin.origin !== publicOrigin.origin) {
+      throw new Error("HTTPS browser origin must equal CONVENE_WIRE_PUBLIC_ORIGIN");
+    }
+  } else if (
+    browserOrigin.protocol !== "http:" ||
+    browserOrigin.hostname.toLowerCase() !== publicOrigin.hostname.toLowerCase() ||
+    browserOrigin.hostname === "localhost" ||
+    browserOrigin.hostname === "127.0.0.1" ||
+    browserOrigin.hostname === "[::1]"
+  ) {
+    throw new Error("HTTP browser origin must use the same non-loopback host as CONVENE_WIRE_PUBLIC_ORIGIN");
+  }
+  return {
+    browserOrigin: browserOrigin.origin,
+    publicOrigin: publicOrigin.origin,
+    secureCookies: browserOrigin.protocol === "https:"
+  };
 }
 
 function validateRecoveryToken(source: string): string {
@@ -77,15 +112,25 @@ export async function loadWebAuthConfiguration(
   const source = await (options.loadFile ?? ((target) => readFile(target, "utf8")))(
     filename
   );
-  return {
-    mode,
-    ownerRecoveryToken: validateRecoveryToken(source),
-    publicOrigin: trustedOrigin(renamedEnvironmentValue(
+  const publicOrigin = exactOrigin(
+    renamedEnvironmentValue(
       env,
       "CONVENE_WIRE_PUBLIC_ORIGIN",
       "AGENT_ROOM_PUBLIC_ORIGIN"
-    ))
-  };
+    ),
+    "CONVENE_WIRE_PUBLIC_ORIGIN"
+  ).origin;
+  const configured = {
+    mode,
+    ownerRecoveryToken: validateRecoveryToken(source),
+    publicOrigin,
+    ...(env.CONVENE_WIRE_BROWSER_ORIGIN?.trim()
+      ? { browserOrigin: env.CONVENE_WIRE_BROWSER_ORIGIN.trim() }
+      : {})
+  } as const;
+  const origins = trustedWebOrigins(configured);
+  return { ...configured, publicOrigin: origins.publicOrigin,
+    ...(configured.browserOrigin ? { browserOrigin: origins.browserOrigin } : {}) };
 }
 
 export function assertWebAuthListener(
