@@ -1533,3 +1533,9 @@ and that certificate. Linux remains explicitly supported as a Bridge/browser
 platform, but differing distribution and browser stores prevent a safe
 universal install command; the Console says so instead of implying Windows-only
 support.
+
+BRG-074 owns the information architecture of that optional assistant. The
+ordinary overview keeps Team and Room entry only; the advanced private-HTTPS
+browser trust action belongs beside Central connection settings and is hidden
+as one unit whenever no current validated private-CA projection exists. This
+relocation changes no certificate, copy, entry-ticket or trust-store authority.
