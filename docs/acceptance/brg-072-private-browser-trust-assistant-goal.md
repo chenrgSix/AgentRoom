@@ -2,8 +2,8 @@
 
 Date: 2026-09-04
 
-Status: goal and acceptance criteria frozen before implementation. Delivery
-state lives only in `docs/TASKS.md`.
+Status: accepted on 2026-09-04. Delivery state lives only in
+`docs/TASKS.md`.
 
 ## Goal
 
@@ -79,3 +79,66 @@ The focused Console and embedded UI suites, full Bridge tests, `go vet`, native
 Desktop compile/tests, Markdown lint and whitespace checks must pass. Windows
 trust-store success is not claimed without native physical evidence; the
 regression contract covers command content, safety and presentation only.
+
+## Implemented Result
+
+The Console state now derives `browserTrustSetup` on demand from the active
+Device credential. It reuses the Bridge transport validator, including exact
+origin, trust mode, installation identity, epoch, certificate lifetime,
+single-CA shape and canonical DER digest. Invalid or unavailable trust produces
+no setup projection.
+
+The projected Windows install command embeds only the validated public DER
+certificate. It verifies the in-memory bytes and randomly named temporary file
+against the full SHA-256 digest, resolves the system `certutil.exe`, installs
+into `CurrentUser` Root, checks the process exit code and removes only its
+owned temporary file in a `finally` block. A separate exact-thumbprint removal
+command is included so the user can revoke that persistent current-user trust.
+
+The Bridge/Desktop Console exposes this only behind **准备另一台 Windows
+浏览器**. Opening or copying is local and performs no request. The dialog
+shows the complete fingerprint, persistent-trust warning, browser-restart and
+fresh-entry instructions, and exact removal path. Re-pairing, Central changes,
+trust epoch changes and CA digest changes close the dialog and clear its
+rendered commands.
+
+## Acceptance Evidence
+
+Implementation commits:
+
+- `a79ab3d` freezes the goal, authority and acceptance boundaries before code.
+- `6da2f39` implements the validated projection, Console interaction, safety
+  regressions and opt-in visual fixture.
+
+Verified commands and observations:
+
+```text
+node --test bridge/internal/console/client-entry.test.mjs
+# 5 passed
+
+npm run test:bridge-ui
+# 61 passed; owned runner root removed
+
+GOCACHE=<owned>/go-build GOMODCACHE=<owned>/go-mod GOFLAGS=-modcacherw go test ./...
+GOCACHE=<owned>/go-build GOMODCACHE=<owned>/go-mod GOFLAGS=-modcacherw go vet ./...
+GOCACHE=<owned>/go-build GOMODCACHE=<owned>/go-mod GOFLAGS=-modcacherw go test -race ./internal/console ./internal/pairing
+GOCACHE=<owned>/go-build GOMODCACHE=<owned>/go-mod GOFLAGS=-modcacherw go test -tags desktop ./cmd/convenewire-bridge-desktop
+GOCACHE=<owned>/go-build GOMODCACHE=<owned>/go-mod GOFLAGS=-modcacherw go build -tags desktop -o <owned>/convenewire-bridge-desktop ./cmd/convenewire-bridge-desktop
+GOOS=windows GOARCH=amd64 GOCACHE=<owned>/go-build GOMODCACHE=<owned>/go-mod GOFLAGS=-modcacherw go build -tags desktop -o <owned>/convenewire-bridge-desktop.exe ./cmd/convenewire-bridge-desktop
+# all passed; /private/tmp/convenewire-brg072-gates.j3W3zs physically absent after exit
+
+npm run lint:docs
+git diff --check
+# 365 Markdown files, zero findings; whitespace clean
+```
+
+An isolated real Console fixture was inspected in the production embedded page
+at the default desktop viewport and at `390x844`. Both rendered the complete
+fingerprint, warning, command, restart and removal flow without clipping or
+obscured controls. The fixture performed no Central request or trust-store
+mutation and its owned process/root were closed afterward.
+
+No native Windows trust-store command was executed during this acceptance.
+Therefore this record proves command construction, certificate identity,
+fail-closed presentation and both Darwin/Windows compilation, but does not
+claim physical Windows policy or browser-store success.
