@@ -20,7 +20,7 @@
     "dev:web": "npm run dev --workspace @convene-wire/web",
     "test": "npm run test:all",
     "test:all": "node scripts/test/run-with-temp-root.mjs -- npm run test:all:inner",
-    "test:all:inner": "npm run test --workspaces --if-present && npm run test:bridge-ui && npm run test:qa-evidence && npm run test:product-experience && npm run test:site && npm run test:temp-lifecycle",
+    "test:all:inner": "npm run test --workspaces --if-present && npm run test:bridge-ui && npm run test:qa-evidence && npm run test:product-experience && npm run test:site && npm run test:temp-lifecycle && npm run test:discussion-benchmark",
     "test:bridge": "node scripts/test/run-with-temp-root.mjs --cwd bridge -- go test ./...",
     "test:bridge-ui": "node scripts/test/run-with-temp-root.mjs -- npm run test:bridge-ui:inner",
     "test:bridge-ui:inner": "node --test bridge/internal/console/*.test.mjs",
@@ -39,7 +39,10 @@
     "test:e2e:inner": "tsx --test tests/e2e/**/*.test.ts",
     "test:e2e:live": "CONVENE_WIRE_LIVE_RUNTIME_E2E=1 PI_TELEMETRY=0 node scripts/test/run-with-temp-root.mjs -- tsx --test tests/e2e/adaptive-discussion-live.test.ts",
     "validate": "npm run validate --workspaces --if-present",
-    "lint:docs": "markdownlint-cli2 \"**/*.md\""
+    "lint:docs": "markdownlint-cli2 \"**/*.md\"",
+    "bench:discussion": "CONVENE_WIRE_BENCH_LIVE=1 node scripts/test/run-with-temp-root.mjs --timeout-ms 1260000 -- tsx --test scripts/bench/discussion-benchmark.test.ts",
+    "test:discussion-benchmark": "node scripts/test/run-with-temp-root.mjs -- npm run test:discussion-benchmark:inner",
+    "test:discussion-benchmark:inner": "node --test scripts/bench/codex-answer.test.mjs && CONVENE_WIRE_BENCH_SYNTHETIC=1 tsx --test scripts/bench/discussion-benchmark.test.ts"
   },
   "devDependencies": {
     "markdownlint-cli2": "0.23.2"

@@ -67,3 +67,33 @@ overflow or browser warning/error. The new explanations and usage copy have
 larger text and explicit light-theme contrast. Screenshots are retained locally
 under ignored `var/qa-066-discussion/desktop.png` and `mobile-light.png`.
 The preview uses only synthetic Team data and simulated responses.
+
+## Combined verification and remaining external gate
+
+The complete `npm test` gate passes 1,177 Node checks (615 Server, 307 Web,
+101 contracts, 61 Bridge UI, 47 QA evidence, three product seeds, 15 site,
+25 temporary-lifecycle and three benchmark checks), plus contracts Go.
+Full workspace build, 14 schemas/258 fixtures, 389 maintained Markdown files
+and whitespace checks pass. Nine deterministic cross-process E2Es pass;
+the separately opted-in Codex/Pi test is skipped. Web retains the existing
+large-bundle advisory. No cross-language wire envelope changed.
+
+The final benchmark runner additionally passes four focused adapter/integration
+checks after adding source hashes, partial-attempt reporting and a shared
+atomic 12-invocation cap. The cap regression proves that an exhausted quota
+starts no provider process.
+Twelve synthetic Runs are not twelve real model calls and do not supply a
+quality, model latency or monetary-cost result. The
+[review packet](qa-065-discussion-benchmark.md) contains exact fixed task text,
+manual rubrics, requested model, data boundary and caps. Automatic approval
+rejected the live invocation before it ran; explicit payload/destination/quota
+authorization is the remaining gate. QA-065 and combined acceptance remain
+open in the sole task register until actual answers are run and reviewed.
+
+The actual preview was signed out and stopped. Physical checks confirm that
+its owned root and the full-test, deterministic-E2E and final synthetic-benchmark
+roots no longer exist; no global temporary-directory scan or deletion was used.
+The actual preview tab is closed. An empty browser error tab from an initial
+invalid-port navigation could not be closed through Browser Use because its
+internal data URL is rejected by that tool's URL policy; it contains no Team
+session or data and is not a running preview process.
