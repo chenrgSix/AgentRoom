@@ -181,3 +181,9 @@
   .work-plan-supersession-diff del, .work-plan-supersession-diff ins { grid-column: 1 / -1; }
   .work-plan-supersession textarea.work-plan-json { min-height: 280px; }
 }
+
+.work-quick-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.work-quick-filters button[aria-pressed="true"] { background: var(--cw-accent-soft, #292948); color: var(--cw-text, #eeeeff); }
+.work-filters { flex-wrap: wrap; }
+.work-filters > label { min-width: 0; }
+.work-filters select { max-width: 100%; }

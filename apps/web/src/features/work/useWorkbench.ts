@@ -3,8 +3,9 @@ import type { WorkbenchPage } from "@convene-wire/contracts/task-result";
 
 import { jsonRequest } from "../../api-client.js";
 import type { LocalSession } from "../../models.js";
+import type { WorkFilters } from "./work-filters.js";
 
-interface WorkbenchOptions {
+interface WorkbenchOptions extends WorkFilters {
   teamId: string | null;
   session: LocalSession | null;
   scope: "mine" | "team";
@@ -32,11 +33,11 @@ function mergeItems(items: WorkbenchPage["items"]): WorkbenchPage["items"] {
 }
 
 /** Owns only the visible page window, never an independent Task projection. */
-export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemberId, search = "" }: WorkbenchOptions) {
+export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemberId, search = "", attention = "", filterRoomId = "", filterAgentId = "", priority = "" }: WorkbenchOptions) {
   const userId = session?.userId ?? null;
   const token = session?.token;
   const normalizedSearch = search.trim();
-  const key = JSON.stringify([teamId, userId, token, scope, lifecycleState, ownerMemberId, normalizedSearch]);
+  const key = JSON.stringify([teamId, userId, token, scope, lifecycleState, ownerMemberId, normalizedSearch, attention, filterRoomId, filterAgentId, priority]);
   const [state, setState] = useState<WorkbenchState>(() => emptyState(key));
   const stateRef = useRef(state);
   const keyRef = useRef(key);
@@ -50,9 +51,13 @@ export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemb
     if (lifecycleState) query.set("lifecycleState", lifecycleState);
     if (ownerMemberId) query.set("ownerMemberId", ownerMemberId);
     if (normalizedSearch) query.set("search", normalizedSearch);
+    if (attention) query.set("attention", attention);
+    if (filterRoomId) query.set("roomId", filterRoomId);
+    if (filterAgentId) query.set("agentId", filterAgentId);
+    if (priority) query.set("priority", priority);
     if (cursor) query.set("cursor", cursor);
     return `/api/teams/${teamId}/work-items?${query}`;
-  }, [teamId, scope, lifecycleState, ownerMemberId, normalizedSearch]);
+  }, [teamId, scope, lifecycleState, ownerMemberId, normalizedSearch, attention, filterRoomId, filterAgentId, priority]);
 
   const refresh = useCallback(async () => {
     // A live notification must not silently cancel the page the user requested.

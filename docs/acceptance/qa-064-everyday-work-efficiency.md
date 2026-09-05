@@ -42,3 +42,17 @@ owned and removed. Evidence below must state any untested boundary honestly.
 This iteration does not publish a Release, deploy to the existing Central,
 change repository authority, require a paid model or close BRG-013, WEB-050 or
 QA-038 physical/specialized admission gates.
+
+## WEB-067 evidence
+
+The 40 focused Web checks cover new filter URL parsing, exact Server query
+parameters, abort/late-page fencing, composed input and the existing pagination,
+search, navigation and work-entry behavior. Tests run from `apps/web` through
+`run-with-temp-root.mjs`; all owned roots are removed. Web TypeScript/Vite build
+passes, retaining the existing large-chunk advisory.
+
+The actual built trusted-Team preview selected `needs_approval` through the
+quick button and returned only TASK-108, with the matching canonical URL and
+one loaded result. Desktop and 390 x 844 layouts were inspected; the narrow
+page reports `clientWidth=scrollWidth=390`. Final combined browser and complete
+regression acceptance remains QA-064.

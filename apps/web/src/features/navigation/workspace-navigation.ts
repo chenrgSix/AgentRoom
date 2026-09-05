@@ -2,9 +2,10 @@ import type { LifecycleState } from "@convene-wire/contracts/task-result";
 
 import type { WorkspaceView } from "../../models.js";
 import type { TaskWorkDetailTab } from "../work/TaskWorkDetail.js";
+import { attentionFilters, type WorkFilters } from "../work/work-filters.js";
 
 /** Untrusted location intent only; App must resolve every resource against current access. */
-export interface WorkspaceNavigation {
+export interface WorkspaceNavigation extends WorkFilters {
   teamId?: string | undefined;
   roomId?: string | undefined;
   taskId?: string | undefined;
@@ -58,6 +59,10 @@ const fields: readonly Field[] = [
   { key: "scope", property: "scope", label: "工作范围", valid: memberOf({ mine: true, team: true }) },
   { key: "state", property: "lifecycleState", label: "任务状态", valid: memberOf(states) },
   { key: "owner", property: "ownerMemberId", label: "任务负责人", valid: identifier("member") },
+  { key: "attention", property: "attention", label: "关注原因", valid: (value) => attentionFilters.some((filter) => filter.value === value) },
+  { key: "workRoom", property: "filterRoomId", label: "筛选房间", valid: identifier("room") },
+  { key: "workAgent", property: "filterAgentId", label: "筛选智能体", valid: identifier("agent") },
+  { key: "priority", property: "priority", label: "优先级", valid: memberOf({ low: true, normal: true, high: true, urgent: true }) },
   { key: "search", property: "search", label: "搜索词", valid: (value) => [...value].length <= 100 }
 ];
 

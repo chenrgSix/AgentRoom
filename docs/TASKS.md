@@ -649,8 +649,8 @@ is recorded only here; BRG-013, WEB-050 and QA-038 retain their separate gates.
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
 | GOV-030 | DONE | Freeze five everyday work improvements | WEB-066, QA-060 | Owner-authorized scope, owning Web module and QA-064 acceptance criteria preserve existing contracts and human approval |
-| WEB-067 | ACTIVE | Connect quick work filters and debounce composed search | GOV-030 | Focused URL/filter/pagination, search/IME and context-race regression; production browser desktop and narrow layout evidence |
-| WEB-068 | READY | Render and export readable Result reports | GOV-030 | Safe Markdown, exact Result/review/criteria/evidence reporting, clipboard/download failure and stale-context tests; browser report evidence |
+| WEB-067 | DONE | Connect quick work filters and debounce composed search | GOV-030 | [QA-064 evidence](acceptance/qa-064-everyday-work-efficiency.md): 40 focused checks, Web build and real trusted-Team quick filtering at desktop/390 px; URL intent, IME coalescing, cursor reset and late-result fences pass |
+| WEB-068 | ACTIVE | Render and export readable Result reports | GOV-030 | Safe Markdown, exact Result/review/criteria/evidence reporting, clipboard/download failure and stale-context tests; browser report evidence |
 | WEB-069 | READY | Show actionable work across application pages | GOV-030 | Server-authorized bounded attention query, live refresh, session/Team/permission fences, navigation and accessible sidebar indicator tests |
 | WEB-070 | READY | Copy a Task definition into an independent draft | GOV-030 | Explicit editable goal/criteria copy through existing create API; no inherited execution, Results, approval, assignment or repository authority; real Server-backed regression |
 | WEB-071 | READY | Edit common plan fields through a bounded form | GOV-030 | Full-definition preservation, validated goal/Agent/budget edits, stale revision and unchanged explicit approval controls; real Server-backed regression |

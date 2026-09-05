@@ -58,6 +58,7 @@ import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js"
 import { parseTaskCriteria } from "./features/task/task-criteria.js";
 import { TaskWorkDetail, type TaskWorkDetailTab } from "./features/work/TaskWorkDetail.js";
 import { WorkWorkspace, workActionTarget } from "./features/work/WorkWorkspace.js";
+import type { WorkFilters } from "./features/work/work-filters.js";
 import { useWorkbench } from "./features/work/useWorkbench.js";
 import {
   type Agent,
@@ -180,6 +181,8 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
   const [workLifecycleState, setWorkLifecycleState] = useState<LifecycleState | "">("");
   const [workOwnerMemberId, setWorkOwnerMemberId] = useState("");
   const [workSearch, setWorkSearch] = useState("");
+  const [workFilters, setWorkFilters] = useState<WorkFilters>({});
+  const [searchReset, setSearchReset] = useState(0);
   const [selectedWorkTab, setSelectedWorkTab] = useState<TaskWorkDetailTab>("overview");
   const [selectedWorkRunId, setSelectedWorkRunId] = useState<string | null>(null);
   const {
@@ -192,7 +195,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     loadMore: loadMoreWork
   } = useWorkbench({
     teamId: selectedTeamId, session, scope: workScope,
-    lifecycleState: workLifecycleState, ownerMemberId: workOwnerMemberId, search: workSearch
+    lifecycleState: workLifecycleState, ownerMemberId: workOwnerMemberId, search: workSearch, ...workFilters
   });
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [agentSetupTarget, setAgentSetupTarget] = useState<AgentSetupTarget | null>(null);
@@ -270,7 +273,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     tab: activeView === "work" && selectedWorkTaskId ? selectedWorkTab : undefined,
     runId: activeView === "work" && selectedWorkTaskId ? selectedWorkRunId ?? undefined : undefined,
     scope: workScope, lifecycleState: workLifecycleState || undefined,
-    ownerMemberId: workOwnerMemberId || undefined, search: workSearch || undefined
+    ownerMemberId: workOwnerMemberId || undefined, search: workSearch || undefined, ...workFilters
   };
   const collaborationLocation = useRef<{ session: LocalSession; location: WorkspaceNavigation } | null>(null);
   if (session && !managing) collaborationLocation.current = { session, location: navigationSnapshot };
@@ -296,6 +299,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
       setWorkLifecycleState(navigation.lifecycleState ?? "");
       setWorkOwnerMemberId(navigation.ownerMemberId ?? "");
       setWorkSearch(navigation.search ?? "");
+      setWorkFilters({ attention: navigation.attention, filterRoomId: navigation.filterRoomId, filterAgentId: navigation.filterAgentId, priority: navigation.priority });
     },
     onError: setError
   });
@@ -1222,6 +1226,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     setSelectedWorkRunId(null);
     setSelectedWorkTab("overview");
     setWorkSearch("");
+    setWorkFilters({});
     setWorkScope("mine");
     setWorkLifecycleState("");
     setWorkOwnerMemberId("");
@@ -1574,7 +1579,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     <div className={`app-shell product-shell ${managing ? "management-area" : "collaboration-area"}`}>
       <WorkspaceSidebar activeView={activeView} locale={locale} teams={teams} teamId={selectedTeamId} rooms={rooms} roomId={selectedRoomId}
         onTeam={(teamId) => navigate({ teamId, roomId: undefined, taskId: undefined, workTaskId: undefined,
-          tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, view: managing ? activeView : "work" })}
+          tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, attention: undefined, filterRoomId: undefined, filterAgentId: undefined, priority: undefined, view: managing ? activeView : "work" })}
         canCreateTeam={!session?.clientTeamId} onNewTeam={() => setTeamDialogOpen(true)} onNewRoom={() => setRoomCreateOpen(true)}
         onRoom={(roomId) => navigate({ roomId, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined })}
         onView={selectWorkspaceView} onCollaboration={returnToCollaboration}>
@@ -1800,6 +1805,10 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
               else navigate({ roomId: target.roomId, workTaskId: target.taskId, taskId: undefined,
                 view: "work", tab: target.tab, runId: target.runId ?? undefined });
             }}
+            {...workFilters}
+            searchContext={JSON.stringify([session?.userId, session?.token, selectedTeamId, searchReset])}
+            onFiltersChange={(patch) => navigate(Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value || undefined])))}
+            onClearFilters={() => { setSearchReset((value) => value + 1); navigate({ lifecycleState: undefined, ownerMemberId: undefined, search: undefined, attention: undefined, filterRoomId: undefined, filterAgentId: undefined, priority: undefined }); }}
             search={workSearch}
             onSearchChange={(search) => navigate({ search: search || undefined }, true)}
             onLifecycleStateChange={(lifecycleState) => {

@@ -201,6 +201,7 @@ test("browser back and forward restore Task, tab, scope, lifecycle filter and se
   f.render(<App />);
   const search = await f.page.findByRole("searchbox", { name: "Search work" });
   f.fireEvent.change(search, { target: { value: "Navigation" } });
+  await f.waitFor(() => assert.equal(f.query().get("search"), "Navigation"));
   f.fireEvent.change(f.page.getByRole("combobox", { name: "Task state" }), { target: { value: f.firstTask.lifecycleState } });
   f.fireEvent.click(f.page.getByRole("button", { name: "Team", exact: true }));
   f.fireEvent.click(await f.page.findByRole("button", { name: `Open TASK-${f.firstTask.taskDisplayNumber}` }));

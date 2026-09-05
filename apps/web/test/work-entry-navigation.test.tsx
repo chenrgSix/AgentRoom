@@ -65,7 +65,7 @@ test("Work creation, next steps, bounded search and copy link only call their sh
     onCreateTask: () => { created += 1; }, onOpenAction: (value: WorkbenchItem) => { opened.push(value); },
     onCopyLink: () => { copied += 1; }, search: "Inspect", onSearchChange: (value: string) => { searches.push(value); }
   };
-  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, within, waitFor } = await import("@testing-library/react");
   try {
     const view = render(<WorkWorkspace {...props} />);
     const page = within(dom.window.document.body);
@@ -80,9 +80,9 @@ test("Work creation, next steps, bounded search and copy link only call their sh
     search.focus();
     assert.equal(dom.window.document.activeElement, search);
     fireEvent.change(search, { target: { value: "x".repeat(101) } });
-    assert.deepEqual(searches, ["x".repeat(100)]);
+    await waitFor(() => assert.deepEqual(searches, ["x".repeat(100)]));
     fireEvent.change(search, { target: { value: "😀".repeat(101) } });
-    assert.deepEqual(searches, ["x".repeat(100), "😀".repeat(100)]);
+    await waitFor(() => assert.deepEqual(searches, ["x".repeat(100), "😀".repeat(100)]));
     assert.ok(page.getByText("Inspect this authorized work"), "search must not filter only the loaded page");
     fireEvent.click(page.getByRole("button", { name: "Clear filters" }));
     assert.deepEqual(searches, ["x".repeat(100), "😀".repeat(100), ""]);
