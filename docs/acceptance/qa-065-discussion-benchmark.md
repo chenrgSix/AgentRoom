@@ -44,7 +44,9 @@ is presented as task success.
 Automatic approval review rejected the live invocation on 2026-09-05 before
 execution, requesting explicit authorization for these payloads, the OpenAI
 model destination and account-quota use. No live model result or cost saving is
-claimed. This is an external execution gate, not a missing credential claim.
+claimed for that rejected attempt. The Owner subsequently replied “确认” to
+this exact payload/model/quota request on 2026-09-05. The bounded real invocation
+is now explicitly authorized; the original rejection remains historical evidence.
 
 The offline runner instead builds the actual Go Bridge and uses the real local
 Server, SQLite and authenticated APIs with a generated synthetic executable.
