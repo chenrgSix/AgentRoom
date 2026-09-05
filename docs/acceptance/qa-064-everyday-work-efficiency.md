@@ -134,3 +134,32 @@ whitespace check pass. The plan form was inspected at 1280 x 900, 720 x 1000
 and 390 x 844 in both themes; each reports equal client and scroll widths.
 The 390 px copy dialog was inspected in both themes, including cancellation.
 Screenshots are retained in the ignored local QA artifact directory.
+
+## Final acceptance
+
+The repository `npm test` command exits 0: 608 Server checks, 305 Web checks,
+101 contract checks, 61 Bridge UI checks, 47 evidence-verifier checks, three
+product-seed modes, 15 site checks and 25 temporary-lifecycle checks pass
+(1,165 Node checks), together with generated-contract/type checks and the
+contracts Go suites. `npm run build` and `npm run validate` pass for all
+workspaces, including 14 schemas and 258 contract fixtures. Nine deterministic
+cross-process E2E scenarios pass; the single explicitly opt-in live Codex/Pi
+scenario is skipped. After the final report/CSS polish, 23 affected Result
+checks, the Web production build and the complete Markdown lint pass again.
+The existing large-bundle Vite advisory remains.
+
+The actual production browser verifies quick and combined filters, canonical
+navigation, Management-to-Result attention navigation, explicit independent
+Task creation, report copy/download and common-field Plan revision. The final
+browser warning/error log is empty. Logout returns to authentication with no
+Task, Result or actionable-work sidebar remaining. Both temporary preview
+processes were stopped and their exact roots removed. All 11 distinct owned
+roots recorded in the retained test/preview logs were checked absent. The
+browser viewport was reset and the owned tab closed. Both hash-verified
+downloads were moved out of Downloads into local evidence.
+
+The local evidence directory `var/qa-064-everyday-work/` retains logs, screenshots
+and report bytes; it is ignored by Git. This proves local product acceptance
+with simulated model responses, not live-provider, physical Windows/macOS
+Bridge, deployment or Release admission. BRG-013, WEB-050 and QA-038 remain
+under their existing separate acceptance criteria.
