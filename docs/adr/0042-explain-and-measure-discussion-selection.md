@@ -26,7 +26,12 @@ unmatched focus questions, question reporter, role match, required Reviewer,
 or finalizer Reviewer/primary/ordinal fallback. Matched question IDs and role
 terms are frozen and included in the digest. Version 1 canonical bytes and
 recovery remain unchanged; historical explanations are never reconstructed
-from current Agent roles. Existing selection JSON storage needs no migration.
+from current Agent roles. Migration 0087 widens the existing SQLite version
+constraint to accept v1/v2 using a transactional table rebuild and foreign-key
+verification. It copies every historical row and selection JSON byte unchanged,
+restores indexes and immutable triggers, and does not amend migration 0084.
+Downgrading the Server after v2 Waves exist requires restoring the pre-upgrade
+backup; older selectors cannot validate v2 snapshots.
 
 The authenticated Discussion read projection adds observed usage: distinct
 bound Run counts by actual lifecycle state, missing/unmatched records, member
