@@ -111,6 +111,15 @@ Agent enablement are rechecked before a member Run starts, so the snapshot is
 an audit and recovery fact, not continuing execution authority. Existing
 Discussions migrate to `all_eligible` compatibility behavior.
 
+[ADR-0042](../adr/0042-explain-and-measure-discussion-selection.md) adds version
+2 frozen member explanations while retaining version 1 digest/recovery bytes.
+New finalization prefers the eligible frozen Reviewer, then eligible Task
+primary, then frozen ordinal. Broad contribution fallbacks are unchanged.
+The authorized read projection separately reports bound Run lifecycle counts,
+unbound slots and wall time; budget slots are not actual spending. Complete
+token/cost telemetry is absent and must remain unknown. QA-065 provides a
+bounded real-task comparison with a single-Agent baseline, not a quality claim.
+
 `DISC-012` adds no generic soft barrier. Its accepted target is a separate
 `read_only_quorum` completion mode available only when every participant is a
 current managed, supplemental-capable, enforceably read-only Agent. The soft

@@ -656,6 +656,21 @@ is recorded only here; BRG-013, WEB-050 and QA-038 retain their separate gates.
 | WEB-071 | DONE | Edit common plan fields through a bounded form | GOV-030 | [QA-064 evidence](acceptance/qa-064-everyday-work-efficiency.md): 15 focused checks, three real seed modes and Web build pass; actual form retains r2 with precisely four edits and no approval; full definition, stale pins and exact retry preserved |
 | QA-064 | DONE | Accept the everyday work efficiency iteration | WEB-067, WEB-068, WEB-069, WEB-070, WEB-071 | [Final evidence](acceptance/qa-064-everyday-work-efficiency.md): 1,165 Node checks plus contracts Go, full build/schema/docs and nine deterministic E2E pass; actual report download, form revision, desktop/720/390 themes, logout and owned-root cleanup verified; live-provider/physical Release gates remain separate |
 
+## Discussion Value Baseline
+
+[ADR-0042](adr/0042-explain-and-measure-discussion-selection.md) and the
+[frozen acceptance goal](acceptance/qa-066-discussion-value-baseline.md) keep
+broad fallbacks intact while making selection and real task outcomes visible.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-031 | DONE | Freeze Discussion explanation and value baseline | DISC-014, QA-064 | Owner-authorized ADR-0042 defines compatibility, observed usage and three bounded real task pairs |
+| DISC-015 | ACTIVE | Explain frozen selection and prefer eligible primary finalizers | GOV-031, DISC-011 | Real finalizer, unchanged fallback, digest tamper and legacy recovery regressions |
+| DISC-016 | READY | Project actual Discussion Run usage and elapsed time | GOV-031 | Distinct Run states, missing records, unbound slots, terminal time and late-work regressions |
+| WEB-072 | PLANNED | Explain Discussion selection and observed usage | DISC-015, DISC-016 | Chinese/English current and legacy records, mobile browser and unknown-cost evidence |
+| QA-065 | READY | Establish a bounded single-Agent versus Discussion benchmark | GOV-031 | Fixed three-task rubrics, bounded isolated runner, actual paired answers and timing with honest limitations |
+| QA-066 | PLANNED | Accept Discussion explanation and value baseline | DISC-015, DISC-016, WEB-072, QA-065 | Focused/full/build/schema/docs/E2E gates, actual browser acceptance and owned-resource cleanup |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

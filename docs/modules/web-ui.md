@@ -827,3 +827,12 @@ Bridge pairing APIs, and Security.
 ## Client owner collaboration entry
 
 ADR-0035 adds explicit self/existing/new-member Device pairing with initial Room selection, owner-default human selection when adding an Agent to a Room, and an identity-confirmed client entry screen. The screen clears fragment proofs immediately and never silently replaces browser identity. Client sessions expose only their authorized Team and ordinary-member authority; navigation still resolves current Room access.
+
+## Discussion explanations and observed usage
+
+[ADR-0042](../adr/0042-explain-and-measure-discussion-selection.md) keeps the
+existing authenticated Discussion APIs and controls. WEB-072 renders frozen
+member reasons, actual Run lifecycle counts and elapsed wall time separately
+from budget slots; unknown token and currency telemetry is labeled unavailable.
+Version 1 snapshots and older Server responses remain readable without
+reconstructed reasons or fabricated zero spending. QA-066 owns acceptance.
