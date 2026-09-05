@@ -665,8 +665,8 @@ broad fallbacks intact while making selection and real task outcomes visible.
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
 | GOV-031 | DONE | Freeze Discussion explanation and value baseline | DISC-014, QA-064 | Owner-authorized ADR-0042 defines compatibility, observed usage and three bounded real task pairs |
-| DISC-015 | ACTIVE | Explain frozen selection and prefer eligible primary finalizers | GOV-031, DISC-011 | Real finalizer, unchanged fallback, digest tamper and migration 0087 legacy recovery regressions |
-| DISC-016 | READY | Project actual Discussion Run usage and elapsed time | GOV-031 | Distinct Run states, missing records, unbound slots, terminal time and late-work regressions |
+| DISC-015 | DONE | Explain frozen selection and prefer eligible primary finalizers | GOV-031, DISC-011 | 67 focused selector/planner/SQLite/orchestrator/migration checks and Server build pass; v1 bytes and child rows survive migration 0087, v2 reasons survive restart, and the actual later-ordinal primary finalizes |
+| DISC-016 | ACTIVE | Project actual Discussion Run usage and elapsed time | GOV-031 | Distinct Run states, missing records, unbound slots, terminal time and late-work regressions |
 | WEB-072 | PLANNED | Explain Discussion selection and observed usage | DISC-015, DISC-016 | Chinese/English current and legacy records, mobile browser and unknown-cost evidence |
 | QA-065 | READY | Establish a bounded single-Agent versus Discussion benchmark | GOV-031 | Fixed three-task rubrics, bounded isolated runner, actual paired answers and timing with honest limitations |
 | QA-066 | PLANNED | Accept Discussion explanation and value baseline | DISC-015, DISC-016, WEB-072, QA-065 | Focused/full/build/schema/docs/E2E gates, actual browser acceptance and owned-resource cleanup |

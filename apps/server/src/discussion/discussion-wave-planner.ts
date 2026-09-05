@@ -77,12 +77,3 @@ export function buildWavePlan(input: {
   );
   return { wave, turns };
 }
-
-export function selectFinalizer(
-  participants: DiscussionParticipant[]
-): DiscussionParticipant {
-  const finalizer = participants.find(({ role }) => role === "reviewer") ??
-    participants[0];
-  if (!finalizer) throw new Error("Discussion has no finalizer");
-  return finalizer;
-}

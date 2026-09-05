@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import type {
   DiscussionParticipant,
   DiscussionRecord,
+  DiscussionSelectionExplanation,
+  DiscussionSelectionReason,
   DiscussionWaveSelection,
   OpenQuestion
 } from "./discussion-types.js";
@@ -38,7 +40,7 @@ const genericRoleTerms = new Set([
 function canonicalSelection(
   selection: Omit<DiscussionWaveSelection, "selectionDigest">
 ): string {
-  return JSON.stringify([
+  const fields: unknown[] = [
     selection.version,
     selection.strategy,
     selection.focusQuestionIds,
@@ -46,7 +48,13 @@ function canonicalSelection(
     selection.selectedAgentIds,
     selection.requiredRoles,
     selection.focusedParticipantLimit
-  ]);
+  ];
+  if (selection.version === 2) {
+    fields.push(selection.explanations?.map((entry) => [
+      entry.agentId, entry.reasons, entry.reportedQuestionIds, entry.matchedRoleTerms
+    ]));
+  }
+  return JSON.stringify(fields);
 }
 
 export function createDiscussionWaveSelection(
@@ -58,6 +66,33 @@ export function createDiscussionWaveSelection(
       .update(canonicalSelection(selection))
       .digest("hex")
   };
+}
+
+function validExplanations(selection: DiscussionWaveSelection): boolean {
+  if (selection.version === 1) return selection.explanations === undefined;
+  const entries = selection.explanations;
+  const allowed: DiscussionSelectionReason[] = selection.strategy === "finalizer"
+    ? ["finalizer_reviewer", "finalizer_primary", "finalizer_ordinal"]
+    : selection.strategy === "all_eligible"
+      ? ["all_member_policy", "no_focus_questions", "no_deterministic_match"]
+      : ["question_reporter", "role_match", "required_reviewer"];
+  const uniqueStrings = (values: unknown): values is string[] =>
+    Array.isArray(values) && values.every((value) =>
+      typeof value === "string" && value.trim().length > 0
+    ) && new Set(values).size === values.length;
+  return Array.isArray(entries) && entries.length === selection.selectedAgentIds.length &&
+    entries.every((entry, index) => entry &&
+      entry.agentId === selection.selectedAgentIds[index] &&
+      uniqueStrings(entry.reasons) && entry.reasons.length > 0 &&
+      entry.reasons.every((reason) => allowed.includes(reason)) &&
+      (selection.strategy === "question_focused" || entry.reasons.length === 1) &&
+      uniqueStrings(entry.reportedQuestionIds) &&
+      entry.reportedQuestionIds.every((id) => selection.focusQuestionIds.includes(id)) &&
+      uniqueStrings(entry.matchedRoleTerms) &&
+      entry.reasons.includes("question_reporter") === (entry.reportedQuestionIds.length > 0) &&
+      entry.reasons.includes("role_match") === (entry.matchedRoleTerms.length > 0) &&
+      (!entry.reasons.includes("required_reviewer") || selection.requiredRoles.includes("reviewer"))
+    );
 }
 
 export function assertDiscussionWaveSelection(
@@ -78,7 +113,8 @@ export function assertDiscussionWaveSelection(
     .update(canonicalSelection(unsigned))
     .digest("hex");
   if (
-    selection.version !== 1 ||
+    ![1, 2].includes(selection.version) ||
+    !validExplanations(selection) ||
     !new Set(["all_eligible", "question_focused", "finalizer"])
       .has(selection.strategy) ||
     !Number.isSafeInteger(selection.focusedParticipantLimit) ||
@@ -165,8 +201,17 @@ function requiredReviewer(
   return candidates.find(({ participant }) => participant.role === "reviewer");
 }
 
+function explain(
+  candidate: DiscussionParticipantCandidate,
+  reason: DiscussionSelectionReason
+): DiscussionSelectionExplanation {
+  return { agentId: candidate.participant.agentId, reasons: [reason],
+    reportedQuestionIds: [], matchedRoleTerms: [] };
+}
+
 function snapshot(input: {
   strategy: DiscussionWaveSelection["strategy"];
+  explanations: DiscussionSelectionExplanation[];
   questions: readonly OpenQuestion[];
   candidates: readonly DiscussionParticipantCandidate[];
   selected: readonly DiscussionParticipantCandidate[];
@@ -174,7 +219,8 @@ function snapshot(input: {
   focusedParticipantLimit: number;
 }): DiscussionParticipantSelection {
   const value = createDiscussionWaveSelection({
-    version: 1,
+    version: 2,
+    explanations: input.explanations,
     strategy: input.strategy,
     focusQuestionIds: input.questions.map(({ id }) => id),
     eligibleAgentIds: input.candidates.map(({ participant }) => participant.agentId),
@@ -209,9 +255,13 @@ export function selectDiscussionParticipants(input: {
     throw new Error("Discussion Wave requires an eligible reviewer");
   }
   if (input.finalization) {
-    const selected = reviewer ?? candidates[0]!;
+    const finalReviewer = candidates.find(({ participant }) => participant.role === "reviewer");
+    const primary = candidates.find(({ taskRole }) => taskRole === "primary");
+    const selected = finalReviewer ?? primary ?? candidates[0]!;
     return snapshot({
       strategy: "finalizer",
+      explanations: [explain(selected, finalReviewer ? "finalizer_reviewer"
+        : primary ? "finalizer_primary" : "finalizer_ordinal")],
       questions: highestPriorityQuestions(input.discussion.progress.openQuestions),
       candidates,
       selected: [selected],
@@ -227,6 +277,9 @@ export function selectDiscussionParticipants(input: {
   ) {
     return snapshot({
       strategy: "all_eligible",
+      explanations: candidates.map((candidate) => explain(candidate,
+        input.discussion.policy.participantSelectionMode === "all_eligible"
+          ? "all_member_policy" : "no_focus_questions")),
       questions,
       candidates,
       selected: candidates,
@@ -249,6 +302,7 @@ export function selectDiscussionParticipants(input: {
   if (scored.length === 0) {
     return snapshot({
       strategy: "all_eligible",
+      explanations: candidates.map((candidate) => explain(candidate, "no_deterministic_match")),
       questions,
       candidates,
       selected: candidates,
@@ -273,6 +327,17 @@ export function selectDiscussionParticipants(input: {
   );
   return snapshot({
     strategy: "question_focused",
+    explanations: selected.map((candidate) => {
+      const reportedQuestionIds = [...new Set(candidate.reportedQuestionIds)]
+        .filter((id) => questionIds.has(id)).sort((a, b) => a.localeCompare(b, "en-US"));
+      const matchedRoleTerms = roleTerms(candidate).filter((term) => questionText.includes(term))
+        .sort((a, b) => a.localeCompare(b, "en-US"));
+      const reasons: DiscussionSelectionReason[] = [];
+      if (reportedQuestionIds.length) reasons.push("question_reporter");
+      if (matchedRoleTerms.length) reasons.push("role_match");
+      if (candidate === reviewer) reasons.push("required_reviewer");
+      return { agentId: candidate.participant.agentId, reasons, reportedQuestionIds, matchedRoleTerms };
+    }),
     questions,
     candidates,
     selected,

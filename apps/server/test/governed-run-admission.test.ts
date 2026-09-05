@@ -4358,7 +4358,7 @@ test("scheduler migration backfills automatic controls and retained admission hi
     DROP TABLE execution_scheduler_receipts;
     DROP TABLE execution_scheduler_operations;
     DROP TABLE execution_scheduler_controls;
-    DELETE FROM schema_migrations WHERE version IN (81, 82, 83, 84, 85, 86);
+    DELETE FROM schema_migrations WHERE version IN (81, 82, 83, 84, 85, 86, 87);
   `);
   f.database.close();
 

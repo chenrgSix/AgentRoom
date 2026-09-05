@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
   assertDiscussionWaveSelection,
+  createDiscussionWaveSelection,
   selectDiscussionParticipants,
   type DiscussionParticipantCandidate
 } from "../src/discussion/discussion-participant-selector.js";
@@ -204,4 +206,72 @@ test("selection digest and member substitutions fail closed", () => {
     value,
     [agents.security, agents.backend, agents.reviewer]
   ), /selection snapshot is invalid/u);
+});
+
+
+test("finalizers prefer eligible Reviewer, then current primary, then frozen ordinal", () => {
+  const input = candidates();
+  input[0]!.taskRole = "contributor";
+  input[2]!.taskRole = "primary";
+  for (const [available, expected, reason] of [
+    [input, agents.reviewer, "finalizer_reviewer"],
+    [input.slice(0, 3).reverse(), agents.docs, "finalizer_primary"],
+    [input.slice(0, 2).reverse(), agents.backend, "finalizer_ordinal"]
+  ] as const) {
+    const result = selectDiscussionParticipants({
+      discussion: discussion(), candidates: [...available], finalization: true
+    }).snapshot;
+    assert.deepEqual(result.selectedAgentIds, [expected]);
+    assert.deepEqual(result.explanations?.[0]?.reasons, [reason]);
+  }
+  assert.throws(() => selectDiscussionParticipants({
+    discussion: discussion(), candidates: [], finalization: true
+  }), /no eligible participant/u);
+});
+
+test("explanations retain matched facts, broad fallback reasons and reject tampering", () => {
+  const input = candidates();
+  input[0]!.reportedQuestionIds = ["question:security"];
+  const value = selectDiscussionParticipants({ discussion: discussion(), candidates: input }).snapshot;
+  assert.equal(value.version, 2);
+  assert.deepEqual(value.explanations?.map(({ reasons }) => reasons), [
+    ["question_reporter"], ["role_match"], ["required_reviewer"]
+  ]);
+  assert.deepEqual(value.explanations?.[0]?.reportedQuestionIds, ["question:security"]);
+  assert.deepEqual(value.explanations?.[1]?.matchedRoleTerms, ["security"]);
+  input[1]!.agentRole = "Unrelated";
+  assert.deepEqual(value.explanations?.[1]?.matchedRoleTerms, ["security"]);
+  const tampered = structuredClone(value);
+  tampered.explanations![1]!.matchedRoleTerms = ["unrelated"];
+  assert.throws(() => assertDiscussionWaveSelection(tampered), /invalid/u);
+  for (const [policy, questions, expected] of [
+    ["all_eligible", [], "all_member_policy"],
+    ["question_focused", [], "no_focus_questions"],
+    ["question_focused", [{ id: "question:legal", question: "Jurisdiction?", importance: "high" }],
+      "no_deterministic_match"]
+  ] as const) {
+    const broad = selectDiscussionParticipants({
+      discussion: discussion({
+        policy: { ...defaultDiscussionPolicy, participantSelectionMode: policy },
+        progress: { ...emptyProgressSnapshot(), openQuestions: [...questions] }
+      }), candidates: input
+    }).snapshot;
+    assert.ok(broad.explanations?.every(({ reasons }) => reasons[0] === expected));
+  }
+  const invalid = structuredClone(value);
+  invalid.explanations![0]!.reportedQuestionIds = ["unknown"];
+  assert.throws(() => assertDiscussionWaveSelection(createDiscussionWaveSelection(invalid)), /invalid/u);
+});
+
+test("legacy selection canonical bytes and absence of explanations remain exact", () => {
+  const legacy = createDiscussionWaveSelection({
+    version: 1, strategy: "all_eligible", focusQuestionIds: [],
+    eligibleAgentIds: [agents.backend], selectedAgentIds: [agents.backend],
+    requiredRoles: [], focusedParticipantLimit: 3
+  });
+  assert.equal(legacy.selectionDigest, createHash("sha256").update(JSON.stringify([
+    1, "all_eligible", [], [agents.backend], [agents.backend], [], 3
+  ])).digest("hex"));
+  assertDiscussionWaveSelection(legacy);
+  assert.throws(() => assertDiscussionWaveSelection({ ...legacy, explanations: [] }), /invalid/u);
 });

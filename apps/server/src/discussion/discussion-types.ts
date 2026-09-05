@@ -185,8 +185,21 @@ export interface DiscussionWave {
   selection: DiscussionWaveSelection | null;
 }
 
+export type DiscussionSelectionReason =
+  | "all_member_policy" | "no_focus_questions" | "no_deterministic_match"
+  | "question_reporter" | "role_match" | "required_reviewer"
+  | "finalizer_reviewer" | "finalizer_primary" | "finalizer_ordinal";
+
+export interface DiscussionSelectionExplanation {
+  agentId: string;
+  reasons: DiscussionSelectionReason[];
+  reportedQuestionIds: string[];
+  matchedRoleTerms: string[];
+}
+
 export interface DiscussionWaveSelection {
-  version: 1;
+  version: 1 | 2;
+  explanations?: DiscussionSelectionExplanation[];
   strategy: "all_eligible" | "question_focused" | "finalizer";
   focusQuestionIds: string[];
   eligibleAgentIds: string[];

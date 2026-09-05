@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -415,6 +415,24 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
       ),
       [0, 1]
     );
+    // Exercise the exact table rebuild with populated v1 Wave and child Turns.
+    const originalWaves = database.prepare("SELECT * FROM discussion_waves").all();
+    const originalTurns = database.prepare("SELECT * FROM discussion_turns").all();
+    const upgrade = await readFile(new URL(
+      "../migrations/0087_explained_discussion_selection.sql", import.meta.url
+    ), "utf8");
+    database.pragma("foreign_keys = OFF");
+    try {
+      database.transaction(() => {
+        database.exec(upgrade);
+        assert.deepEqual(database.pragma("foreign_key_check"), []);
+      })();
+    } finally { database.pragma("foreign_keys = ON"); }
+    assert.deepEqual(database.prepare("SELECT * FROM discussion_waves").all(), originalWaves);
+    assert.deepEqual(database.prepare("SELECT * FROM discussion_turns").all(), originalTurns);
+    assert.throws(() => database.prepare(
+      "UPDATE discussion_waves SET selection_json = NULL WHERE wave_id = ?"
+    ).run(wave.waveId), /immutable/u);
     const reopenedDatabase = openDatabase(databasePath);
     try {
       const reopenedSelection = new DiscussionRepository(reopenedDatabase)

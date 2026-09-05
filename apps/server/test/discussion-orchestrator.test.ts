@@ -2637,3 +2637,37 @@ test("soft-boundary recovery never fabricates a user extension", async (t) => {
     value.close();
   }
 });
+
+
+test("actual finalization uses a later-ordinal Task primary and survives restart", async (t) => {
+  const value = await fixture(t);
+  try {
+    const taskService = new AgentTaskService(
+      new AgentTaskRepository(value.database), value.core, new AuthService(value.database)
+    );
+    const task = taskService.create(value.principal, {
+      roomId: value.roomId, title: "Primary finalization", goal: "Use the assigned owner.",
+      assignments: [
+        { agentId: value.agentIds[0]!, role: "contributor" },
+        { agentId: value.agentIds[1]!, role: "primary" }
+      ]
+    }, now);
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId, taskId: task.taskId, goal: task.goal,
+      participantAgentIds: value.agentIds, mode: "round_robin"
+    });
+    for (const run of result.scheduledRuns) {
+      completeRun({ core: value.core, runs: value.runs, run, content: "Use the assigned owner.",
+        assessment: { goalSatisfied: true, confidence: 0.99, newInformationAdded: true,
+          disagreementRemaining: "none", recommendation: "finish" } });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+    assert.equal(result.discussion.state, "finalizing");
+    assert.equal(result.scheduledRuns[0]?.targetAgentId, value.agentIds[1]);
+    const selection = result.waves.at(-1)!.selection;
+    assert.deepEqual(selection?.explanations?.[0]?.reasons, ["finalizer_primary"]);
+    const restarted = value.restart();
+    assert.deepEqual(restarted.get(value.principal, result.discussion.discussionId)
+      .waves.at(-1)!.selection, selection);
+  } finally { value.close(); }
+});

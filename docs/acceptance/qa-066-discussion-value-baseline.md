@@ -33,3 +33,14 @@ decision and compatibility boundary; delivery state lives only in TASKS.md.
 This freezes additional routing architecture for this iteration. It does not
 claim statistical superiority, production readiness, physical-platform
 acceptance, a Release or deployment.
+
+## Selection evidence
+
+DISC-015 passes 67 focused checks spanning selection, planning, populated SQLite
+migration, repository recovery and the actual Orchestrator. The primary is
+intentionally later in frozen order in the real finalization regression.
+Reviewer and missing-primary fallbacks, preserved broad policies, frozen match
+facts and explanation tampering are covered. Migration 0087 preserves all v1
+Wave bytes and child Turns, checks foreign keys and restores immutability;
+the existing hard-coded v1 digest remains exact. Server TypeScript build passes.
+All focused runner roots were physically removed.
