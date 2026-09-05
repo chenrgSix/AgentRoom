@@ -2664,6 +2664,11 @@ test("actual finalization uses a later-ordinal Task primary and survives restart
     }
     assert.equal(result.discussion.state, "finalizing");
     assert.equal(result.scheduledRuns[0]?.targetAgentId, value.agentIds[1]);
+    assert.equal(result.observedUsage.createdRuns, 3);
+    assert.equal(result.observedUsage.runsByState.completed, 2);
+    assert.equal(result.observedUsage.runsByState.queued, 1);
+    assert.equal(result.observedUsage.tokens, null);
+    assert.equal(result.observedUsage.estimatedCostMicros, null);
     const selection = result.waves.at(-1)!.selection;
     assert.deepEqual(selection?.explanations?.[0]?.reasons, ["finalizer_primary"]);
     const restarted = value.restart();

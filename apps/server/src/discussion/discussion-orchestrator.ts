@@ -66,9 +66,12 @@ import {
   quorumSoftDeadline
 } from "./discussion-quorum.js";
 
+import { observeDiscussionUsage, type DiscussionObservedUsage } from "./discussion-usage.js";
+
 const maximumParticipants = 5;
 
 export interface DiscussionView {
+  observedUsage: DiscussionObservedUsage;
   discussion: DiscussionRecord;
   participants: DiscussionParticipant[];
   waves: DiscussionWave[];
@@ -1604,11 +1607,16 @@ export class DiscussionOrchestrator {
   }
 
   private view(discussionId: string): DiscussionView {
+    const discussion = this.requireDiscussion(discussionId);
+    const turns = this.repository.listTurns(discussionId);
     return {
-      discussion: this.requireDiscussion(discussionId),
+      discussion,
+      observedUsage: observeDiscussionUsage({
+        discussion, turns, getRun: (runId) => this.runs.getRun(runId), now: this.clock()
+      }),
       participants: this.repository.listParticipants(discussionId),
       waves: this.repository.listWaves(discussionId),
-      turns: this.repository.listTurns(discussionId),
+      turns,
       decisions: this.repository.listDecisions(discussionId),
       seals: this.repository.listWaveSeals(discussionId),
       supplementalEvidence: this.repository.listSupplementalEvidence(discussionId)

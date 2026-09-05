@@ -44,3 +44,14 @@ facts and explanation tampering are covered. Migration 0087 preserves all v1
 Wave bytes and child Turns, checks foreign keys and restores immutability;
 the existing hard-coded v1 digest remains exact. Server TypeScript build passes.
 All focused runner roots were physically removed.
+
+## Observed usage evidence
+
+DISC-016 passes 48 usage and real Orchestrator checks plus Server build. The
+projection counts distinct bound Runs with matching Room, Task, Agent and
+trigger Message, reports unavailable bindings separately, and ignores budget
+slot debits. All nine lifecycle states, duplicate input, unbound member slots,
+terminal wall-time freezing and late working-to-completed transitions are
+covered. The real finalizer view observes two completed Runs and one queued
+Run. Tokens and currency remain null; no execution-time or cost inference is
+made from Run creation or Discussion duration.
