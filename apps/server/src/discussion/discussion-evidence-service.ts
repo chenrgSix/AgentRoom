@@ -48,8 +48,16 @@ function truncateSection(value: string, maximum: number): string {
 
 function truncateTranscript(lines: readonly string[], maximum: number): string {
   if (maximum <= 0) return "";
+  const complete = lines.join("\n");
+  if (!exceedsUnicodeCodePointLimit(complete, maximum)) return complete;
+
+  const marker = truncationMarker.trimStart();
+  const markerLength = codePointLength(marker);
+  if (maximum <= markerLength) {
+    return truncateUnicodeCodePoints(marker, maximum);
+  }
   const selected: string[] = [];
-  let remaining = maximum;
+  let remaining = maximum - markerLength - 1;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index]!;
     const separatorLength = selected.length === 0 ? 0 : 1;
@@ -60,11 +68,11 @@ function truncateTranscript(lines: readonly string[], maximum: number): string {
       continue;
     }
     if (selected.length === 0) {
-      selected.unshift(truncateSection(line, remaining));
+      selected.unshift(truncateUnicodeCodePoints(line, remaining));
     }
     break;
   }
-  return selected.join("\n");
+  return selected.length === 0 ? marker : `${marker}\n${selected.join("\n")}`;
 }
 
 export class DiscussionEvidenceService {

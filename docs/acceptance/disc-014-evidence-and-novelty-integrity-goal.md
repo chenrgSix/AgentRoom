@@ -92,11 +92,14 @@ execution Plan, or alter Task Result evidence authority.
 
 ## Acceptance Evidence
 
-- 64 focused tests cover supported reference resolution, scope rejection,
-  claimed-only audit retention, legacy reopen behavior, exact and lexical
-  repetition, independent progress deltas, frozen member order, quorum
-  filtering, restart behavior and Prompt projection.
-- The full Server suite passes 606 tests with no failures and removes its owned
+- 79 focused Discussion tests cover supported reference resolution, scope
+  rejection, claimed-only audit retention, legacy reopen behavior, exact and
+  lexical repetition, independent progress deltas, frozen member order, quorum
+  filtering, restart behavior and Prompt projection. The Orchestrator fixture
+  resolves Message, Run, Artifact, Result, Memory and Discussion references
+  through real SQLite repositories, and a restart between Waves reconstructs
+  lexical comparison from accepted durable replies.
+- The full Server suite passes 608 tests with no failures and removes its owned
   temporary root.
 - The Server TypeScript build passes. Markdown lint passes across 380
   maintained files, and `git diff --check` reports no whitespace errors.

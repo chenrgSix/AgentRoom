@@ -211,7 +211,7 @@ test("Wave aggregation rejects duplicate participant ordinals", () => {
   }), /Duplicate Wave participant ordinal/u);
 });
 
-test("the current explicit Reviewer opinion replaces stale approval", () => {
+test("current review replaces or invalidates stale approval", () => {
   const evaluate = (
     previousApproval: boolean,
     opinions: Array<boolean | undefined>
@@ -228,9 +228,51 @@ test("the current explicit Reviewer opinion replaces stale approval", () => {
 
   assert.equal(evaluate(true, [false]), false);
   assert.equal(evaluate(false, [true]), true);
-  assert.equal(evaluate(true, [undefined]), true);
+  assert.equal(evaluate(true, [undefined]), false);
   assert.equal(evaluate(false, [true, false]), false);
   assert.equal(evaluate(false, [false, true]), false);
+
+  const unchangedReply = "The already reviewed conclusion remains unchanged.";
+  const unchanged = evaluateWaveProgress({
+    previous: {
+      ...emptyProgressSnapshot(),
+      reviewerApproved: true,
+      replyHashes: [hashDiscussionReply(unchangedReply)]
+    },
+    previousReplies: [unchangedReply],
+    successfulResults: [{
+      participantOrdinal: 0,
+      reply: unchangedReply,
+      assessment: { newInformationAdded: false },
+      speakerIsReviewer: false
+    }],
+    policy: defaultDiscussionPolicy
+  });
+  assert.equal(unchanged.snapshot.lastTurnAddedInformation, false);
+  assert.equal(unchanged.snapshot.reviewerApproved, true);
+
+  const changedCompletion = evaluateWaveProgress({
+    previous: {
+      ...emptyProgressSnapshot(),
+      reviewerApproved: true,
+      replyHashes: [hashDiscussionReply(unchangedReply)]
+    },
+    previousReplies: [unchangedReply],
+    successfulResults: [{
+      participantOrdinal: 0,
+      reply: unchangedReply,
+      assessment: {
+        goalSatisfied: true,
+        confidence: 0.95,
+        newInformationAdded: false
+      },
+      speakerIsReviewer: false
+    }],
+    policy: defaultDiscussionPolicy
+  });
+  assert.equal(changedCompletion.snapshot.lastTurnAddedInformation, false);
+  assert.equal(changedCompletion.snapshot.goalSatisfied, true);
+  assert.equal(changedCompletion.snapshot.reviewerApproved, false);
 });
 
 test("claimed evidence remains auditable but only verified evidence resets plateau", () => {

@@ -207,6 +207,34 @@ test("plateau policy distinguishes low and high priority unresolved questions", 
   });
   assert.equal(high.action, "wait_human");
   assert.equal(high.state, "waiting_human");
+
+  const unreviewed = decideDiscussion({
+    progress: {
+      ...emptyProgressSnapshot(),
+      plateauCount: 2,
+      lastTurnAddedInformation: false,
+      reviewerApproved: false
+    },
+    budget: emptyBudgetSnapshot(4),
+    policy: { ...defaultDiscussionPolicy, requireReviewer: true },
+    requestedOutputMode: "summary"
+  });
+  assert.equal(unreviewed.action, "wait_human");
+  assert.equal(unreviewed.state, "waiting_human");
+  assert.equal(unreviewed.reason, "discussion_plateau");
+
+  const reviewed = decideDiscussion({
+    progress: {
+      ...emptyProgressSnapshot(),
+      plateauCount: 2,
+      lastTurnAddedInformation: false,
+      reviewerApproved: true
+    },
+    budget: emptyBudgetSnapshot(4),
+    policy: { ...defaultDiscussionPolicy, requireReviewer: true },
+    requestedOutputMode: "summary"
+  });
+  assert.equal(reviewed.action, "finalize");
 });
 
 test("user cancellation and hard budget outrank completion recommendations", () => {

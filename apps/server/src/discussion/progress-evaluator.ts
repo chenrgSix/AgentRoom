@@ -310,9 +310,6 @@ export function evaluateWaveProgress(input: {
     const opinion = members[index]?.assessment?.reviewerApproved;
     return result.speakerIsReviewer && opinion !== undefined ? [opinion] : [];
   });
-  const reviewerApproved = currentReviewerOpinions.length === 0
-    ? input.previous.reviewerApproved
-    : currentReviewerOpinions.every((approved) => approved);
 
   const completionAssessments = members
     .map(({ assessment }) => assessment)
@@ -363,6 +360,21 @@ export function evaluateWaveProgress(input: {
     disagreementRemaining !== input.previous.disagreementRemaining;
   const madeProgress = addedNovelReply || resolvedQuestions.length > 0 ||
     newEvidence > 0 || disagreementChanged;
+  const openQuestionsChanged = openQuestions.length !== input.previous.openQuestions.length ||
+    openQuestions.some((question, index) => {
+      const previous = input.previous.openQuestions[index];
+      return previous?.id !== question.id ||
+        previous.question !== question.question ||
+        previous.importance !== question.importance;
+    });
+  const reviewProjectionChanged = madeProgress || openQuestionsChanged ||
+    goalSatisfied !== input.previous.goalSatisfied ||
+    confidence !== input.previous.confidence;
+  const reviewerApproved = currentReviewerOpinions.length > 0
+    ? currentReviewerOpinions.every((approved) => approved)
+    : reviewProjectionChanged
+      ? false
+      : input.previous.reviewerApproved;
 
   return {
     snapshot: {

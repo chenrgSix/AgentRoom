@@ -33,10 +33,11 @@ rejects revisiting an Agent. Discussion may use the same participants again in
 later Waves. A Reviewer contributes independently in the same ordinary Wave as
 the other participants and cannot inspect peer replies that did not exist when
 the Wave started. Its explicit current-Wave approval or rejection replaces the
-prior approval evidence; a missing or failed current Reviewer report preserves
-the prior value. Approval is evidence for a policy that requires review, and
-the role is preferred when selecting the separate finalization member; it does
-not create a serial review Wave.
+prior approval evidence. A Wave without an explicit Reviewer opinion preserves
+the prior value only when its review-relevant progress projection is unchanged;
+otherwise the prior approval is stale and becomes false. Approval is evidence
+for a policy that requires review, and the role is preferred when selecting the
+separate finalization member; it does not create a serial review Wave.
 
 ## Authority Boundary
 
@@ -237,9 +238,12 @@ inputs. A typical plateau has no newly resolved important question, newly
 verified evidence, changed decision, reduced disagreement or lexically novel
 accepted reply across consecutive Waves.
 
-A plateau with no important unresolved issue may finalize automatically. A
-plateau with a high-priority unresolved issue moves to `waiting_human` and
+A plateau with no important unresolved issue may finalize automatically only
+when any required Reviewer approval is current. A plateau with a high-priority
+unresolved issue or missing required approval moves to `waiting_human` and
 offers a strategy or participant change; it must not claim success silently.
+User-requested finalization and hard-budget termination remain separate stop
+boundaries and do not claim policy satisfaction.
 
 ## Discussion Budget
 
@@ -334,8 +338,9 @@ and pull adapters participate without a client rewrite. It first reserves the
 current identity, Task, `Your Task`, assessment and structured finalization
 rules, bounds goal and progress sections, then admits only the newest accepted
 transcript lines that fit. The transcript remains limited to 24 Room Messages,
-and the whole instruction remains within 20,000 Unicode code points without
-splitting a code point.
+and any character-budget omission receives a visible truncation marker. The
+whole instruction remains within 20,000 Unicode code points without splitting a
+code point.
 
 Managed adapters should emit structured assessments when supported. Generic or
 manual participants may emit reply-only output; policy remains safe under that

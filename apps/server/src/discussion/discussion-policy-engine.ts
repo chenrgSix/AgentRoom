@@ -109,7 +109,7 @@ export function decideDiscussion(input: {
     const hasHighPriorityQuestion = input.progress.openQuestions.some(
       ({ importance }) => importance === "high"
     );
-    return hasHighPriorityQuestion
+    return hasHighPriorityQuestion || !reviewSatisfied
       ? {
           action: "wait_human",
           state: "waiting_human",

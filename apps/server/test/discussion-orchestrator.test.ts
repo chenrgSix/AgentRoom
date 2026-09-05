@@ -31,11 +31,15 @@ import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 import { AgentTaskService } from "../src/task/agent-task-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
+import { ArtifactRepository } from "../src/task/artifact-repository.js";
 import { ContextPlanner } from "../src/task/context-planner.js";
+import { MemoryEntryRepository } from "../src/task/memory-entry-repository.js";
+import { ResultRepository } from "../src/task/result-repository.js";
 
 const now = "2026-08-23T10:00:00.000Z";
 
 interface OrchestratorFixture {
+  artifacts: ArtifactRepository;
   close(): void;
   clock: { value: string };
   core: CoreRepository;
@@ -44,10 +48,13 @@ interface OrchestratorFixture {
   devicePrincipal: DevicePrincipal;
   discussions: DiscussionRepository;
   orchestrator: DiscussionOrchestrator;
+  ownerMemberId: string;
   restart(): DiscussionOrchestrator;
   principal: WebPrincipal;
   roomId: string;
   agentIds: string[];
+  memories: MemoryEntryRepository;
+  results: ResultRepository;
   runs: RunRepository;
   supplementalEvidence: DiscussionSupplementalEvidenceService;
 }
@@ -126,6 +133,9 @@ async function fixture(
     }).agentId;
   });
   const taskRepository = new AgentTaskRepository(database);
+  const artifacts = new ArtifactRepository(database);
+  const results = new ResultRepository(database);
+  const memories = new MemoryEntryRepository(database);
   const delivery = new DeliveryService(
     database,
     core,
@@ -145,6 +155,7 @@ async function fixture(
   };
   resources.defer(close);
   return {
+    artifacts,
     close,
     clock,
     core,
@@ -154,13 +165,17 @@ async function fixture(
     discussions,
     orchestrator: new DiscussionOrchestrator(
       core, messages, discussions, runs, auth,
-      taskRepository, () => clock.value
+      taskRepository, () => clock.value, undefined,
+      { artifacts, results, memories }
     ),
     restart: () => {
       const restartedDatabase = openDatabase(databasePath);
       restartedDatabases.push(restartedDatabase);
       const restartedCore = new CoreRepository(restartedDatabase);
       const restartedAuth = new AuthService(restartedDatabase);
+      const restartedArtifacts = new ArtifactRepository(restartedDatabase);
+      const restartedResults = new ResultRepository(restartedDatabase);
+      const restartedMemories = new MemoryEntryRepository(restartedDatabase);
       return new DiscussionOrchestrator(
         restartedCore,
         new MessageService(restartedCore, restartedAuth),
@@ -168,12 +183,21 @@ async function fixture(
         new RunRepository(restartedDatabase),
         restartedAuth,
         new AgentTaskRepository(restartedDatabase),
-        () => clock.value
+        () => clock.value,
+        undefined,
+        {
+          artifacts: restartedArtifacts,
+          results: restartedResults,
+          memories: restartedMemories
+        }
       );
     },
+    ownerMemberId: created.owner.memberId,
     principal,
     roomId: room.roomId,
     agentIds,
+    memories,
+    results,
     runs,
     supplementalEvidence: new DiscussionSupplementalEvidenceService(
       core,
@@ -1487,7 +1511,41 @@ test("bounded instructions preserve identity, task and assessment guidance", asy
   }
 });
 
-test("later Waves distinguish claimed and verified evidence references", async (t) => {
+test("transcript character truncation is explicit and preserves newest evidence", async (t) => {
+  const value = await fixture(t);
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Keep transcript budget truncation visible.",
+      participantAgentIds: value.agentIds,
+      policy: { allowAutomaticFinish: false }
+    });
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: `Long contribution ${index}: ${String(index).repeat(12_000)}`,
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+
+    const instruction = result.scheduledRuns[0]?.instruction ?? "";
+    const transcript = recentTranscript(instruction);
+    assert.ok([...instruction].length <= 20_000);
+    assert.match(
+      transcript,
+      /^\[\.\.\. truncated to preserve required instruction sections \.\.\.\]/u
+    );
+    assert.doesNotMatch(transcript, /Long contribution 0:/u);
+    assert.match(transcript, /Long contribution 1:/u);
+  } finally {
+    value.close();
+  }
+});
+
+test("later Waves verify all concrete evidence repositories", async (t) => {
   const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
@@ -1497,6 +1555,86 @@ test("later Waves distinguish claimed and verified evidence references", async (
       policy: { allowAutomaticFinish: false }
     });
     const rootMessageId = result.discussion.rootMessageId;
+    const taskId = result.discussion.taskId;
+    const runId = result.scheduledRuns[0]?.runId;
+    assert.ok(runId);
+    const artifactId = "artifact_discussion_evidence001";
+    value.artifacts.create({
+      artifactId,
+      artifactRevision: 0,
+      taskId,
+      roomId: value.roomId,
+      type: "document",
+      workspaceRef: "workspace_discussion_evidence",
+      repository: null,
+      path: null,
+      commitSha: null,
+      branch: null,
+      contentMode: "reference_only",
+      contentId: null,
+      contentPublicationId: null,
+      contentSizeBytes: null,
+      contentMediaType: null,
+      contentSha256: null,
+      title: "Discussion evidence",
+      summary: "A concrete same-Task Artifact reference.",
+      sourceRunId: runId,
+      createdByMemberId: value.ownerMemberId,
+      createdByAgentId: null,
+      createdAt: now,
+      relations: []
+    });
+    const memoryId = "memory_discussion_evidence001";
+    value.memories.create({
+      memoryId,
+      scopeKind: "task",
+      scopeId: taskId,
+      roomId: value.roomId,
+      taskId,
+      type: "progress",
+      content: "The concrete evidence fixture is ready.",
+      supersedesMemoryId: null,
+      sourceMessageIds: [rootMessageId],
+      sourceArtifactIds: [artifactId],
+      sourceRunIds: [runId],
+      sourceDiscussionIds: [result.discussion.discussionId],
+      createdByMemberId: value.ownerMemberId,
+      createdAt: now
+    });
+    const task = new AgentTaskRepository(value.database).get(taskId);
+    assert.ok(task);
+    const concreteResult = value.results.create({
+      roomId: value.roomId,
+      proposal: {
+        operationId: "op_discussion_evidence_result001",
+        taskId,
+        definitionRevision: task.definitionRevision,
+        criteriaRevision: task.criteriaRevision,
+        proposedAtTaskRevision: task.taskRevision,
+        supersedesResultId: null,
+        outcome: "informational",
+        summary: "Concrete Result evidence for Discussion verification.",
+        risks: [],
+        openQuestions: [],
+        nextActions: [],
+        sources: [{
+          evidenceRefId: "evidence_discussion_message001",
+          kind: "message",
+          messageId: rootMessageId
+        }],
+        criterionClaims: []
+      },
+      actor: { kind: "member", memberId: value.ownerMemberId },
+      now
+    });
+    const concreteReferences = [
+      rootMessageId,
+      runId,
+      artifactId,
+      concreteResult.resultId,
+      memoryId,
+      result.discussion.discussionId
+    ];
     const forgedReference = "artifact_forged_progress";
     for (const [index, run] of result.scheduledRuns.entries()) {
       completeRun({
@@ -1505,7 +1643,7 @@ test("later Waves distinguish claimed and verified evidence references", async (
         run,
         content: `Independent evidence contribution ${index}.`,
         assessment: {
-          newEvidenceRefs: [index === 0 ? rootMessageId : forgedReference],
+          newEvidenceRefs: index === 0 ? concreteReferences : [forgedReference],
           recommendation: "continue"
         }
       });
@@ -1514,9 +1652,12 @@ test("later Waves distinguish claimed and verified evidence references", async (
 
     assert.deepEqual([...result.discussion.progress.evidenceRefs].sort(), [
       forgedReference,
-      rootMessageId
+      ...concreteReferences
     ].sort());
-    assert.deepEqual(result.discussion.progress.verifiedEvidenceRefs, [rootMessageId]);
+    assert.deepEqual(
+      result.discussion.progress.verifiedEvidenceRefs,
+      [...concreteReferences].sort()
+    );
     assert.ok(result.turns.some(({ assessment }) =>
       assessment?.newEvidenceRefs?.includes(forgedReference)
     ));
@@ -1525,12 +1666,72 @@ test("later Waves distinguish claimed and verified evidence references", async (
       nextInstruction.indexOf("## Progress"),
       nextInstruction.indexOf("## Remaining Lease")
     );
-    assert.match(progressSection, new RegExp(rootMessageId, "u"));
+    for (const reference of concreteReferences) {
+      assert.match(progressSection, new RegExp(reference, "u"));
+    }
     assert.doesNotMatch(progressSection, new RegExp(forgedReference, "u"));
     assert.match(
       recentTranscript(nextInstruction),
       new RegExp(`\\[${rootMessageId} \\|`, "u")
     );
+  } finally {
+    value.close();
+  }
+});
+
+test("restart rebuilds lexical comparison from prior accepted replies", async (t) => {
+  const value = await fixture(t);
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Suppress durable lexical restatements after restart.",
+      participantAgentIds: value.agentIds,
+      policy: { allowAutomaticFinish: false, plateauWindow: 4 }
+    });
+    const firstReplies = [
+      "Use Redis because it provides lower latency for this request path.",
+      "Redis 的延迟更低，因此我们建议在这个请求路径中使用 Redis。"
+    ];
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: firstReplies[index]!,
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+    assert.equal(result.discussion.progress.plateauCount, 0);
+
+    const pendingRuns = result.scheduledRuns;
+    const restarted = value.restart();
+    assert.deepEqual(
+      sortedRunIds(restarted.recover()),
+      sortedRunIds(pendingRuns)
+    );
+    const repeatedReplies = [
+      "Because Redis provides lower latency for this request path, use Redis.",
+      "Redis 延迟更低，因此建议在这个请求路径中使用 Redis。"
+    ];
+    for (const [index, run] of pendingRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: repeatedReplies[index]!,
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(restarted.onRunTerminal(run.runId));
+    }
+    assert.equal(result.discussion.progress.lastTurnAddedInformation, false);
+    assert.equal(result.discussion.progress.plateauCount, 1);
+
+    const persisted = value.restart().get(
+      value.principal,
+      result.discussion.discussionId
+    );
+    assert.deepEqual(persisted.discussion.progress, result.discussion.progress);
   } finally {
     value.close();
   }
