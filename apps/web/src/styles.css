@@ -775,6 +775,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .discussion-selection-audit, .discussion-quorum-audit { display: grid; min-width: 0; gap: 4px; margin-top: 3px; padding: 7px 8px; border: 1px solid #3d4935; border-radius: 8px; background: #171c15; }
 .discussion-selection-audit > strong, .discussion-quorum-audit > strong { color: #cbd9bc; font-size: 9px; }
 .discussion-selection-audit > span { overflow-wrap: anywhere; color: #929f88; font-size: 8px; }
+.discussion-selection-audit > strong { font-size: 11px; }
+.discussion-selection-audit > span { font-size: 11px; line-height: 1.5; }
+.discussion-selection-reasons { margin: 0; padding-left: 16px; font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.discussion-selection-audit details { min-width: 0; font-size: 10px; overflow-wrap: anywhere; }
+.discussion-selection-audit summary { cursor: pointer; }
 .discussion-selection-audit code, .discussion-quorum-audit code { overflow-wrap: anywhere; color: #aab99d; font: 8px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .discussion-quorum-audit article { display: grid; min-width: 0; gap: 4px; padding: 7px; border-left: 3px solid #7e944f; background: #20271c; }
 .discussion-quorum-audit article.supplemental { border-left-color: #5a8992; }
@@ -1101,6 +1106,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .discussion-wave-member-copy > strong { color: #3e4839; }
 :root[data-theme="light"] .discussion-wave-member-copy > small { color: #8b625c; }
 :root[data-theme="light"] .discussion-wave-finalizing { color: #3d7882; }
+:root[data-theme="light"] .discussion-selection-audit > strong { color: #35402f; }
+:root[data-theme="light"] .discussion-selection-audit > span,
+:root[data-theme="light"] .discussion-selection-audit details { color: #4b5940; }
 :root[data-theme="light"] .discussion-policy-audit > div, :root[data-theme="light"] .discussion-selection-audit, :root[data-theme="light"] .discussion-quorum-audit, :root[data-theme="light"] .discussion-quorum-audit article { border-color: #cbd6bf; background: #f6f9f1; }
 :root[data-theme="light"] .discussion-composer-policy { border-color: #c3d0b5; background: #f5f8f1; }
 :root[data-theme="light"] .discussion-composer-policy summary { color: #526a2a; }

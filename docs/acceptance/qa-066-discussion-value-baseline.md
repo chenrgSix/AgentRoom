@@ -55,3 +55,15 @@ terminal wall-time freezing and late working-to-completed transitions are
 covered. The real finalizer view observes two completed Runs and one queued
 Run. Tokens and currency remain null; no execution-time or cost inference is
 made from Run creation or Discussion duration.
+
+## Web evidence
+
+WEB-072 passes nine focused Discussion UI checks and all 307 Web checks.
+Actual built trusted-Team pages retain v2 reasons and the expandable digest,
+show five actual Runs with three completed and two expired, and keep budget
+slots and missing token/cost telemetry separate. Chinese/English and dark/light
+views were inspected at 1280, 720 and 390 pixels with no horizontal document
+overflow or browser warning/error. The new explanations and usage copy have
+larger text and explicit light-theme contrast. Screenshots are retained locally
+under ignored `var/qa-066-discussion/desktop.png` and `mobile-light.png`.
+The preview uses only synthetic Team data and simulated responses.

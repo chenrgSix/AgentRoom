@@ -1,3 +1,4 @@
+import { DiscussionInsights } from "./DiscussionInsights.js";
 import type { Locale } from "../../i18n.js";
 import type {
   Agent,
@@ -257,12 +258,8 @@ export function DiscussionStatus({
               <div><dt>{locale === "zh-CN" ? "参与选择" : "Participant selection"}</dt><dd>{display(visibleDiscussion.discussion.policy.participantSelectionMode)} · {visibleDiscussion.discussion.policy.focusedParticipantLimit}</dd></div>
               <div><dt>{locale === "zh-CN" ? "本轮完成" : "Wave completion"}</dt><dd>{display(visibleDiscussion.discussion.policy.waveCompletionMode)}{visibleDiscussion.discussion.policy.waveCompletionMode === "read_only_quorum" ? ` · ${visibleDiscussion.discussion.policy.quorumMinimumCompleted} @ ${visibleDiscussion.discussion.policy.quorumSoftDeadlineSeconds}s` : ""}</dd></div>
             </dl>}
-            {activeWave?.selection && <div className="discussion-selection-audit" aria-label={locale === "zh-CN" ? "本轮参与选择证据" : "Wave participant selection evidence"}>
-              <strong>{locale === "zh-CN" ? "本轮选择证据" : "Wave selection evidence"}</strong>
-              <span>{display(activeWave.selection.strategy)} · {activeWave.selection.selectedAgentIds.map((agentId) => agentsById.get(agentId)?.name ?? agentId).join(", ")}</span>
-              {activeWave.selection.focusQuestionIds.length > 0 && <span>{locale === "zh-CN" ? "聚焦问题" : "Focus questions"}: {activeWave.selection.focusQuestionIds.join(", ")}</span>}
-              <code>{activeWave.selection.selectionDigest}</code>
-            </div>}
+            <DiscussionInsights view={visibleDiscussion} wave={activeWave}
+              agentsById={agentsById} locale={locale} />
             {activeWave && (
               <div className={`discussion-wave ${activeWave.phase} ${activeWave.state}`}>
                 <div className="discussion-wave-summary">

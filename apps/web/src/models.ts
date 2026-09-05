@@ -185,6 +185,16 @@ export type DiscussionState =
   | "terminated";
 
 export interface DiscussionView {
+  observedUsage?: {
+    observedAt: string;
+    createdRuns: number;
+    runsByState: Record<Run["state"], number>;
+    unboundMemberSlots: number;
+    unavailableRunRecords: number;
+    wallDurationSeconds: number | null;
+    tokens: number | null;
+    estimatedCostMicros: number | null;
+  };
   discussion: {
     discussionId: string;
     taskId: string;
@@ -204,6 +214,7 @@ export interface DiscussionView {
     };
     budget: {
       turnsUsed: number;
+      agentRunsUsed?: number;
       durationSeconds: number;
     };
     policy?: {
@@ -225,7 +236,15 @@ export interface DiscussionView {
     state: "open" | "completed" | "partial" | "failed" | "canceled";
     expectedMembers: number;
     selection?: {
-      version: 1;
+      version: 1 | 2;
+      explanations?: Array<{
+        agentId: string;
+        reasons: Array<"all_member_policy" | "no_focus_questions" | "no_deterministic_match" |
+          "question_reporter" | "role_match" | "required_reviewer" |
+          "finalizer_reviewer" | "finalizer_primary" | "finalizer_ordinal">;
+        reportedQuestionIds: string[];
+        matchedRoleTerms: string[];
+      }>;
       strategy: "all_eligible" | "question_focused" | "finalizer";
       focusQuestionIds: string[];
       eligibleAgentIds: string[];
