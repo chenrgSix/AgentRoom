@@ -23,7 +23,7 @@ only in `docs/TASKS.md`.
   bounded existing query, not a fabricated total or a new notification service.
   Logout, changed Team, denied access and late replies cannot retain old data.
 - Copy Task opens an editable draft and requires explicit creation. Title,
-  goal and criterion semantics survive; new identity and draft state are
+  goal, criterion semantics and completion policy survive; new identity and draft state are
   Server-created. Assignments, history, Results, grants and approval do not copy.
 - A bounded common-field plan form preserves every unedited full-definition
   field. Goal, Agent and budget edits create a new revision using existing
@@ -84,3 +84,17 @@ Focus recovery refreshes the current scope.
 The actual built preview retains “我的任务待处理 / 查看下一步” in Management.
 Clicking it returns directly to the current Task Result review surface. It
 shows neither a fabricated total nor any new notification permission prompt.
+
+## WEB-070 evidence
+
+The 23 focused copy/Task-detail checks and Web build pass. Real Fastify/SQLite
+tests create a fresh draft, preserve multiline and optional criteria plus the
+completion policy, leave the source untouched and inherit no assignments or
+execution state. Denied access, source revision drift, session changes and
+response loss after an actual commit cannot silently create another Task.
+
+The actual built preview copied TASK-108 through an editable confirmation
+dialog into TASK-113, “QA-064 · 可复用草稿”. Its overview reports draft, the same
+required criterion and accepted-Result policy, zero attempts and no Run,
+Result or assignment. New criterion keys work on LAN HTTP without requiring
+secure-context random UUID support.

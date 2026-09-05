@@ -803,7 +803,7 @@ Team-wide count, and clears on logout, Team changes or failed authorization.
 The first version needs no browser notification permission or external channel.
 
 Copying a Task explicitly pre-fills a new editable draft with its title, goal
-and criteria. It uses the existing create API and copies no assignments, Runs,
+and criteria, preserving its completion policy. It uses the existing create API and copies no assignments, Runs,
 Results, Plan, review, budget usage, parent linkage or local grants. Execution
 Agent selection happens separately through existing Task/Room controls.
 

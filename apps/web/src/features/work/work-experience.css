@@ -192,3 +192,8 @@
 .result-report-actions [role="alert"] { color: var(--cw-danger); }
 .work-result-summary { min-width: 0; overflow-wrap: anywhere; }
 .work-result-summary .markdown-message { max-width: 100%; }
+
+.task-copy-criteria { min-width: 0; border: 1px solid var(--cw-border); border-radius: 8px; padding: 12px; }
+.task-copy-criteria > div { margin-bottom: 16px; }
+.task-copy-criteria label { display: block; }
+.task-copy-criteria input[type="checkbox"] { width: auto; margin-right: 6px; }

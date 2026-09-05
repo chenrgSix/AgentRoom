@@ -1,3 +1,4 @@
+import { TaskCopyControl } from "../task/TaskCopyControl.js";
 import { MarkdownMessage } from "../../MarkdownMessage.js";
 import { ResultReportActions } from "./ResultReportActions.js";
 import type {
@@ -507,6 +508,7 @@ export function TaskWorkDetail({
             <span>{display(task.lifecycleState)}</span>
             <span>{display(task.priority)}</span>
           </div>
+          <TaskCopyControl key={`${task.taskId}:${currentMember?.memberId}:${token}`} task={task} locale={locale} token={token} roomName={roomName} onCreated={(created) => { onChanged(); onOpenTask(created.taskId, created.roomId); }} />
           {onCopyLink && <button className="work-inline-link" onClick={() => void onCopyLink()} type="button">{text("复制当前链接", "Copy current link", locale)}</button>}
         </div>
       </header>
