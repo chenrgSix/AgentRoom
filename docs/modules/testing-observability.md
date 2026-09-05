@@ -62,6 +62,37 @@ app-server crosses production Bridge/process boundaries but is not live-provider
 or multi-machine evidence. The accepted topology, counts, gates and replay
 matrix live in [`QA-052`](../acceptance/qa-052-controlled-product-loop-goal.md).
 
+`QA-060` can run those same two retained physical tests against released
+artifacts on supported Apple-silicon macOS hardware. Set all four
+`CONVENE_WIRE_PRODUCT_SMOKE_*` pins below; partial pins, a non-digest image,
+mismatched image labels or a mismatched Bridge version fail before startup.
+First verify the downloaded Bridge archive against the public Release
+checksums and obtain the Server image from the verified Central source package.
+The default, unconfigured test path still builds Bridge and starts source
+Central; it is not packaged acceptance.
+
+```sh
+CONVENE_WIRE_PRODUCT_SMOKE_IMAGE='sha256:FULL_IMAGE_ID' \
+CONVENE_WIRE_PRODUCT_SMOKE_BRIDGE='/absolute/released/convenewire-bridge' \
+CONVENE_WIRE_PRODUCT_SMOKE_VERSION='v0.5.0-rc.6' \
+CONVENE_WIRE_PRODUCT_SMOKE_SOURCE='FULL_40_CHARACTER_RELEASE_SOURCE' \
+node scripts/test/run-with-temp-root.mjs -- \
+  node --import tsx --test tests/e2e/governed-two-bridge-integration.test.ts
+```
+
+The packaged path uses a UUID-named disposable Docker container, one
+loopback-only published port, a dedicated temporary database directory,
+trusted-team Owner setup, exact-Origin Cookies and the released Desktop
+archive's native CLI helper. Central never mounts either client repository.
+SQLite assertions read completed online backups made inside the container;
+the host must never open the running container's WAL/SHM across kernel
+boundaries. Docker processes stop before container removal, and the existing
+owned-resource lifecycle reclaims backups, repositories and caches on either
+outcome. Docker and normal native process/sandbox authority are prerequisites.
+This is an API-driven product smoke with deterministic model responses, not
+browser click-through, HTTPS/Caddy, live-model or multi-machine acceptance.
+Owner review and actual stable publication remain separate QA-060 gates.
+
 GOV-026 accepts the pre-provider architecture in
 [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md).
 `CON-023` supplies generated contract fixtures and `EXEC-009` supplies

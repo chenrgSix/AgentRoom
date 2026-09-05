@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { execFile, execFileSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { unlinkSync } from "node:fs";
 import {
   access,
   chmod,
@@ -40,6 +41,44 @@ const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
 const bridgeRoot = path.join(repositoryRoot, "bridge");
 const permissionProfile = "convenewire_governed";
+const packagedImage = process.env.CONVENE_WIRE_PRODUCT_SMOKE_IMAGE;
+const packagedBridge = process.env.CONVENE_WIRE_PRODUCT_SMOKE_BRIDGE;
+const packagedVersion = process.env.CONVENE_WIRE_PRODUCT_SMOKE_VERSION;
+const packagedSource = process.env.CONVENE_WIRE_PRODUCT_SMOKE_SOURCE;
+const smokeOrigin = "https://qa060.invalid";
+const smokeRecoveryToken = `qa060-${randomUUID()}`;
+const webCookies = new Set<string>();
+const centralContainers = new Map<string, string>();
+
+async function prepareCentralData(databasePath: string): Promise<void> {
+  await mkdir(path.dirname(databasePath), { recursive: true });
+  if (packagedImage) {
+    await writeFile(path.join(path.dirname(databasePath), "owner-token"),
+      smokeRecoveryToken, { mode: 0o600 });
+  }
+}
+
+async function prepareBridge(binary: string): Promise<void> {
+  const pins = [packagedImage, packagedBridge, packagedVersion, packagedSource];
+  if (pins.some(Boolean)) {
+    assert.ok(pins.every(Boolean), "Packaged smoke requires all four release pins");
+    assert.match(packagedImage!, /^sha256:[a-f0-9]{64}$/u);
+    assert.match(packagedSource!, /^[a-f0-9]{40}$/u);
+    assert.ok(path.isAbsolute(packagedBridge!));
+    const inspection = await execFileAsync("docker", ["image", "inspect", packagedImage!]);
+    const [image] = JSON.parse(inspection.stdout);
+    assert.equal(image.Config.Labels["org.opencontainers.image.version"], packagedVersion);
+    assert.equal(image.Config.Labels["org.opencontainers.image.revision"], packagedSource);
+    const version = await execFileAsync(packagedBridge!, ["version"]);
+    assert.equal(version.stdout.trim(), packagedVersion);
+    await copyFile(packagedBridge!, binary);
+    await chmod(binary, 0o700);
+    return;
+  }
+  await execFileAsync(process.env.CONVENE_WIRE_GO_BIN ?? "go", [
+    "build", "-o", binary, "./cmd/convenewire-bridge"
+  ], { cwd: bridgeRoot, maxBuffer: 8 << 20 });
+}
 
 interface ProcessHandle extends TestProcess {
   stderr: string;
@@ -210,6 +249,41 @@ function startCentral(
   databasePath: string,
   bridgeServerToken: string
 ): ProcessHandle {
+  if (packagedImage) {
+    const container = `cw-product-${randomUUID()}`;
+    centralContainers.set(databasePath, container);
+    const env = centralEnvironment(port, databasePath, bridgeServerToken);
+    env.CONVENE_WIRE_HOST = "0.0.0.0";
+    env.CONVENE_WIRE_WEB_AUTH_MODE = "trusted-team";
+    env.CONVENE_WIRE_PUBLIC_ORIGIN = smokeOrigin;
+    env.CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE = path.join(path.dirname(databasePath), "owner-token");
+    env.CONVENE_WIRE_RELEASE_VERSION = packagedVersion;
+    env.CONVENE_WIRE_SOURCE_COMMIT = packagedSource;
+    const handle = startProcess(resources, "docker", [
+      "run", "--rm", "--name", container, "--user", "0:0",
+      "--publish", `127.0.0.1:${port}:${port}`,
+      "--mount", `type=bind,source=${path.dirname(databasePath)},target=${path.dirname(databasePath)}`,
+      ...["CONVENE_WIRE_PORT", "CONVENE_WIRE_HOST", "CONVENE_WIRE_DATABASE_PATH",
+        "CONVENE_WIRE_BRIDGE_SERVER_TOKEN", "CONVENE_WIRE_WEB_AUTH_MODE",
+        "CONVENE_WIRE_RELEASE_VERSION", "CONVENE_WIRE_SOURCE_COMMIT",
+        "CONVENE_WIRE_PUBLIC_ORIGIN", "CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE"]
+        .flatMap((key) => ["--env", key]),
+      packagedImage
+    ], { cwd: repositoryRoot, env, stdio: ["ignore", "pipe", "pipe"] });
+    const stopProcess = handle.stop;
+    let stopped: Promise<void> | undefined;
+    const stop = () => stopped ??= (async () => {
+      try {
+        await stopProcess();
+      } finally {
+        const listed = await execFileAsync("docker", ["ps", "-aq", "--filter", `name=^/${container}$`]);
+        if (listed.stdout.trim()) await execFileAsync("docker", ["rm", "-f", container]);
+        if (centralContainers.get(databasePath) === container) centralContainers.delete(databasePath);
+      }
+    })();
+    resources.defer(stop);
+    return Object.assign(handle, { stop });
+  }
   return startProcess(resources, process.execPath, [
     "--import",
     "tsx",
@@ -290,6 +364,38 @@ async function writeJSON(filename: string, value: unknown): Promise<void> {
   });
 }
 
+function authenticationHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = packagedImage ? { origin: smokeOrigin } : {};
+  if (token) {
+    if (webCookies.has(token)) headers.cookie = token;
+    else headers.authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+async function bootstrapOwner(serverUrl: string, displayName: string): Promise<string> {
+  if (!packagedImage) {
+    const bootstrap = await requestJSON<any>(serverUrl, "POST", "/api/bootstrap", { displayName });
+    return bootstrap.session.token as string;
+  }
+  const metrics = await fetch(`${serverUrl}/api/metrics`);
+  assert.equal(metrics.status, 200);
+  assert.ok((await metrics.text()).includes(
+    `convenewire_build_info{release_version="${packagedVersion}",source_commit="${packagedSource}"} 1`
+  ), "Running Central must report the pinned release/source identity");
+  const response = await fetch(`${serverUrl}/api/auth/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: smokeOrigin,
+      "x-agent-room-recovery-token": smokeRecoveryToken },
+    body: JSON.stringify({ displayName })
+  });
+  assert.equal(response.status, 200, await response.text());
+  const cookie = response.headers.get("set-cookie")?.split(";")[0];
+  assert.ok(cookie, "Packaged trusted-team setup must issue a session Cookie");
+  webCookies.add(cookie);
+  return cookie;
+}
+
 async function requestJSON<T>(
   serverUrl: string,
   method: string,
@@ -301,7 +407,7 @@ async function requestJSON<T>(
     method,
     headers: {
       ...(payload === undefined ? {} : { "content-type": "application/json" }),
-      ...(token ? { authorization: `Bearer ${token}` } : {})
+      ...authenticationHeaders(token)
     },
     ...(payload === undefined ? {} : { body: JSON.stringify(payload) })
   });
@@ -341,7 +447,21 @@ async function mcpCall(
 }
 
 function databaseRead<T>(databasePath: string, read: (database: Database.Database) => T): T {
-  const database = new Database(databasePath, {
+  const container = centralContainers.get(databasePath);
+  const snapshot = container ? `${databasePath}.snapshot-${randomUUID()}` : undefined;
+  if (container && snapshot) {
+    // Never map the live Linux WAL/SHM into macOS: SQLite locks and shared
+    // memory must stay on one kernel. Read a completed online backup instead.
+    execFileSync("docker", ["exec", container, "node", "-e", [
+      "const Database = require('better-sqlite3');",
+      "const source = new Database(process.argv[1], { readonly: true, fileMustExist: true });",
+      "source.backup(process.argv[2]).then(() => { source.close();",
+      "const snapshot = new Database(process.argv[2]);",
+      "snapshot.pragma('journal_mode = DELETE'); snapshot.close();",
+      "}).catch(error => { console.error(error); process.exitCode = 1; });"
+    ].join("\n"), databasePath, snapshot], { timeout: 15_000 });
+  }
+  const database = new Database(snapshot ?? databasePath, {
     readonly: true,
     fileMustExist: true
   });
@@ -349,6 +469,7 @@ function databaseRead<T>(databasePath: string, read: (database: Database.Databas
     return read(database);
   } finally {
     database.close();
+    if (snapshot) unlinkSync(snapshot);
   }
 }
 
@@ -732,7 +853,7 @@ test("controlled product loop reaches one physical integrated_commit dependency"
 }, async (t) => {
   const resources = await createTestResources(t, "convene-wire-qa052-e2e-");
   const directory = resources.directory;
-  const serverDatabase = path.join(directory, "central.sqlite");
+  const serverDatabase = path.join(directory, "central-data", "central.sqlite");
   const sourceA = path.join(directory, "source-a");
   const sourceB = path.join(directory, "source-b");
   const dataA = path.join(directory, "bridge-a-data");
@@ -759,6 +880,7 @@ test("controlled product loop reaches one physical integrated_commit dependency"
   let stage = "initialize physical fixture";
 
   try {
+    await prepareCentralData(serverDatabase);
     await mkdir(path.join(sourceA, "src"), { recursive: true });
     await writeFile(
       path.join(sourceA, "src/dependency.ts"),
@@ -778,13 +900,7 @@ test("controlled product loop reaches one physical integrated_commit dependency"
 
     const codex = await createCodexFixture(directory, planDraftPath);
     const verifier = await createVerifier(directory);
-    const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
-    await execFileAsync(goBinary, [
-      "build",
-      "-o",
-      bridgeBinary,
-      "./cmd/convenewire-bridge"
-    ], { cwd: bridgeRoot, maxBuffer: 8 << 20 });
+    await prepareBridge(bridgeBinary);
 
     const port = await reservePort();
     const serverUrl = `http://127.0.0.1:${port}`;
@@ -796,10 +912,7 @@ test("controlled product loop reaches one physical integrated_commit dependency"
       return response.ok ? true : undefined;
     });
 
-    const bootstrap = await requestJSON<any>(serverUrl, "POST", "/api/bootstrap", {
-      displayName: "QA-052 Owner"
-    });
-    const webToken = bootstrap.session.token as string;
+    const webToken = await bootstrapOwner(serverUrl, "QA-052 Owner");
     const team = await requestJSON<any>(serverUrl, "POST", "/api/teams", {
       name: "QA-052 Controlled Product Team"
     }, webToken);
@@ -1396,7 +1509,7 @@ test("controlled product loop reaches one physical integrated_commit dependency"
       {
         method: "POST",
         headers: {
-          authorization: `Bearer ${webToken}`,
+          ...authenticationHeaders(webToken),
           "content-type": "application/json"
         },
         body: JSON.stringify(approvalCommand)
@@ -1996,6 +2109,8 @@ test("controlled product loop reaches one physical integrated_commit dependency"
       destinationInputs: 1,
       foreignKeys: []
     });
+    t.diagnostic(JSON.stringify({ release: packagedVersion ?? "source", source: packagedSource,
+      image: packagedImage, evidence, cleanedWorktrees: 2 }));
     assert.equal(
       createHash("sha256").update(await readFile(path.join(sourceA, "src/dependency.ts"))).digest("hex"),
       createHash("sha256").update("export const state = 'old';\n").digest("hex")
@@ -2024,7 +2139,7 @@ test("parallel Bridges retain one CAS winner, one conflict, and exact fan-in", {
 }, async (t) => {
   const resources = await createTestResources(t, "convene-wire-qa053-e2e-");
   const directory = resources.directory;
-  const serverDatabase = path.join(directory, "central.sqlite");
+  const serverDatabase = path.join(directory, "central-data", "central.sqlite");
   const source = path.join(directory, "shared-source");
   const observer = path.join(directory, "observer-clone");
   const rendezvous = path.join(directory, "parallel-rendezvous");
@@ -2051,6 +2166,7 @@ test("parallel Bridges retain one CAS winner, one conflict, and exact fan-in", {
   let stage = "initialize parallel fixture";
 
   try {
+    await prepareCentralData(serverDatabase);
     await mkdir(path.join(source, "src"), { recursive: true });
     await writeFile(path.join(source, "src/base.ts"),
       "export const base = 'unchanged';\n");
@@ -2069,10 +2185,7 @@ test("parallel Bridges retain one CAS winner, one conflict, and exact fan-in", {
     await mkdir(rendezvous, { recursive: true });
     const codex = await createParallelCodexFixture(directory, rendezvous);
     const verifier = await createParallelVerifier(directory);
-    const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
-    await execFileAsync(goBinary, [
-      "build", "-o", bridgeBinary, "./cmd/convenewire-bridge"
-    ], { cwd: bridgeRoot, maxBuffer: 8 << 20 });
+    await prepareBridge(bridgeBinary);
 
     const port = await reservePort();
     const serverUrl = `http://127.0.0.1:${port}`;
@@ -2084,10 +2197,7 @@ test("parallel Bridges retain one CAS winner, one conflict, and exact fan-in", {
       return response.ok ? true : undefined;
     });
 
-    const bootstrap = await requestJSON<any>(serverUrl, "POST", "/api/bootstrap", {
-      displayName: "QA-053 Owner"
-    });
-    const webToken = bootstrap.session.token as string;
+    const webToken = await bootstrapOwner(serverUrl, "QA-053 Owner");
     const team = await requestJSON<any>(serverUrl, "POST", "/api/teams", {
       name: "QA-053 Parallel Coding Team"
     }, webToken);
