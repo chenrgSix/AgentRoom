@@ -197,10 +197,12 @@
 .task-copy-criteria > div { margin-bottom: 16px; }
 .task-copy-criteria label { display: block; }
 .task-copy-criteria input[type="checkbox"] { width: auto; margin-right: 6px; }
+.task-copy-criteria > button { min-height: 38px; padding: 8px 12px; border: 1px solid var(--cw-border-strong); border-radius: 8px; background: var(--cw-surface-raised); color: var(--cw-text); cursor: pointer; font: inherit; }
 
 .work-plan-common-editor, .work-plan-common-editor fieldset { min-width: 0; border: 1px solid var(--cw-border); border-radius: 8px; padding: 12px; }
 .work-plan-common-editor label { display: grid; min-width: 0; gap: 6px; margin-block: 10px; }
-.work-plan-common-editor input, .work-plan-common-editor select { width: 100%; min-width: 0; max-width: 100%; }
+.work-plan-common-editor input, .work-plan-common-editor select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 40px; padding: 9px 10px; border: 1px solid var(--cw-border-strong); border-radius: 8px; background: var(--cw-surface-inset); color: var(--cw-text); font: inherit; font-size: 14px; font-weight: 400; }
+.work-plan-common-editor input:focus-visible, .work-plan-common-editor select:focus-visible { outline: 2px solid var(--cw-focus); outline-offset: 2px; }
 .work-plan-common-editor textarea { min-height: 100px; }
 .work-plan-common-editor textarea[spellcheck="false"] { min-height: 320px; }
 .work-plan-common-editor > fieldset { margin-block: 14px; }

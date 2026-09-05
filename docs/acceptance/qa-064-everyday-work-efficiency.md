@@ -124,3 +124,13 @@ quoted prose, preserving report content while producing clean Markdown. The
 download matches the 1,143-character clipboard report byte-for-byte, SHA-256
 `7bda03a471ab363b67b036dcac5fecabfb3c2e636db3cd5ec4df06dcb7d2b8cc`.
 The complete 385-file documentation check, including that actual report, passes.
+
+## QA-064 visual follow-up
+
+Actual screenshots exposed native default styling on the new plan inputs and
+the copy-dialog Add criterion button. They now use existing theme tokens,
+consistent control height and visible focus styling. The final Web build and
+whitespace check pass. The plan form was inspected at 1280 x 900, 720 x 1000
+and 390 x 844 in both themes; each reports equal client and scroll widths.
+The 390 px copy dialog was inspected in both themes, including cancellation.
+Screenshots are retained in the ignored local QA artifact directory.
