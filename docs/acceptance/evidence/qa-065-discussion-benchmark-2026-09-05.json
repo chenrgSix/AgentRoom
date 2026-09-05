@@ -1,0 +1,661 @@
+{
+  "version": 1,
+  "synthetic": false,
+  "sourceCommit": "24cbc83755a5c786b4fbb3134a7d566a18bd5921",
+  "model": "gpt-5.4-mini",
+  "observedProviderModel": null,
+  "reasoningEffort": "low",
+  "runtime": "codex exec via generic Bridge adapter",
+  "runtimeVersion": "codex-cli 0.153.3",
+  "maximumRuns": 12,
+  "maximumModelWorkSeconds": 1200,
+  "tokens": null,
+  "cost": null,
+  "cases": [
+    {
+      "id": "selector-review",
+      "category": "code_review",
+      "source": "00989ec:apps/server/src/discussion/discussion-participant-selector.ts",
+      "prompt": "Review this production finalization policy. Candidates are already filtered by current eligibility and sorted by frozen participant ordinal. Each candidate includes taskRole: primary|contributor|reviewer|null. The frozen Discussion reviewer has participant.role=reviewer. Intended preference: eligible frozen reviewer, then eligible Task primary, then original ordinal. Current code:\nconst reviewer = candidates.find(c => c.participant.role === 'reviewer');\nif (finalization) {\n  const selected = reviewer ?? candidates[0];\n  return freezeSelection([selected]);\n}\nIdentify the concrete missing behavior, give the smallest correction, and propose two regression cases. Explain whether an unavailable reviewer or a nonparticipant primary may be selected.",
+      "rubric": [
+        "Identifies that a later-ordinal eligible Task primary is overlooked when no reviewer is eligible",
+        "Corrects preference to reviewer then taskRole primary then frozen ordinal without expanding eligibility",
+        "Tests later-ordinal primary and unavailable primary/reviewer or frozen recovery; does not select an unavailable or nonparticipant Agent"
+      ]
+    },
+    {
+      "id": "quorum-diagnosis",
+      "category": "problem_diagnosis",
+      "source": "apps/server/src/discussion/budget-ledger.ts and discussion-usage.ts",
+      "prompt": "Diagnose this Discussion usage report using only these retained facts. Wave expectedMembers=3; the budget ledger charged agentRunsUsed += expectedMembers. Turn A is bound to Run A, now completed. Turn B is bound to Run B, now working while cancellation is still in flight after the owner ended the Discussion. Turn C failed before any Run was created and has runId=null. Discussion createdAt=10:00:00, terminalAt=10:00:30, observedAt=10:02:00. Provider token and money telemetry is absent. A dashboard reports \"3 successful Runs, 120 seconds execution, $0 cost\". Correct each claim, explain why budget and actual lifecycle differ, and specify what a later observation may change.",
+      "rubric": [
+        "Reports two actual Runs: one completed and one still working; one unbound member slot and three debited budget slots",
+        "Reports 30 seconds Discussion wall time including waits, not 120 seconds or summed execution time",
+        "Keeps tokens and money unknown and allows late Run outcome changes without extending terminal Discussion wall time"
+      ]
+    },
+    {
+      "id": "fallback-design",
+      "category": "solution_comparison",
+      "source": "docs/modules/discussion-orchestration.md and ADR-0042",
+      "prompt": "Compare three ways to choose Discussion members: (A) always the first two by frozen ordinal, (B) deterministic focus-question reporter/role matching with required reviewer retention, and (C) a new LLM router. Current eligible candidates in frozen order: Backend primary (0), Docs (1), Security who reported high-priority question Q-security (2), designated Reviewer (3). Focused limit=2 and review mode requires the Reviewer. Current question is Q-security: \"Which security boundary protects the token exchange?\" Current policy keeps all eligible members on first wave or absent/unmatched focus questions. Recommend a choice for this wave and a next-step product experiment. Address the required reviewer, which two members should run, the no-match fallback tradeoff, and what evidence is needed before claiming monetary savings or better answers.",
+      "rubric": [
+        "Chooses Security and designated Reviewer within the limit; identifies that ordinal-first loses both relevance and required review",
+        "Preserves or explicitly treats no-match broad fallback as an experiment rather than claiming unconditional Top-N superiority",
+        "Calls for single-Agent comparison and actual Run/time/answer-quality evidence; Run savings alone do not prove token/money savings or quality"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "caseId": "selector-review",
+      "arm": "single_agent",
+      "promptSha256": "9f8476837f7d3a6fcb421ae21da2b35f11e1d02dc5ec97d683ef81b777478193",
+      "runCount": 1,
+      "runtimeSucceeded": true,
+      "finalAnswer": "The missing behavior is the `Task primary` fallback. Right now finalization only prefers:\n\n1. the frozen reviewer\n2. otherwise `candidates[0]`\n\nSo when no reviewer is present, the code ignores an eligible `taskRole === \"primary\"` candidate and may pick a lower-priority contributor just because it is earliest by frozen ordinal.\n\nSmallest correction:\n\n```ts\nconst reviewer = candidates.find(c => c.participant.role === 'reviewer');\nconst primary = candidates.find(c => c.taskRole === 'primary');\n\nif (finalization) {\n  const selected = reviewer ?? primary ?? candidates[0];\n  return freezeSelection([selected]);\n}\n```\n\nTwo regression cases:\n\n1. Reviewer absent, primary present, contributor earlier ordinal:\n   - input: `[contributor(ord 1), primary(ord 2)]`\n   - expected: `primary` selected\n\n2. Reviewer present, primary present, reviewer should win:\n   - input: `[primary(ord 1), reviewer(ord 2)]`\n   - expected: `reviewer` selected\n\nOn the selection question:\n- An unavailable reviewer should not be selected if the eligibility filter is working, because it would not be in `candidates`.\n- A nonparticipant primary may be selected only if it is eligible and present in `candidates`; the current code does not prefer it explicitly, so it can be skipped in favor of `candidates[0]` unless the fix above is applied.",
+      "answers": [
+        {
+          "agent": "Solver",
+          "content": "The missing behavior is the `Task primary` fallback. Right now finalization only prefers:\n\n1. the frozen reviewer\n2. otherwise `candidates[0]`\n\nSo when no reviewer is present, the code ignores an eligible `taskRole === \"primary\"` candidate and may pick a lower-priority contributor just because it is earliest by frozen ordinal.\n\nSmallest correction:\n\n```ts\nconst reviewer = candidates.find(c => c.participant.role === 'reviewer');\nconst primary = candidates.find(c => c.taskRole === 'primary');\n\nif (finalization) {\n  const selected = reviewer ?? primary ?? candidates[0];\n  return freezeSelection([selected]);\n}\n```\n\nTwo regression cases:\n\n1. Reviewer absent, primary present, contributor earlier ordinal:\n   - input: `[contributor(ord 1), primary(ord 2)]`\n   - expected: `primary` selected\n\n2. Reviewer present, primary present, reviewer should win:\n   - input: `[primary(ord 1), reviewer(ord 2)]`\n   - expected: `reviewer` selected\n\nOn the selection question:\n- An unavailable reviewer should not be selected if the eligibility filter is working, because it would not be in `candidates`.\n- A nonparticipant primary may be selected only if it is eligible and present in `candidates`; the current code does not prefer it explicitly, so it can be skipped in favor of `candidates[0]` unless the fix above is applied."
+        }
+      ],
+      "manualRubric": [
+        {
+          "criterion": "Identifies that a later-ordinal eligible Task primary is overlooked when no reviewer is eligible",
+          "passed": true,
+          "evidence": "Identifies the missing Task primary fallback and gives the earlier-contributor/later-primary counterexample."
+        },
+        {
+          "criterion": "Corrects preference to reviewer then taskRole primary then frozen ordinal without expanding eligibility",
+          "passed": true,
+          "evidence": "The proposed code searches the existing candidates and uses reviewer ?? primary ?? candidates[0], without adding candidates. This credits the code correction; the contradictory nonparticipant prose fails criterion 3."
+        },
+        {
+          "criterion": "Tests later-ordinal primary and unavailable primary/reviewer or frozen recovery; does not select an unavailable or nonparticipant Agent",
+          "passed": false,
+          "evidence": "Tests later-ordinal primary and reviewer precedence, but no unavailable-primary/reviewer or frozen-recovery case. The answer permits a nonparticipant primary if present in candidates; the frozen participant boundary excludes that Agent."
+        }
+      ],
+      "elapsedMilliseconds": 20750,
+      "runs": [
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:34:22.849Z",
+          "terminalAt": "2026-09-05T12:34:43.490Z"
+        }
+      ],
+      "discussionUsage": null,
+      "selection": null
+    },
+    {
+      "caseId": "selector-review",
+      "arm": "discussion",
+      "promptSha256": "9f8476837f7d3a6fcb421ae21da2b35f11e1d02dc5ec97d683ef81b777478193",
+      "runCount": 3,
+      "runtimeSucceeded": true,
+      "finalAnswer": "The missing behavior is the second preference in finalization: after the frozen reviewer, the code must prefer an eligible `taskRole === \"primary\"` candidate before falling back to frozen ordinal order. As written, it skips that step and always uses `candidates[0]` when no reviewer is present.\n\nSmallest correction:\n```ts\nif (finalization) {\n  const reviewer = candidates.find(c => c.participant.role === 'reviewer');\n  const primary = candidates.find(c => c.taskRole === 'primary');\n  const selected = reviewer ?? primary ?? candidates[0];\n  return freezeSelection([selected]);\n}\n```\n\nTwo regression cases:\n1. Finalization with an eligible reviewer, an eligible primary, and an earlier contributor: selects the reviewer.\n2. Finalization with no eligible reviewer, but an eligible primary not at ordinal 0: selects the primary, not `candidates[0]`.\n\nSelection rules:\n- An unavailable reviewer should not be selected if eligibility filtering is correct, because such a reviewer should not be in `candidates`.\n- A nonparticipant primary may be selected if it is eligible and present in `candidates`; the policy explicitly prefers eligible primary after reviewer.",
+      "answers": [
+        {
+          "agent": "Solver",
+          "content": "The concrete missing behavior is the middle preference: when no eligible frozen reviewer exists, finalization should pick an eligible `taskRole: \"primary\"` before falling back to frozen ordinal. The current code skips that and always falls back to `candidates[0]`.\n\nSmallest correction:\n```ts\nconst reviewer = candidates.find(c => c.participant.role === 'reviewer');\nconst primary = candidates.find(c => c.taskRole === 'primary');\n\nif (finalization) {\n  const selected = reviewer ?? primary ?? candidates[0];\n  return freezeSelection([selected]);\n}\n```\n\nTwo regression cases:\n1. Finalization with an eligible reviewer and an eligible primary:\n   - expect reviewer selected\n   - verifies reviewer still wins over primary and ordinal\n\n2. Finalization with no eligible reviewer, but an eligible primary not at ordinal 0:\n   - expect the primary selected\n   - current code would incorrectly select `candidates[0]`\n\nAnswering the selection question:\n- An unavailable reviewer should not be selected, because candidates are already filtered to current eligibility. If the reviewer is unavailable, they should not appear in `candidates`.\n- A nonparticipant primary may be selected if it is eligible and no eligible reviewer exists, because the intended policy explicitly prefers eligible task primary after reviewer."
+        },
+        {
+          "agent": "Reviewer",
+          "content": "Missing behavior: finalization only prefers the frozen reviewer, then blindly falls back to `candidates[0]`. It never prefers an eligible `taskRole === 'primary'` candidate over a contributor/null candidate when no reviewer is present.\n\nSmallest correction:\n```ts\nif (finalization) {\n  const reviewer = candidates.find(c => c.participant.role === 'reviewer');\n  const primary = candidates.find(c => c.taskRole === 'primary');\n  const selected = reviewer ?? primary ?? candidates[0];\n  return freezeSelection([selected]);\n}\n```\n\nRegression cases:\n1. Finalization with eligible reviewer + eligible primary + earlier contributor: select the reviewer, not the primary or ordinal-first contributor.\n2. Finalization with no eligible reviewer, but eligible primary exists after a contributor in ordinal order: select the primary, not `candidates[0]`.\n\nSelection rules:\n- An unavailable reviewer should not be selected if eligibility filtering is correct, because `candidates` is already prefiltered to eligible entries.\n- A nonparticipant primary may be selected only if it is still an eligible candidate in `candidates`; if it is absent or ineligible, it must not be chosen."
+        },
+        {
+          "agent": "Reviewer",
+          "content": "The missing behavior is the second preference in finalization: after the frozen reviewer, the code must prefer an eligible `taskRole === \"primary\"` candidate before falling back to frozen ordinal order. As written, it skips that step and always uses `candidates[0]` when no reviewer is present.\n\nSmallest correction:\n```ts\nif (finalization) {\n  const reviewer = candidates.find(c => c.participant.role === 'reviewer');\n  const primary = candidates.find(c => c.taskRole === 'primary');\n  const selected = reviewer ?? primary ?? candidates[0];\n  return freezeSelection([selected]);\n}\n```\n\nTwo regression cases:\n1. Finalization with an eligible reviewer, an eligible primary, and an earlier contributor: selects the reviewer.\n2. Finalization with no eligible reviewer, but an eligible primary not at ordinal 0: selects the primary, not `candidates[0]`.\n\nSelection rules:\n- An unavailable reviewer should not be selected if eligibility filtering is correct, because such a reviewer should not be in `candidates`.\n- A nonparticipant primary may be selected if it is eligible and present in `candidates`; the policy explicitly prefers eligible primary after reviewer."
+        }
+      ],
+      "manualRubric": [
+        {
+          "criterion": "Identifies that a later-ordinal eligible Task primary is overlooked when no reviewer is eligible",
+          "passed": true,
+          "evidence": "The final answer identifies that candidates[0] overlooks the eligible primary when the reviewer is absent."
+        },
+        {
+          "criterion": "Corrects preference to reviewer then taskRole primary then frozen ordinal without expanding eligibility",
+          "passed": true,
+          "evidence": "The final code keeps the candidate set and uses reviewer ?? primary ?? candidates[0]. This credits the code correction separately from the nonparticipant prose."
+        },
+        {
+          "criterion": "Tests later-ordinal primary and unavailable primary/reviewer or frozen recovery; does not select an unavailable or nonparticipant Agent",
+          "passed": false,
+          "evidence": "The final answer repeats the nonparticipant-primary allowance. Its two tests cover reviewer precedence and later-ordinal primary, with no unavailable-primary/reviewer or frozen-recovery case. The Reviewer finalizer did not correct these omissions."
+        }
+      ],
+      "elapsedMilliseconds": 35622,
+      "runs": [
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:34:43.613Z",
+          "terminalAt": "2026-09-05T12:34:59.814Z"
+        },
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:34:43.617Z",
+          "terminalAt": "2026-09-05T12:35:03.232Z"
+        },
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:35:03.439Z",
+          "terminalAt": "2026-09-05T12:35:19.160Z"
+        }
+      ],
+      "discussionUsage": {
+        "observedAt": "2026-09-05T12:35:19.219Z",
+        "createdRuns": 3,
+        "runsByState": {
+          "queued": 0,
+          "delivered": 0,
+          "working": 0,
+          "input_required": 0,
+          "completed": 3,
+          "failed": 0,
+          "canceled": 0,
+          "expired": 0,
+          "outcome_unknown": 0
+        },
+        "unboundMemberSlots": 0,
+        "unavailableRunRecords": 0,
+        "wallDurationSeconds": 35,
+        "tokens": null,
+        "estimatedCostMicros": null
+      },
+      "selection": [
+        {
+          "version": 2,
+          "explanations": [
+            {
+              "agentId": "agent_R1VDHCR7sAphyMCLterneQ",
+              "reasons": [
+                "no_focus_questions"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            },
+            {
+              "agentId": "agent_KhHjglrV26FfVFJP4zahJQ",
+              "reasons": [
+                "no_focus_questions"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            }
+          ],
+          "strategy": "all_eligible",
+          "focusQuestionIds": [],
+          "eligibleAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "selectedAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "requiredRoles": [
+            "reviewer"
+          ],
+          "focusedParticipantLimit": 3,
+          "selectionDigest": "5890450b57cf49840a2dae7c24a771a03ff499c2e7a12faa025f243dd1476bcf"
+        },
+        {
+          "version": 2,
+          "explanations": [
+            {
+              "agentId": "agent_KhHjglrV26FfVFJP4zahJQ",
+              "reasons": [
+                "finalizer_reviewer"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            }
+          ],
+          "strategy": "finalizer",
+          "focusQuestionIds": [],
+          "eligibleAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "selectedAgentIds": [
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "requiredRoles": [
+            "reviewer"
+          ],
+          "focusedParticipantLimit": 3,
+          "selectionDigest": "e525683f7b6a59b120e33ce787238e7bb84617d6d557188c1f666016d5ddff9e"
+        }
+      ]
+    },
+    {
+      "caseId": "quorum-diagnosis",
+      "arm": "discussion",
+      "promptSha256": "84176d3f0e9684200766949d48e657fd944b288cdb9e5bdd67f1452c8c7f9ab1",
+      "runCount": 3,
+      "runtimeSucceeded": true,
+      "finalAnswer": "The dashboard is overstating all three metrics.\n\n- `3 successful Runs` is incorrect. Only Turn A is completed successfully. Turn B has a Run but is still working while cancellation is in flight, so it is not yet a successful completion. Turn C failed before any Run was created, so it cannot count as a successful Run.\n- `120 seconds execution` is unsupported. No provider timing telemetry exists, and the only timestamps are Discussion-level times, not run execution duration.\n- `$0 cost` is unsupported. Provider token and money telemetry are absent, so zero cost cannot be concluded.\n\nWhy budget and actual lifecycle differ:\n\n- The budget ledger charged `agentRunsUsed += expectedMembers`, so it accounts for the expected wave size of 3, not the number of Runs that actually completed.\n- Actual lifecycle is narrower and event-based: one completed Run, one in-flight Run under cancellation, and one failed-before-creation turn.\n- So budget is a preallocated accounting measure; lifecycle is the realized execution state.\n\nWhat a later observation may change:\n\n- Turn B may later resolve to canceled, completed, or failed, which would change the lifecycle counts.\n- Later telemetry may also provide real execution time and non-zero cost.\n- The budget charge itself should remain unchanged because it was based on `expectedMembers`, not final outcomes.",
+      "answers": [
+        {
+          "agent": "Reviewer",
+          "content": "Corrected report:\n- “3 successful Runs” is wrong. Only Turn A is a completed successful Run. Turn B has a Run but is still working, and Turn C failed before any Run existed, so it has no successful Run to count.\n- “120 seconds execution” is unsupported. No timing telemetry is provided, and the state of Turn B is still in flight.\n- “$0 cost” is unsupported. Provider token and money telemetry are absent, so cost cannot be asserted.\n\nWhy budget and actual lifecycle differ:\n- The budget ledger charged `agentRunsUsed += expectedMembers`, so it pre-allocates budget for the expected 3 members.\n- That is accounting for expected capacity, not a count of actual completed Runs.\n- Actual lifecycle is event-based: one completed Run, one in-flight Run with cancellation pending, and one failed before Run creation.\n\nWhat a later observation may change:\n- Turn B may later flip from working to canceled, completed, or failed.\n- If provider telemetry arrives later, execution time and cost may also change.\n- The budget charge itself should not change, because it was based on `expectedMembers`, not observed completion."
+        },
+        {
+          "agent": "Solver",
+          "content": "Corrected report:\n\n- “3 successful Runs” is wrong. Only Turn A is a completed Run. Turn B is only bound to a Run and is still working. Turn C failed before any Run existed, so it is not a Run success.\n- “120 seconds execution” is unsupported. The facts give no per-Run execution telemetry. The only timing facts are discussion timestamps: created at 10:00:00, terminal at 10:00:30, observed at 10:02:00. That does not justify 120 seconds of run execution.\n- “$0 cost” is also unsupported. Provider token and money telemetry is absent, so zero cost cannot be inferred.\n\nWhy budget and lifecycle differ:\n\n- The budget ledger charged `agentRunsUsed += expectedMembers`, so it counts the expected wave capacity, not only Runs that actually materialized or finished.\n- Actual lifecycle is smaller: one completed Run, one in-flight Run under cancellation, and one failed-before-creation turn.\n- So the budget reflects reserved/charged participation, while lifecycle reflects realized Run creation and completion.\n\nWhat a later observation may change:\n\n- Turn B may later become canceled, failed, or completed, which would change the lifecycle counts.\n- If provider telemetry arrives later, execution seconds and cost may become known and may differ from $0.\n- Turn A should remain completed, and Turn C should remain “no Run created.”"
+        },
+        {
+          "agent": "Reviewer",
+          "content": "The dashboard is overstating all three metrics.\n\n- `3 successful Runs` is incorrect. Only Turn A is completed successfully. Turn B has a Run but is still working while cancellation is in flight, so it is not yet a successful completion. Turn C failed before any Run was created, so it cannot count as a successful Run.\n- `120 seconds execution` is unsupported. No provider timing telemetry exists, and the only timestamps are Discussion-level times, not run execution duration.\n- `$0 cost` is unsupported. Provider token and money telemetry are absent, so zero cost cannot be concluded.\n\nWhy budget and actual lifecycle differ:\n\n- The budget ledger charged `agentRunsUsed += expectedMembers`, so it accounts for the expected wave size of 3, not the number of Runs that actually completed.\n- Actual lifecycle is narrower and event-based: one completed Run, one in-flight Run under cancellation, and one failed-before-creation turn.\n- So budget is a preallocated accounting measure; lifecycle is the realized execution state.\n\nWhat a later observation may change:\n\n- Turn B may later resolve to canceled, completed, or failed, which would change the lifecycle counts.\n- Later telemetry may also provide real execution time and non-zero cost.\n- The budget charge itself should remain unchanged because it was based on `expectedMembers`, not final outcomes."
+        }
+      ],
+      "manualRubric": [
+        {
+          "criterion": "Reports two actual Runs: one completed and one still working; one unbound member slot and three debited budget slots",
+          "passed": true,
+          "evidence": "Enumerates one completed Run, one working Run under cancellation and one turn that failed before Run creation; also explains the ledger charge of 3. This fully accounts for two actual Runs and one unbound slot without requiring those exact labels."
+        },
+        {
+          "criterion": "Reports 30 seconds Discussion wall time including waits, not 120 seconds or summed execution time",
+          "passed": false,
+          "evidence": "Rejects 120 seconds of execution but never calculates the 30-second Discussion wall time or identifies that interval as including waits."
+        },
+        {
+          "criterion": "Keeps tokens and money unknown and allows late Run outcome changes without extending terminal Discussion wall time",
+          "passed": false,
+          "evidence": "Keeps absent monetary telemetry unknown and permits later Run-state changes, but does not state that terminal Discussion wall time stays fixed. Instead it discusses later execution timing and non-zero cost."
+        }
+      ],
+      "elapsedMilliseconds": 39384,
+      "runs": [
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:35:19.233Z",
+          "terminalAt": "2026-09-05T12:35:41.598Z"
+        },
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:35:19.235Z",
+          "terminalAt": "2026-09-05T12:35:38.660Z"
+        },
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:35:41.838Z",
+          "terminalAt": "2026-09-05T12:35:58.370Z"
+        }
+      ],
+      "discussionUsage": {
+        "observedAt": "2026-09-05T12:35:58.605Z",
+        "createdRuns": 3,
+        "runsByState": {
+          "queued": 0,
+          "delivered": 0,
+          "working": 0,
+          "input_required": 0,
+          "completed": 3,
+          "failed": 0,
+          "canceled": 0,
+          "expired": 0,
+          "outcome_unknown": 0
+        },
+        "unboundMemberSlots": 0,
+        "unavailableRunRecords": 0,
+        "wallDurationSeconds": 39,
+        "tokens": null,
+        "estimatedCostMicros": null
+      },
+      "selection": [
+        {
+          "version": 2,
+          "explanations": [
+            {
+              "agentId": "agent_R1VDHCR7sAphyMCLterneQ",
+              "reasons": [
+                "no_focus_questions"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            },
+            {
+              "agentId": "agent_KhHjglrV26FfVFJP4zahJQ",
+              "reasons": [
+                "no_focus_questions"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            }
+          ],
+          "strategy": "all_eligible",
+          "focusQuestionIds": [],
+          "eligibleAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "selectedAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "requiredRoles": [
+            "reviewer"
+          ],
+          "focusedParticipantLimit": 3,
+          "selectionDigest": "5890450b57cf49840a2dae7c24a771a03ff499c2e7a12faa025f243dd1476bcf"
+        },
+        {
+          "version": 2,
+          "explanations": [
+            {
+              "agentId": "agent_KhHjglrV26FfVFJP4zahJQ",
+              "reasons": [
+                "finalizer_reviewer"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            }
+          ],
+          "strategy": "finalizer",
+          "focusQuestionIds": [
+            "later-state",
+            "q2"
+          ],
+          "eligibleAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "selectedAgentIds": [
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "requiredRoles": [
+            "reviewer"
+          ],
+          "focusedParticipantLimit": 3,
+          "selectionDigest": "ebce2a542891877084e84b8626008084cb4795da438c8221ce8a7db7787ce007"
+        }
+      ]
+    },
+    {
+      "caseId": "quorum-diagnosis",
+      "arm": "single_agent",
+      "promptSha256": "84176d3f0e9684200766949d48e657fd944b288cdb9e5bdd67f1452c8c7f9ab1",
+      "runCount": 1,
+      "runtimeSucceeded": true,
+      "finalAnswer": "The dashboard is incorrect on all three claims.\n\n- `3 successful Runs` is wrong. From the retained facts, only Turn A is a completed Run, so the confirmed successful Run count is `1`. Turn B is still working, and Turn C failed before any Run existed (`runId=null`), so it is not a successful Run.\n- `120 seconds execution` is unsupported. The only hard timing facts are `createdAt=10:00:00`, `terminalAt=10:00:30`, and `observedAt=10:02:00`, so the Discussion was terminal for at least 30 seconds by the observation point. There is no evidence for 120 seconds of actual execution.\n- `$0 cost` is also unsupported. Provider token and money telemetry are absent, so cost cannot be asserted as zero; it is unknown from these facts.\n\nWhy budget and actual lifecycle differ:\n- The budget ledger charged `agentRunsUsed += expectedMembers`, so the budget side is a planning/accounting measure based on the expected 3 members.\n- The actual lifecycle depends on run creation and completion. Here, one member completed, one was still running while cancellation was in flight after the owner ended the Discussion, and one failed before any Run was created. That makes the budget count `3` while actual Run outcomes are only partially realized.\n\nWhat a later observation may change:\n- A later observation can update Turn B’s state after cancellation resolves. It may become canceled, completed, or otherwise terminal, which could change the observed successful-run count and any execution-duration/cost reporting.",
+      "answers": [
+        {
+          "agent": "Solver",
+          "content": "The dashboard is incorrect on all three claims.\n\n- `3 successful Runs` is wrong. From the retained facts, only Turn A is a completed Run, so the confirmed successful Run count is `1`. Turn B is still working, and Turn C failed before any Run existed (`runId=null`), so it is not a successful Run.\n- `120 seconds execution` is unsupported. The only hard timing facts are `createdAt=10:00:00`, `terminalAt=10:00:30`, and `observedAt=10:02:00`, so the Discussion was terminal for at least 30 seconds by the observation point. There is no evidence for 120 seconds of actual execution.\n- `$0 cost` is also unsupported. Provider token and money telemetry are absent, so cost cannot be asserted as zero; it is unknown from these facts.\n\nWhy budget and actual lifecycle differ:\n- The budget ledger charged `agentRunsUsed += expectedMembers`, so the budget side is a planning/accounting measure based on the expected 3 members.\n- The actual lifecycle depends on run creation and completion. Here, one member completed, one was still running while cancellation was in flight after the owner ended the Discussion, and one failed before any Run was created. That makes the budget count `3` while actual Run outcomes are only partially realized.\n\nWhat a later observation may change:\n- A later observation can update Turn B’s state after cancellation resolves. It may become canceled, completed, or otherwise terminal, which could change the observed successful-run count and any execution-duration/cost reporting."
+        }
+      ],
+      "manualRubric": [
+        {
+          "criterion": "Reports two actual Runs: one completed and one still working; one unbound member slot and three debited budget slots",
+          "passed": true,
+          "evidence": "Accounts for one completed Run, one working Run, one runId=null turn and a budget count of 3. This is credited as two actual Runs and one unbound member slot."
+        },
+        {
+          "criterion": "Reports 30 seconds Discussion wall time including waits, not 120 seconds or summed execution time",
+          "passed": false,
+          "evidence": "Says the Discussion was terminal for at least 30 seconds by observation, rather than calculating the 30-second createdAt-to-terminalAt wall duration. It does not distinguish that duration from waits or summed execution."
+        },
+        {
+          "criterion": "Keeps tokens and money unknown and allows late Run outcome changes without extending terminal Discussion wall time",
+          "passed": false,
+          "evidence": "Correctly treats cost as unknown and allows Run B to become terminal, but never freezes Discussion wall time at terminalAt; it only refers to possible execution-duration/cost reporting changes."
+        }
+      ],
+      "elapsedMilliseconds": 17981,
+      "runs": [
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:35:58.620Z",
+          "terminalAt": "2026-09-05T12:36:16.479Z"
+        }
+      ],
+      "discussionUsage": null,
+      "selection": null
+    },
+    {
+      "caseId": "fallback-design",
+      "arm": "single_agent",
+      "promptSha256": "b2d47910fa63c233699d100b02d5d7ba7e8d6ec937ef5cb5e9e5f18ce6284977",
+      "runCount": 1,
+      "runtimeSucceeded": true,
+      "finalAnswer": "Recommend **B** for this wave.\n\n- **Why B:** The current question is a security-focused question, and the policy already has a strong signal to keep the **reporter of Q-security** plus the **required Reviewer**. With the focused limit of 2 and review mode enabled, the two runners should be:\n  - **Security who reported Q-security (2)**\n  - **Designated Reviewer (3)**\n\n- **Why not A:** Always taking the first two frozen ordinals would miss the security reporter and ignore the question-specific routing signal.\n- **Why not C:** A new LLM router is the highest-variance option and is not justified without evidence that it beats the deterministic rule on both quality and cost.\n\n- **No-match fallback tradeoff:** The current policy to keep all eligible members on the first wave, or on absent/unmatched focus questions, is safer for coverage but more expensive. It reduces the risk of excluding a relevant reviewer when the question is unclear, but it can over-include and dilute the focused limit. For this wave, there is a match, so the fallback should not override the focused selection.\n\n- **Next-step product experiment:** Run a controlled A/B test:\n  - Baseline: deterministic policy B\n  - Variant: LLM router C\n  - Keep reviewer retention fixed\n  - Measure cost per completed task, answer quality, security-specific correctness, and reviewer override rate\n\n- **Evidence needed before claiming savings or better answers:** You need a statistically meaningful sample across comparable tasks, with the same review mode and similar difficulty. Claim monetary savings only if total compute/agent cost drops without increasing rework. Claim better answers only if quality improves on blinded scoring or downstream acceptance, not just shorter outputs or fewer participants.",
+      "answers": [
+        {
+          "agent": "Solver",
+          "content": "Recommend **B** for this wave.\n\n- **Why B:** The current question is a security-focused question, and the policy already has a strong signal to keep the **reporter of Q-security** plus the **required Reviewer**. With the focused limit of 2 and review mode enabled, the two runners should be:\n  - **Security who reported Q-security (2)**\n  - **Designated Reviewer (3)**\n\n- **Why not A:** Always taking the first two frozen ordinals would miss the security reporter and ignore the question-specific routing signal.\n- **Why not C:** A new LLM router is the highest-variance option and is not justified without evidence that it beats the deterministic rule on both quality and cost.\n\n- **No-match fallback tradeoff:** The current policy to keep all eligible members on the first wave, or on absent/unmatched focus questions, is safer for coverage but more expensive. It reduces the risk of excluding a relevant reviewer when the question is unclear, but it can over-include and dilute the focused limit. For this wave, there is a match, so the fallback should not override the focused selection.\n\n- **Next-step product experiment:** Run a controlled A/B test:\n  - Baseline: deterministic policy B\n  - Variant: LLM router C\n  - Keep reviewer retention fixed\n  - Measure cost per completed task, answer quality, security-specific correctness, and reviewer override rate\n\n- **Evidence needed before claiming savings or better answers:** You need a statistically meaningful sample across comparable tasks, with the same review mode and similar difficulty. Claim monetary savings only if total compute/agent cost drops without increasing rework. Claim better answers only if quality improves on blinded scoring or downstream acceptance, not just shorter outputs or fewer participants."
+        }
+      ],
+      "manualRubric": [
+        {
+          "criterion": "Chooses Security and designated Reviewer within the limit; identifies that ordinal-first loses both relevance and required review",
+          "passed": true,
+          "evidence": "Chooses B, Security and the required designated Reviewer within limit 2. It states the reviewer requirement and that ordinal-first misses the security reporter; the supplied first-two membership also excludes the Reviewer. Credit considers the answer as a whole."
+        },
+        {
+          "criterion": "Preserves or explicitly treats no-match broad fallback as an experiment rather than claiming unconditional Top-N superiority",
+          "passed": true,
+          "evidence": "Retains broad first/absent/unmatched fallback as a coverage tradeoff and applies focused selection only to the matched wave."
+        },
+        {
+          "criterion": "Calls for single-Agent comparison and actual Run/time/answer-quality evidence; Run savings alone do not prove token/money savings or quality",
+          "passed": false,
+          "evidence": "Proposes B-versus-C routing rather than a single-Agent comparison, and omits actual Run/elapsed-time evidence. It does request comparable tasks, answer quality and real cost, but the complete predeclared criterion is not met."
+        }
+      ],
+      "elapsedMilliseconds": 16450,
+      "runs": [
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:36:16.608Z",
+          "terminalAt": "2026-09-05T12:36:32.824Z"
+        }
+      ],
+      "discussionUsage": null,
+      "selection": null
+    },
+    {
+      "caseId": "fallback-design",
+      "arm": "discussion",
+      "promptSha256": "b2d47910fa63c233699d100b02d5d7ba7e8d6ec937ef5cb5e9e5f18ce6284977",
+      "runCount": 3,
+      "runtimeSucceeded": true,
+      "finalAnswer": "Choose **B** for this wave.\n\nRun **Security** and the **designated Reviewer**. The reviewer must be retained because review mode requires it, and the security reporter is the only focused match for **Q-security**. Do **not** use A, because frozen-first-two would pick Backend primary and Docs and miss the question-specific match. Do **not** use C yet, because an LLM router needs evidence before adding variance.\n\nThe no-match fallback is still useful as a safety net for unmatched or first-wave coverage, but it trades relevance for breadth and can waste capacity. Here, there is a clear match, so the fallback should not apply.\n\nNext step: run a controlled comparison of **B vs C** across matched and unmatched tasks while keeping reviewer retention fixed. Before claiming lower cost or better answers, you need representative sample size and evidence on:\n- answer quality from blinded human review\n- routing correctness on focus-question matches\n- token, latency, and cost impact\n- whether any cost reduction happens without quality loss",
+      "answers": [
+        {
+          "agent": "Solver",
+          "content": "Recommend **B** for this wave.\n\n- **Run members:** the **Security** reporter for `Q-security` and the **designated Reviewer**. That satisfies the review-mode requirement while keeping the focused selection aligned to the question.\n- **Why not A:** always taking the first two by frozen ordinal would pick Backend primary and Docs, which misses the security reporter and is poorly matched to the current question.\n- **Why not C yet:** an LLM router is not justified without evidence that it outperforms a deterministic policy on quality and cost. It adds variance and makes regressions harder to diagnose.\n\n**No-match fallback tradeoff:** the current fallback of keeping all eligible members on first wave or when there is no matched focus question favors coverage and safety, but it can inflate cost and dilute attention. For this wave, though, there is a clear match, so the fallback should not be used.\n\n**Next-step product experiment:** run a controlled comparison of **B vs C** on a representative set of discussion tasks, with the reviewer-retention rule held constant. Measure:\n- token and cost usage,\n- answer quality judged by blinded human review,\n- correctness on question-specific routing,\n- and whether the router changes outcomes for security-focused prompts.\n\nDo **not** claim monetary savings or better answers yet. You need sufficient sample size, matched task mix, and statistically credible evidence showing lower cost **without** quality loss, or higher quality at equal cost, before making that claim."
+        },
+        {
+          "agent": "Reviewer",
+          "content": "Choose **B** for this wave.\n\n- **Required reviewer:** keep the designated **Reviewer**.\n- **Which two should run:** **Security** and **Reviewer**. Security is the only focused match for **Q-security**, and review mode still requires the Reviewer.\n- **Why not A:** frozen-first-two would pick Backend primary and Docs, which ignores the security focus and drops the reporter.\n- **Why not C yet:** an LLM router is the least predictable choice here; it may improve coverage later, but it is not justified without live evidence.\n\n**No-match fallback tradeoff:** when there is no focused match, a deterministic fallback like frozen ordinal or “keep all eligible on first wave” protects coverage and reduces brittleness, but it can waste capacity on weakly relevant members and hide the benefit of focused routing. In this case, there is a match, so the fallback should not be used.\n\n**Next-step experiment:** run a controlled A/B/C comparison on matched and unmatched questions, with the same review constraint, and measure:\n- answer quality by human judgment\n- security-specific correctness on questions like this one\n- latency and token/cost spend\n- how often the router selects the focused reporter plus Reviewer\n\nDo **not** claim monetary savings or better answers until you have statistically credible evidence across a representative sample, not just one security question."
+        },
+        {
+          "agent": "Reviewer",
+          "content": "Choose **B** for this wave.\n\nRun **Security** and the **designated Reviewer**. The reviewer must be retained because review mode requires it, and the security reporter is the only focused match for **Q-security**. Do **not** use A, because frozen-first-two would pick Backend primary and Docs and miss the question-specific match. Do **not** use C yet, because an LLM router needs evidence before adding variance.\n\nThe no-match fallback is still useful as a safety net for unmatched or first-wave coverage, but it trades relevance for breadth and can waste capacity. Here, there is a clear match, so the fallback should not apply.\n\nNext step: run a controlled comparison of **B vs C** across matched and unmatched tasks while keeping reviewer retention fixed. Before claiming lower cost or better answers, you need representative sample size and evidence on:\n- answer quality from blinded human review\n- routing correctness on focus-question matches\n- token, latency, and cost impact\n- whether any cost reduction happens without quality loss"
+        }
+      ],
+      "manualRubric": [
+        {
+          "criterion": "Chooses Security and designated Reviewer within the limit; identifies that ordinal-first loses both relevance and required review",
+          "passed": true,
+          "evidence": "Chooses Security and the designated Reviewer, explicitly retains required review, and identifies that A selects Backend primary/Docs and misses the security match. The required Reviewer is also outside that stated pair."
+        },
+        {
+          "criterion": "Preserves or explicitly treats no-match broad fallback as an experiment rather than claiming unconditional Top-N superiority",
+          "passed": true,
+          "evidence": "Keeps unmatched/first-wave broad coverage as a tradeoff and does not claim unconditional Top-N superiority."
+        },
+        {
+          "criterion": "Calls for single-Agent comparison and actual Run/time/answer-quality evidence; Run savings alone do not prove token/money savings or quality",
+          "passed": false,
+          "evidence": "Requests quality, token, latency and cost evidence, but proposes B-versus-C routing rather than a single-Agent baseline and does not measure actual Runs. The complete predeclared criterion is not met."
+        }
+      ],
+      "elapsedMilliseconds": 35563,
+      "runs": [
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:36:33.071Z",
+          "terminalAt": "2026-09-05T12:36:51.916Z"
+        },
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:36:33.073Z",
+          "terminalAt": "2026-09-05T12:36:51.977Z"
+        },
+        {
+          "state": "completed",
+          "createdAt": "2026-09-05T12:36:52.109Z",
+          "terminalAt": "2026-09-05T12:37:08.557Z"
+        }
+      ],
+      "discussionUsage": {
+        "observedAt": "2026-09-05T12:37:08.620Z",
+        "createdRuns": 3,
+        "runsByState": {
+          "queued": 0,
+          "delivered": 0,
+          "working": 0,
+          "input_required": 0,
+          "completed": 3,
+          "failed": 0,
+          "canceled": 0,
+          "expired": 0,
+          "outcome_unknown": 0
+        },
+        "unboundMemberSlots": 0,
+        "unavailableRunRecords": 0,
+        "wallDurationSeconds": 35,
+        "tokens": null,
+        "estimatedCostMicros": null
+      },
+      "selection": [
+        {
+          "version": 2,
+          "explanations": [
+            {
+              "agentId": "agent_R1VDHCR7sAphyMCLterneQ",
+              "reasons": [
+                "no_focus_questions"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            },
+            {
+              "agentId": "agent_KhHjglrV26FfVFJP4zahJQ",
+              "reasons": [
+                "no_focus_questions"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            }
+          ],
+          "strategy": "all_eligible",
+          "focusQuestionIds": [],
+          "eligibleAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "selectedAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "requiredRoles": [
+            "reviewer"
+          ],
+          "focusedParticipantLimit": 3,
+          "selectionDigest": "5890450b57cf49840a2dae7c24a771a03ff499c2e7a12faa025f243dd1476bcf"
+        },
+        {
+          "version": 2,
+          "explanations": [
+            {
+              "agentId": "agent_KhHjglrV26FfVFJP4zahJQ",
+              "reasons": [
+                "finalizer_reviewer"
+              ],
+              "reportedQuestionIds": [],
+              "matchedRoleTerms": []
+            }
+          ],
+          "strategy": "finalizer",
+          "focusQuestionIds": [
+            "q2"
+          ],
+          "eligibleAgentIds": [
+            "agent_R1VDHCR7sAphyMCLterneQ",
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "selectedAgentIds": [
+            "agent_KhHjglrV26FfVFJP4zahJQ"
+          ],
+          "requiredRoles": [
+            "reviewer"
+          ],
+          "focusedParticipantLimit": 3,
+          "selectionDigest": "4e9f994818a56ee7149974256b548d158661a4e2958535044080ccbd191d19c1"
+        }
+      ]
+    }
+  ],
+  "error": null,
+  "benchmarkSources": [
+    {
+      "name": "discussion-cases.mjs",
+      "sha256": "58de7d3f4649ba0b08cded0fa633559e8ec56f39fef0d49fe4698844e8918cf7"
+    },
+    {
+      "name": "codex-answer.mjs",
+      "sha256": "6daf87cf563303ae8dff2d25be1b00aba773b91422aef836faf8236f01eb0e1f"
+    },
+    {
+      "name": "discussion-benchmark.test.ts",
+      "sha256": "b55e24196866880a43ec5c3f5dd6ad28d21918b05e2c7ab8de4589075ad91797"
+    }
+  ],
+  "workingTreeDirty": false,
+  "review": {
+    "reviewedOn": "2026-09-05",
+    "reviewer": "Codex task agent reading the retained answers against the predeclared rubric; no additional provider calls or LLM judge",
+    "independentHumanReview": false,
+    "blinded": false,
+    "rawReportSha256": "cf26dc76e2d9c1bfd80022fc4c23f2da5e394e9a243eda4bc74ac137dba510b7",
+    "transformation": "Only fills the predeclared manualRubric decisions/evidence and adds this review object; all original task inputs, answers, timings, selections and runtime outcomes are retained unchanged.",
+    "gradingRule": "Each composite rubric item passes only if its required content is covered. Equivalent accounting and implications across the answer are credited; individual decisions explain omissions and partial credit boundaries.",
+    "arms": {
+      "single_agent": {
+        "tasks": 3,
+        "createdRuns": 3,
+        "completedRuns": 3,
+        "elapsedMillisecondsSum": 55181,
+        "rubricItemsPassed": 5,
+        "rubricItemsTotal": 9,
+        "tasksMeetingEveryRubricItem": 0
+      },
+      "discussion": {
+        "tasks": 3,
+        "createdRuns": 9,
+        "completedRuns": 9,
+        "elapsedMillisecondsSum": 110569,
+        "rubricItemsPassed": 5,
+        "rubricItemsTotal": 9,
+        "tasksMeetingEveryRubricItem": 0
+      }
+    },
+    "limitations": [
+      "Three project-grounded closed-input tasks, one attempt per arm, one requested model at low reasoning effort; no population success-rate estimate or statistical superiority claim.",
+      "Task text and executable/model settings are matched; ordinary Run, Discussion contribution and finalizer role/context wrappers differ as part of the product treatment.",
+      "The selector-review payload does not explicitly restate that candidates are exclusively frozen Discussion participants. Its nonparticipant assessment may partly reflect wording ambiguity; missing availability/recovery regression coverage independently fails criterion 3 in both arms.",
+      "The fallback-design answers infer missing reviewer coverage from the supplied first-two set. The review credits that implication consistently in both arms.",
+      "Both arms have zero fully passing tasks under these strict composite rubrics. This is not a production task success-rate estimate.",
+      "Elapsed wall time includes orchestration and waiting, is one observation per arm, and is not provider execution time.",
+      "Observed provider model identity, tokens and currency are unavailable; requested model is not provider attestation.",
+      "This samples the existing reviewer finalizer and broad initial wave; it does not compare alternative finalizers or matched/unmatched runtime selector strategies.",
+      "No routing architecture change, automatic retry, Release or deployment follows from this sample."
+    ]
+  }
+}

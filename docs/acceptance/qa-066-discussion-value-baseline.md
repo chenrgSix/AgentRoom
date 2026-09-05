@@ -68,7 +68,7 @@ larger text and explicit light-theme contrast. Screenshots are retained locally
 under ignored `var/qa-066-discussion/desktop.png` and `mobile-light.png`.
 The preview uses only synthetic Team data and simulated responses.
 
-## Combined verification and remaining external gate
+## Combined verification and real comparison
 
 The complete `npm test` gate passes 1,177 Node checks (615 Server, 307 Web,
 101 contracts, 61 Bridge UI, 47 QA evidence, three product seeds, 15 site,
@@ -86,9 +86,29 @@ Twelve synthetic Runs are not twelve real model calls and do not supply a
 quality, model latency or monetary-cost result. The
 [review packet](qa-065-discussion-benchmark.md) contains exact fixed task text,
 manual rubrics, requested model, data boundary and caps. Automatic approval
-rejected the live invocation before it ran; explicit payload/destination/quota
-authorization is the remaining gate. QA-065 and combined acceptance remain
-open in the sole task register until actual answers are run and reviewed.
+initially rejected the live invocation before it ran. The Owner then explicitly
+confirmed the payload, OpenAI destination and quota; the subsequent authorized
+invocation completed all six arms and 12 real Runs without retries.
+
+The [reviewed real evidence](evidence/qa-065-discussion-benchmark-2026-09-05.json)
+binds clean source `24cbc83755a5c786b4fbb3134a7d566a18bd5921`, CLI `0.153.3`,
+requested `gpt-5.4-mini` at low reasoning effort and unchanged benchmark hashes.
+Three ordinary Runs took 55.181 seconds in total; three two-member Discussions
+with Reviewer finalizers used nine Runs and 110.569 seconds. Both arms satisfy
+five of nine predeclared rubric items and neither fully satisfies a task's
+three composite items. The task agent reviewed every final answer with explicit
+evidence; this is not independent human or blind review. The small closed-input
+sample shows no rubric coverage gain and cannot establish general superiority,
+production-user success rates or monetary ROI. Provider model attestation,
+tokens and currency remain unknown. The primary-fallback behavior is verified
+by regression tests, not by this Reviewer-present live sample.
+
+The live runner exited successfully in 176 seconds including setup. Its exact
+owned temporary root was physically absent after completion, and a read-only
+process check found no remaining benchmark process. Original and reviewed
+answer reports remain available without retaining fixture credentials or Team
+data. QA-065 and QA-066 completion evidence is now present in the sole task
+register. Discussion v1 scope remains frozen under ADR-0042.
 
 The actual preview was signed out and stopped. Physical checks confirm that
 its owned root and the full-test, deterministic-E2E and final synthetic-benchmark
