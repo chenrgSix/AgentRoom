@@ -114,3 +114,13 @@ exactly those four edits; repository, dependency and verification fields remain.
 Concurrency 9 was blocked by the visible maximum 8 control. The saved plan
 remains draft with no approval receipt and an unchecked r2 approval control.
 The browser warning/error log is empty.
+
+## QA-064 report formatting follow-up
+
+The complete documentation check caught two list-boundary issues in the actual
+exported report. Criteria and their claims now use separated subheadings and
+quoted prose, preserving report content while producing clean Markdown. The
+23 focused Result checks and final Web build pass again. The final physical
+download matches the 1,143-character clipboard report byte-for-byte, SHA-256
+`7bda03a471ab363b67b036dcac5fecabfb3c2e636db3cd5ec4df06dcb7d2b8cc`.
+The complete 385-file documentation check, including that actual report, passes.

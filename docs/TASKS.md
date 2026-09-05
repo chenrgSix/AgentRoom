@@ -654,7 +654,7 @@ is recorded only here; BRG-013, WEB-050 and QA-038 retain their separate gates.
 | WEB-069 | DONE | Show actionable work across application pages | GOV-030 | [QA-064 evidence](acceptance/qa-064-everyday-work-efficiency.md): 38 focused checks, Web build and real management-to-Result navigation pass; bounded independent query, coalesced refresh, focus recovery and session/Team/denied-access fences |
 | WEB-070 | DONE | Copy a Task definition into an independent draft | GOV-030 | [QA-064 evidence](acceptance/qa-064-everyday-work-efficiency.md): 23 focused checks and Web build; real Server draft and actual TASK-108 to TASK-113 copy preserve criteria/completion semantics, exclude execution/authority and block ambiguous duplicate creation |
 | WEB-071 | DONE | Edit common plan fields through a bounded form | GOV-030 | [QA-064 evidence](acceptance/qa-064-everyday-work-efficiency.md): 15 focused checks, three real seed modes and Web build pass; actual form retains r2 with precisely four edits and no approval; full definition, stale pins and exact retry preserved |
-| QA-064 | ACTIVE | Accept the everyday work efficiency iteration | WEB-067, WEB-068, WEB-069, WEB-070, WEB-071 | Relevant complete Web/Server/build/schema/docs and deterministic E2E gates; actual production-browser desktop/720/390 checks, report download, negative cases and owned-preview cleanup |
+| QA-064 | ACTIVE | Accept the everyday work efficiency iteration | WEB-067, WEB-068, WEB-069, WEB-070, WEB-071 | Complete suites/build/schema and nine deterministic E2E scenarios pass; final report formatting, repeated physical download and docs pass; browser layout and owned-preview cleanup evidence are being finalized |
 
 ## Deferred Beyond MVP
 

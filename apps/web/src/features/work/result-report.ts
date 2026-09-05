@@ -41,13 +41,11 @@ export function resultReport(task: TaskProjection, result: ResultProjection, loc
       "", quoted(result.review.reason)
     ] : [t("尚无人类审核记录。", "No human review is recorded.")]),
     "", `## ${t("当前任务验收标准", "Current Task criteria")} · r${task.criteriaRevision}`, "",
-    ...task.criteria.toSorted((a, b) => a.ordinal - b.ordinal).map((criterion) =>
-      `- ${literal(criterion.criterionKey)} · ${criterion.required ? t("必需", "Required") : t("可选", "Optional")}\n${quoted(criterion.description)}`),
-    ...(task.criteria.length === 0 ? [empty] : []),
+    task.criteria.length ? task.criteria.toSorted((a, b) => a.ordinal - b.ordinal).map((criterion) =>
+      `### ${literal(criterion.criterionKey)} · ${criterion.required ? t("必需", "Required") : t("可选", "Optional")}\n\n${quoted(criterion.description)}`).join("\n\n") : empty,
     "", `## ${t("结果中的标准声明", "Criterion claims in this Result")}`, "",
-    ...result.proposal.criterionClaims.map((claim) =>
-      `- ${literal(claim.criterionKey)} · ${claim.coverage}\n${quoted(claim.explanation)}\n  ${t("引用", "References")}: ${claim.evidenceRefIds.map(literal).join(", ") || empty}`),
-    ...(result.proposal.criterionClaims.length === 0 ? [empty] : []),
+    result.proposal.criterionClaims.length ? result.proposal.criterionClaims.map((claim) =>
+      `### ${literal(claim.criterionKey)} · ${claim.coverage}\n\n${quoted(claim.explanation)}\n\n${t("引用", "References")}: ${claim.evidenceRefIds.map(literal).join(", ") || empty}`).join("\n\n") : empty,
     "", `## ${t("证据引用", "Evidence references")}`, "",
     ...result.proposal.sources.map((source) => {
       const id = source.artifactId ?? source.runId ?? source.messageId ?? source.memoryId ?? source.discussionId ?? source.evidenceRefId;
@@ -57,7 +55,7 @@ export function resultReport(task: TaskProjection, result: ResultProjection, loc
     "", t("引用保留来源身份；引用存在不代表内容已核验。此报告未载入独立验证或仓库集成回执，请在任务证据页核查。", "References preserve source identities; a reference does not establish verified content. This report does not load independent verification or repository integration receipts; inspect the Task Evidence tab."),
     ...([[t("风险", "Risks"), result.proposal.risks], [t("开放问题", "Open questions"), result.proposal.openQuestions],
       [t("建议后续行动", "Proposed next actions"), result.proposal.nextActions.map((action) => action.description)]] as const)
-      .flatMap(([heading, entries]) => ["", `## ${heading}`, "", ...(entries.length ? entries.map(quoted) : [empty])]),
+      .flatMap(([heading, entries]) => ["", `## ${heading}`, "", entries.length ? entries.map(quoted).join("\n\n") : empty]),
     "", t("报告是导出时的快照；来源链接仍需要相应访问权限。", "This report is an export-time snapshot. Source links still require access."), ""
   ];
   return lines.join("\n");
