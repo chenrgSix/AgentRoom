@@ -1,8 +1,9 @@
 # QA-063 Streamlined Release Workflow
 
-Status: implementation and native Windows lifecycle accepted; tagged hosted
-Release and physical Central installation evidence remain open. Delivery state
-lives only in `docs/TASKS.md`.
+Status: Owner-authorized `v0.5.0-rc.6` transition-release goal frozen on
+2026-09-05; implementation and native Windows lifecycle are accepted, while
+the exact tagged hosted Release and physical Central installation evidence
+remain open. Delivery state lives only in `docs/TASKS.md`.
 
 ## Goal
 
@@ -16,7 +17,26 @@ Implement ADR-0041 without rewriting any historical Release:
   checksum-closed source archive; and
 - require exactly 12 named assets at the future Release boundary.
 
-This record does not authorize a tag, Draft or publication.
+## Frozen v0.5.0-rc.6 Candidate
+
+The Owner authorized `v0.5.0-rc.6` on 2026-09-05 as the first real transition
+candidate for the ADR-0041 distribution boundary. It supersedes
+`v0.5.0-rc.5` for evaluation without moving, rewriting, deleting or relabeling
+any older tag, Release or asset. Stable GitHub Latest remains `v0.4.2`.
+
+The candidate contains both the streamlined 12-asset Release implementation
+and the accepted Discussion integrity work in `DISC-013` and `DISC-014`. It is
+not a stable-release admission and does not close `QA-060`.
+
+The exact source commit is selected only after this frozen record and the
+release notes are committed on clean `main`, local `main` equals
+`origin/main`, and that exact commit passes the complete main CI. The
+authorization permits an annotated tag and empty Draft only for that selected
+commit. Public prerelease publication remains gated on the protected tagged
+workflow, authenticated closed-set verification and the supported physical
+Central source-package installation in this record. Independent anonymous
+download verification follows publication immediately; a failure there leaves
+the immutable prerelease published but keeps `QA-063` unaccepted.
 
 ## Implemented Source
 
