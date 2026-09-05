@@ -151,3 +151,9 @@
 @media (prefers-reduced-motion: reduce) {
   .product-shell *, .product-dialog * { scroll-behavior: auto; }
 }
+
+.product-attention { padding: 8px 12px; font-size: 11px; }
+.product-attention-link { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; color: var(--cw-text); background: var(--cw-accent-soft); border: 1px solid var(--cw-accent-border); border-radius: 8px; padding: 8px; }
+.product-attention-link small { width: 100%; color: var(--cw-text-secondary); text-align: left; }
+.attention-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--cw-warning); }
+.product-attention-clear { color: var(--cw-text-muted); }

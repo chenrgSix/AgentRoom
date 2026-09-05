@@ -1,6 +1,7 @@
 import {
   type FormEvent,
   useEffect,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -59,6 +60,7 @@ import { parseTaskCriteria } from "./features/task/task-criteria.js";
 import { TaskWorkDetail, type TaskWorkDetailTab } from "./features/work/TaskWorkDetail.js";
 import { WorkWorkspace, workActionTarget } from "./features/work/WorkWorkspace.js";
 import type { WorkFilters } from "./features/work/work-filters.js";
+import { useWorkAttention } from "./features/work/useWorkAttention.js";
 import { useWorkbench } from "./features/work/useWorkbench.js";
 import {
   type Agent,
@@ -191,12 +193,16 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     loadingMore: workbenchLoadingMore,
     error: workbenchError,
     hasMore: workbenchHasMore,
-    refresh: refreshWorkbenchState,
+    refresh: refreshVisibleWorkbench,
     loadMore: loadMoreWork
   } = useWorkbench({
     teamId: selectedTeamId, session, scope: workScope,
     lifecycleState: workLifecycleState, ownerMemberId: workOwnerMemberId, search: workSearch, ...workFilters
   });
+  const attention = useWorkAttention(selectedTeamId, session);
+  const refreshWorkbenchState = useCallback(async () => {
+    await Promise.all([refreshVisibleWorkbench(), attention.refresh()]);
+  }, [refreshVisibleWorkbench, attention.refresh]);
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [agentSetupTarget, setAgentSetupTarget] = useState<AgentSetupTarget | null>(null);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
@@ -1577,7 +1583,13 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
 
   return (
     <div className={`app-shell product-shell ${managing ? "management-area" : "collaboration-area"}`}>
-      <WorkspaceSidebar activeView={activeView} locale={locale} teams={teams} teamId={selectedTeamId} rooms={rooms} roomId={selectedRoomId}
+      <WorkspaceSidebar attentionItem={attention.item} attentionFailed={attention.failed} attentionLoading={attention.loading}
+        onRetryAttention={() => void attention.refresh()}
+        onOpenAttention={(item) => {
+          const target = workActionTarget(item);
+          if (target?.view === "room") openTaskInRoom(target.roomId, target.taskId);
+          else navigate({ view: "work", roomId: item.roomId, workTaskId: item.taskId, taskId: undefined, tab: target?.tab ?? "overview", runId: target?.runId });
+        }} activeView={activeView} locale={locale} teams={teams} teamId={selectedTeamId} rooms={rooms} roomId={selectedRoomId}
         onTeam={(teamId) => navigate({ teamId, roomId: undefined, taskId: undefined, workTaskId: undefined,
           tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, attention: undefined, filterRoomId: undefined, filterAgentId: undefined, priority: undefined, view: managing ? activeView : "work" })}
         canCreateTeam={!session?.clientTeamId} onNewTeam={() => setTeamDialogOpen(true)} onNewRoom={() => setRoomCreateOpen(true)}

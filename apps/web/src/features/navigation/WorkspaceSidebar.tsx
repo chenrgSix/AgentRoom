@@ -1,9 +1,15 @@
+import type { WorkbenchItem } from "../work/WorkWorkspace.js";
 import type { ReactNode } from "react";
 import { type Locale, translate } from "../../i18n.js";
 import type { Room, Team, WorkspaceView } from "../../models.js";
 import { isManagementView } from "./workspace-navigation.js";
 
 interface Props {
+  attentionItem?: WorkbenchItem | null;
+  attentionFailed?: boolean;
+  attentionLoading?: boolean;
+  onRetryAttention?: () => void;
+  onOpenAttention?: (item: WorkbenchItem) => void;
   canCreateTeam?: boolean;
   activeView: WorkspaceView;
   locale: Locale;
@@ -44,6 +50,13 @@ export function WorkspaceSidebar(props: Props) {
         <button aria-current={!managing ? "page" : undefined} onClick={props.onCollaboration} type="button">{zh ? "协作" : "Collaboration"}</button>
         <button aria-current={managing ? "page" : undefined} onClick={() => { if (!managing) props.onView(teamId ? "agents" : "security"); }} type="button">{zh ? "管理" : "Management"}</button>
       </nav>
+      {teamId && props.onOpenAttention && <div className="product-attention" aria-live="polite">
+        {props.attentionItem ? <button type="button" className="product-attention-link" onClick={() => props.onOpenAttention?.(props.attentionItem!)}>
+          <span className="attention-dot" aria-hidden="true" />{zh ? "我的任务待处理" : "My work needs attention"}
+          <small>{zh ? "查看下一步" : "Open next step"}</small>
+        </button> : props.attentionFailed ? <button type="button" disabled={props.attentionLoading} onClick={props.onRetryAttention}>{zh ? "重新检查待处理工作" : "Check pending work again"}</button>
+          : <span className="product-attention-clear">{props.attentionLoading ? (zh ? "正在检查待处理工作…" : "Checking pending work…") : (zh ? "暂无待输入、审核或确认的工作" : "No work awaiting input, review or acknowledgement")}</span>}
+      </div>}
       {managing ? (
         <nav className="product-destinations" aria-label={zh ? "管理导航" : "Management navigation"}>
           {destinations.map(([view, name, icon]) => (

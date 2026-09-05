@@ -71,3 +71,16 @@ report byte-for-byte (`cmp`), SHA-256
 file was saved; physical bytes, rather than that observer, prove download.
 No browser warning/error was recorded. Local QA artifacts are under
 `var/qa-064-everyday-work/` and are not production data or Release evidence.
+
+## WEB-069 evidence
+
+The 38 focused attention, real-Server navigation, Room synchronization and
+management checks pass, together with the Web build. The indicator reads one
+matching item with existing `scope=mine` and attention/lifecycle filters,
+independent of the visible page. Refreshes coalesce with a trailing reread when
+another change arrives; Team switch, logout and denied access clear old facts.
+Focus recovery refreshes the current scope.
+
+The actual built preview retains “我的任务待处理 / 查看下一步” in Management.
+Clicking it returns directly to the current Task Result review surface. It
+shows neither a fabricated total nor any new notification permission prompt.
