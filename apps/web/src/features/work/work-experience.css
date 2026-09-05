@@ -187,3 +187,8 @@
 .work-filters { flex-wrap: wrap; }
 .work-filters > label { min-width: 0; }
 .work-filters select { max-width: 100%; }
+
+.result-report-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block: 12px; }
+.result-report-actions [role="alert"] { color: var(--cw-danger); }
+.work-result-summary { min-width: 0; overflow-wrap: anywhere; }
+.work-result-summary .markdown-message { max-width: 100%; }

@@ -56,3 +56,18 @@ quick button and returned only TASK-108, with the matching canonical URL and
 one loaded result. Desktop and 390 x 844 layouts were inspected; the narrow
 page reports `clientWidth=scrollWidth=390`. Final combined browser and complete
 regression acceptance remains QA-064.
+
+## WEB-068 evidence
+
+The 23 focused Result/Task/Markdown tests and Web build pass. Tests cover
+Markdown headings/tables and executable-content rejection, report version and
+staleness, absent/current review, exact source references, clipboard denial,
+download object-URL cleanup, revoked access and late old-context reads.
+
+In the actual trusted preview, TASK-108 Result v1 copied a 1,138-character
+report. The physical downloaded `TASK-108-Result-v1.md` matches the clipboard
+report byte-for-byte (`cmp`), SHA-256
+`2329d38f0001404d199b4a425263f66167ca3d2fc244788eae4ccd157b115663`. The browser event observer timed out even though the
+file was saved; physical bytes, rather than that observer, prove download.
+No browser warning/error was recorded. Local QA artifacts are under
+`var/qa-064-everyday-work/` and are not production data or Release evidence.

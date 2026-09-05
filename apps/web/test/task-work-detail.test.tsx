@@ -300,7 +300,7 @@ test("Task detail renders authoritative tabs and untrusted content as text", asy
     fireEvent.keyDown(page.getByRole("tab", { name: "Runs" }), { key: "ArrowRight" });
     await page.findByText("Result v1");
     assert.equal(page.getByRole("tab", { name: "Results" }).getAttribute("tabindex"), "0");
-    assert.ok(page.getByText(result.proposal.summary));
+    assert.ok(page.getByText("Exact summary window.compromised = true"));
     assert.equal(dom.window.document.querySelector("img"), null);
     assert.ok(page.getByRole("button", { name: "Accept" }));
 

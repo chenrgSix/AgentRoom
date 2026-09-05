@@ -1,3 +1,5 @@
+import { MarkdownMessage } from "../../MarkdownMessage.js";
+import { ResultReportActions } from "./ResultReportActions.js";
 import type {
   ResultProjection,
   RunContextManifest,
@@ -667,7 +669,8 @@ export function TaskWorkDetail({
               return <article className="work-result-card" key={result.resultId}>
                 <header><strong>Result v{result.resultVersion}</strong><span>{display(result.state)}</span><span>{display(result.proposal.outcome)}</span></header>
                 {stale && <p className="work-warning">{text("此 Result 基于旧的 Task 定义或标准，不可接受。", "This Result is stale against the current Task definition or criteria and cannot be accepted.", locale)}</p>}
-                <p className="work-result-summary">{result.proposal.summary}</p>
+                <div className="work-result-summary"><MarkdownMessage content={result.proposal.summary} /></div>
+                <ResultReportActions taskId={task.taskId} resultId={result.resultId} locale={locale} token={token} />
                 <p>{text("提议者", "Proposed by", locale)}: {display(result.proposedBy.kind)}</p>
                 <h5>{text("标准声明", "Criterion claims", locale)}</h5>
                 <ul>{result.proposal.criterionClaims.map((claim) => <li key={claim.criterionKey}><strong>{display(claim.coverage)}</strong> — {claim.explanation}<small>{claim.evidenceRefIds.join(", ")}</small></li>)}</ul>
