@@ -3,18 +3,8 @@ import type {
   DiscussionPolicy
 } from "./discussion-types.js";
 
-export interface TurnTelemetry {
-  tokens?: number;
-  estimatedCostMicros?: number;
-}
-
-function validUsage(value: number | undefined): value is number {
-  return value !== undefined && Number.isSafeInteger(value) && value >= 0;
-}
-
 export function recordTurnUsage(input: {
   previous: BudgetSnapshot;
-  telemetry?: TurnTelemetry;
   agentRuns?: number;
   discussionStartedAt: string;
   now: string;
@@ -22,32 +12,16 @@ export function recordTurnUsage(input: {
   const elapsed = Math.max(0, Math.floor(
     (Date.parse(input.now) - Date.parse(input.discussionStartedAt)) / 1_000
   ));
-  const turnTokens = input.telemetry?.tokens;
-  const turnCost = input.telemetry?.estimatedCostMicros;
-  const tokenKnown = validUsage(turnTokens);
-  const costKnown = validUsage(turnCost);
   const agentRuns = input.agentRuns ?? 1;
   if (!Number.isSafeInteger(agentRuns) || agentRuns < 1 || agentRuns > 5) {
     throw new Error("Discussion Wave Agent Run count must be between 1 and 5");
   }
   return {
-    ...input.previous,
     turnsUsed: input.previous.turnsUsed + 1,
     agentRunsUsed: input.previous.agentRunsUsed + agentRuns,
-    tokensUsed: tokenKnown &&
-      (input.previous.turnsUsed === 0 || input.previous.tokenTelemetryKnown)
-      ? (input.previous.tokensUsed ?? 0) + turnTokens
-      : null,
     durationSeconds: elapsed,
-    estimatedCostMicros: costKnown &&
-      (input.previous.turnsUsed === 0 || input.previous.costTelemetryKnown)
-      ? (input.previous.estimatedCostMicros ?? 0) +
-        turnCost
-      : null,
-    tokenTelemetryKnown: tokenKnown &&
-      (input.previous.turnsUsed === 0 || input.previous.tokenTelemetryKnown),
-    costTelemetryKnown: costKnown &&
-      (input.previous.turnsUsed === 0 || input.previous.costTelemetryKnown)
+    leaseEndTurn: input.previous.leaseEndTurn,
+    extensions: input.previous.extensions
   };
 }
 
@@ -107,7 +81,9 @@ export function grantDiscussionLease(input: {
     throw new Error("Discussion lease cannot advance beyond its current boundary");
   }
   return {
-    ...input.previous,
+    turnsUsed: input.previous.turnsUsed,
+    agentRunsUsed: input.previous.agentRunsUsed,
+    durationSeconds: input.previous.durationSeconds,
     leaseEndTurn,
     extensions: input.previous.extensions + 1
   };

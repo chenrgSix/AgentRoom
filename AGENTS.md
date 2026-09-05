@@ -47,7 +47,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run test:compose` — verify the default/custom central HTTPS ports and validate the Caddy configuration.
 - `npm run test:e2e` — run deterministic cross-process acceptance tests.
 - `npm run test:discussion-benchmark` — verify the benchmark adapter and 12 synthetic Runs through a real isolated Server/Bridge, without provider access or authentication.
-- `npm run bench:discussion` — explicitly run three closed-input real Codex task pairs (at most 12 Runs, 20 minutes of model work), retaining answers and null provider cost under ignored `var/discussion-benchmark/`; use `CONVENE_WIRE_BENCH_MODEL` to pin a different model.
+- `npm run bench:discussion` — explicitly run three closed-input real Codex task pairs (at most 12 Runs, 20 minutes of model work), retaining answers, Run outcomes and elapsed time under ignored `var/discussion-benchmark/`; use `CONVENE_WIRE_BENCH_MODEL` to pin a different model.
 - `npm run test:e2e:live` — explicitly invoke local Codex and Pi against an isolated temporary Team.
 - `npm run db:migrate` — migrate the configured central SQLite database.
 - `npm run dev:server` — run the Fastify API on port 3000.

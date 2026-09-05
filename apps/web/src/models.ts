@@ -192,8 +192,6 @@ export interface DiscussionView {
     unboundMemberSlots: number;
     unavailableRunRecords: number;
     wallDurationSeconds: number | null;
-    tokens: number | null;
-    estimatedCostMicros: number | null;
   };
   discussion: {
     discussionId: string;

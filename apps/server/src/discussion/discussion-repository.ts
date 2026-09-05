@@ -114,9 +114,7 @@ interface BudgetEventRow {
   ordinal: number;
   event_type: DiscussionBudgetEvent["eventType"];
   turns: number;
-  tokens: number | null;
   duration_seconds: number;
-  estimated_cost_micros: number | null;
   metadata_json: string;
   created_at: string;
 }
@@ -157,9 +155,7 @@ function mapDiscussion(row: DiscussionRow): DiscussionRecord {
     Omit<ProgressSnapshot, "verifiedEvidenceRefs"> & {
       verifiedEvidenceRefs?: string[];
     };
-  const budget = JSON.parse(row.budget_json) as Partial<BudgetSnapshot> & {
-    turnsUsed: number;
-  };
+  const budget = JSON.parse(row.budget_json) as BudgetSnapshot;
   return {
     discussionId: row.discussion_id,
     roomId: row.room_id,
@@ -177,9 +173,12 @@ function mapDiscussion(row: DiscussionRow): DiscussionRecord {
       verifiedEvidenceRefs: progress.verifiedEvidenceRefs ?? []
     },
     budget: {
-      ...budget,
-      agentRunsUsed: budget.agentRunsUsed ?? budget.turnsUsed
-    } as BudgetSnapshot,
+      turnsUsed: budget.turnsUsed,
+      agentRunsUsed: budget.agentRunsUsed ?? budget.turnsUsed,
+      durationSeconds: budget.durationSeconds,
+      leaseEndTurn: budget.leaseEndTurn,
+      extensions: budget.extensions
+    },
     executionModel: row.execution_model,
     currentTurn: row.current_turn,
     currentWave: row.current_wave,
@@ -1125,9 +1124,7 @@ export class DiscussionRepository {
       ordinal: row.ordinal,
       eventType: row.event_type,
       turns: row.turns,
-      tokens: row.tokens,
       durationSeconds: row.duration_seconds,
-      estimatedCostMicros: row.estimated_cost_micros,
       metadata: JSON.parse(row.metadata_json) as Record<string, unknown>,
       createdAt: row.created_at
     }));
@@ -1353,11 +1350,11 @@ export class DiscussionRepository {
   private insertBudgetEvent(event: DiscussionBudgetEvent): void {
     this.database.prepare(`
       INSERT INTO discussion_budget_events (
-        budget_event_id, discussion_id, ordinal, event_type, turns, tokens,
-        duration_seconds, estimated_cost_micros, metadata_json, created_at
+        budget_event_id, discussion_id, ordinal, event_type, turns,
+        duration_seconds, metadata_json, created_at
       ) VALUES (
-        @budgetEventId, @discussionId, @ordinal, @eventType, @turns, @tokens,
-        @durationSeconds, @estimatedCostMicros, @metadataJson, @createdAt
+        @budgetEventId, @discussionId, @ordinal, @eventType, @turns,
+        @durationSeconds, @metadataJson, @createdAt
       )
     `).run({ ...event, metadataJson: JSON.stringify(event.metadata) });
   }

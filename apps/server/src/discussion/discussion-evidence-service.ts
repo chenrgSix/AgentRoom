@@ -214,7 +214,7 @@ export class DiscussionEvidenceService {
       progress,
       "",
       "## Remaining Lease",
-      `${remainingLease} ordinary waves; token and cost telemetry may be unknown.`,
+      `${remainingLease} ordinary waves.`,
       "",
       "## Recent Room Transcript"
     ].join("\n");

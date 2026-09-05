@@ -98,13 +98,9 @@ export interface ProgressSnapshot {
 export interface BudgetSnapshot {
   turnsUsed: number;
   agentRunsUsed: number;
-  tokensUsed: number | null;
   durationSeconds: number;
-  estimatedCostMicros: number | null;
   leaseEndTurn: number;
   extensions: number;
-  tokenTelemetryKnown: boolean;
-  costTelemetryKnown: boolean;
 }
 
 export interface DiscussionRecord {
@@ -273,9 +269,7 @@ export interface DiscussionBudgetEvent {
     | "extension_granted"
     | "finalization_reserved";
   turns: number;
-  tokens: number | null;
   durationSeconds: number;
-  estimatedCostMicros: number | null;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
@@ -315,11 +309,7 @@ export const emptyProgressSnapshot = (): ProgressSnapshot => ({
 export const emptyBudgetSnapshot = (leaseEndTurn: number): BudgetSnapshot => ({
   turnsUsed: 0,
   agentRunsUsed: 0,
-  tokensUsed: null,
   durationSeconds: 0,
-  estimatedCostMicros: null,
   leaseEndTurn,
-  extensions: 0,
-  tokenTelemetryKnown: false,
-  costTelemetryKnown: false
+  extensions: 0
 });

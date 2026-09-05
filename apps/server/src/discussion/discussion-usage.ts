@@ -8,8 +8,6 @@ export interface DiscussionObservedUsage {
   unboundMemberSlots: number;
   unavailableRunRecords: number;
   wallDurationSeconds: number | null;
-  tokens: null;
-  estimatedCostMicros: null;
 }
 
 /** A read projection of canonical Run facts, independent of budget debits. */
@@ -26,9 +24,7 @@ export function observeDiscussionUsage(input: {
       completed: 0, failed: 0, canceled: 0, expired: 0, outcome_unknown: 0 },
     unboundMemberSlots: 0,
     unavailableRunRecords: 0,
-    wallDurationSeconds: null,
-    tokens: null,
-    estimatedCostMicros: null
+    wallDurationSeconds: null
   };
   const seen = new Set<string>();
   for (const turn of input.turns) {

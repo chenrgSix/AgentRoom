@@ -29,11 +29,11 @@ test("observed usage counts unique actual lifecycle states, including live quoru
   assert.equal(usage.unboundMemberSlots, 1);
   assert.equal(usage.unavailableRunRecords, 0);
   assert.equal(usage.wallDurationSeconds, 30);
-  assert.equal(usage.tokens, null);
-  assert.equal(usage.estimatedCostMicros, null);
+  assert.equal(Object.hasOwn(usage, "tokens"), false);
+  assert.equal(Object.hasOwn(usage, "estimatedCostMicros"), false);
 });
 
-test("unavailable or mismatched Run records never become zero-cost completed work", () => {
+test("unavailable or mismatched Run records never become completed work", () => {
   for (const patch of [undefined, { roomId: "room_foreign" }, { taskId: "task_foreign" },
     { targetAgentId: "agent_foreign" }, { triggerMessageId: "msg_foreign" }]) {
     const usage = observeDiscussionUsage({ discussion, turns: [turn("run_test")],

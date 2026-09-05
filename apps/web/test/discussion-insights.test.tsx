@@ -7,8 +7,7 @@ import type { Agent, DiscussionView } from "../src/models.js";
 const view = { discussion: { budget: { agentRunsUsed: 5 } }, observedUsage: {
   createdRuns: 3, runsByState: { completed: 1, working: 1, outcome_unknown: 1,
     queued: 0, delivered: 0, input_required: 0, canceled: 0, failed: 0, expired: 0 },
-  unboundMemberSlots: 2, unavailableRunRecords: 1, wallDurationSeconds: 42,
-  tokens: null, estimatedCostMicros: null
+  unboundMemberSlots: 2, unavailableRunRecords: 1, wallDurationSeconds: 42
 } } as DiscussionView;
 const wave = { selection: { version: 2, selectedAgentIds: ["agent_primary"],
   strategy: "finalizer", focusQuestionIds: [], selectionDigest: "a".repeat(64),
@@ -26,9 +25,10 @@ test("frozen primary reason and observed versus budget usage render in both loca
     assert.ok(html.includes("42s"));
     assert.ok(!html.includes("<script>"));
     assert.ok(!html.includes("$0"));
+    assert.doesNotMatch(html, /tokens?|cost|费用/i);
   }
 });
-test("old snapshots and older Servers do not invent explanations, actual counts or costs", () => {
+test("old snapshots and older Servers do not invent explanations or actual counts", () => {
   const legacy = { ...wave, selection: { ...wave.selection!, version: 1 as const, explanations: undefined } };
   const html = renderToStaticMarkup(<DiscussionInsights view={{ ...view, observedUsage: undefined }}
     wave={legacy} agentsById={agentsById} locale="zh-CN" />);
@@ -36,4 +36,15 @@ test("old snapshots and older Servers do not invent explanations, actual counts 
   assert.ok(html.includes("当前服务器未提供实际运行统计"));
   assert.ok(!html.includes("已创建 0"));
   assert.ok(!html.includes("由任务主负责人汇总"));
+  assert.doesNotMatch(html, /tokens?|cost|费用/i);
+});
+
+test("retired metrics from an older Server are ignored in both locales", () => {
+  const legacyUsage = { ...view.observedUsage!, tokens: 120, estimatedCostMicros: 35 };
+  for (const locale of ["zh-CN", "en"] as const) {
+    const html = renderToStaticMarkup(<DiscussionInsights view={{ ...view, observedUsage: legacyUsage }}
+      wave={wave} agentsById={agentsById} locale={locale} />);
+    assert.doesNotMatch(html, /tokens?|cost|费用|120|35/i);
+    assert.ok(html.includes("42s"));
+  }
 });

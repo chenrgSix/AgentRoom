@@ -31,9 +31,9 @@ test("bounded real single-Agent and Discussion task pairs", {
   await mkdir(quotaDirectory);
   const app = await createServerApp({ databasePath: path.join(directory, "server.sqlite") });
   resources.defer(() => app.close());
-  const report = { version: 1, synthetic, sourceCommit: (await exec("git", ["rev-parse", "HEAD"], { cwd: root })).stdout.trim(),
+  const report = { version: 2, synthetic, sourceCommit: (await exec("git", ["rev-parse", "HEAD"], { cwd: root })).stdout.trim(),
     model, observedProviderModel: null, reasoningEffort: "low", runtime: "codex exec via generic Bridge adapter",
-    runtimeVersion: "", maximumRuns: 12, maximumModelWorkSeconds: 1200, tokens: null, cost: null,
+    runtimeVersion: "", maximumRuns: 12, maximumModelWorkSeconds: 1200,
     cases, results: [] as Array<Record<string, unknown>>, error: null as string | null };
   const sources = await Promise.all(["discussion-cases.mjs", "codex-answer.mjs", "discussion-benchmark.test.ts"]
     .map(async (name) => ({ name, sha256: createHash("sha256").update(
@@ -170,6 +170,14 @@ test("bounded real single-Agent and Discussion task pairs", {
       }
     }
     assert.equal(scheduled, 12);
+    assert.equal(Object.hasOwn(report, "tokens"), false);
+    assert.equal(Object.hasOwn(report, "cost"), false);
+    for (const result of report.results) {
+      if (result.discussionUsage) {
+        assert.equal(Object.hasOwn(result.discussionUsage, "tokens"), false);
+        assert.equal(Object.hasOwn(result.discussionUsage, "estimatedCostMicros"), false);
+      }
+    }
   } catch (error) {
     report.error = error instanceof Error ? error.message : "Benchmark failed";
     if (currentAttempt) Object.assign(currentAttempt, { error: report.error,

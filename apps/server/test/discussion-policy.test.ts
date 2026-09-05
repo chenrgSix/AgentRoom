@@ -107,15 +107,20 @@ test("assessment bounds count Unicode code points like JSON Schema", () => {
   }), null);
 });
 
-test("budget ledger preserves unknown telemetry and protects finalization reserve", () => {
+test("budget ledger tracks only waves, slots and duration and protects finalization reserve", () => {
   const startedAt = "2026-08-23T10:00:00.000Z";
+  const legacy = { ...emptyBudgetSnapshot(4), tokensUsed: 120,
+    estimatedCostMicros: 35, tokenTelemetryKnown: true, costTelemetryKnown: true };
   const first = recordTurnUsage({
-    previous: emptyBudgetSnapshot(4),
-    telemetry: { tokens: 120, estimatedCostMicros: 35 },
+    previous: legacy,
     discussionStartedAt: startedAt,
     now: "2026-08-23T10:00:03.000Z"
   });
-  assert.equal(first.tokensUsed, 120);
+  assert.deepEqual(first, { turnsUsed: 1, agentRunsUsed: 1, durationSeconds: 3,
+    leaseEndTurn: 4, extensions: 0 });
+  assert.deepEqual(grantDiscussionLease({ previous: legacy,
+    policy: defaultDiscussionPolicy, source: "user" }),
+  { ...emptyBudgetSnapshot(8), extensions: 1 });
   assert.equal(first.durationSeconds, 3);
   assert.equal(first.agentRunsUsed, 1);
   const second = recordTurnUsage({
@@ -124,9 +129,8 @@ test("budget ledger preserves unknown telemetry and protects finalization reserv
     discussionStartedAt: startedAt,
     now: "2026-08-23T10:00:05.000Z"
   });
-  assert.equal(second.tokensUsed, null);
-  assert.equal(second.estimatedCostMicros, null);
-  assert.equal(second.tokenTelemetryKnown, false);
+  assert.deepEqual(second, { turnsUsed: 2, agentRunsUsed: 4, durationSeconds: 5,
+    leaseEndTurn: 4, extensions: 0 });
   assert.equal(second.turnsUsed, 2);
   assert.equal(second.agentRunsUsed, 4);
 

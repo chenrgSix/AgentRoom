@@ -347,9 +347,7 @@ export class DiscussionOrchestrator {
       ordinal: 1,
       eventType: "lease_granted",
       turns: policy.initialLeaseTurns,
-      tokens: null,
       durationSeconds: 0,
-      estimatedCostMicros: null,
       metadata: { source: "initial", unit: "wave" },
       createdAt: now
     });
@@ -881,9 +879,7 @@ export class DiscussionOrchestrator {
         waveId: wave.waveId,
         waveOrdinal: wave.ordinal,
         agentRuns: wave.expectedMembers,
-        outcomes: outcomeCounts,
-        tokenTelemetryKnown: budget.tokenTelemetryKnown,
-        costTelemetryKnown: budget.costTelemetryKnown
+        outcomes: outcomeCounts
       }
     })];
     let decision = decideDiscussion({
@@ -1592,9 +1588,7 @@ export class DiscussionOrchestrator {
         ordinalOffset + 1,
       eventType,
       turns: input.turns,
-      tokens: null,
       durationSeconds: input.durationSeconds ?? discussion.budget.durationSeconds,
-      estimatedCostMicros: null,
       metadata: input.metadata,
       createdAt: this.clock()
     };

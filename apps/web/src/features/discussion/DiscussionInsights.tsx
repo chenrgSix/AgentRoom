@@ -59,7 +59,6 @@ export function DiscussionInsights({ view, wave, agentsById, locale }: {
           : `${usage.unboundMemberSlots} member slots without a Run · ${usage.unavailableRunRecords} records unavailable`}</span>
       </> : <span>{zh ? "当前服务器未提供实际运行统计" : "Observed usage is unavailable from this Server"}</span>}
       {view.discussion.budget.agentRunsUsed !== undefined && <span>{zh ? "预算已记账槽位" : "Debited budget slots"}: {view.discussion.budget.agentRunsUsed}</span>}
-      <span>{zh ? "Token 与费用：尚无完整统计" : "Tokens and cost: complete telemetry unavailable"}</span>
     </div>
   </>;
 }

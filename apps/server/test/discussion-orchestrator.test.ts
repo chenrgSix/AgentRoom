@@ -2667,8 +2667,14 @@ test("actual finalization uses a later-ordinal Task primary and survives restart
     assert.equal(result.observedUsage.createdRuns, 3);
     assert.equal(result.observedUsage.runsByState.completed, 2);
     assert.equal(result.observedUsage.runsByState.queued, 1);
-    assert.equal(result.observedUsage.tokens, null);
-    assert.equal(result.observedUsage.estimatedCostMicros, null);
+    assert.equal(Object.hasOwn(result.observedUsage, "tokens"), false);
+    assert.equal(Object.hasOwn(result.observedUsage, "estimatedCostMicros"), false);
+    assert.doesNotMatch(JSON.stringify(result.discussion.budget), /tokensUsed|estimatedCostMicros|TelemetryKnown/);
+    const events = value.discussions.listBudgetEvents(result.discussion.discussionId);
+    assert.doesNotMatch(JSON.stringify(events), /tokens|estimatedCostMicros|TelemetryKnown/);
+    const prompt = result.scheduledRuns[0]!.instruction;
+    assert.match(prompt, /ordinary waves\./);
+    assert.doesNotMatch(prompt, /token and cost telemetry/);
     const selection = result.waves.at(-1)!.selection;
     assert.deepEqual(selection?.explanations?.[0]?.reasons, ["finalizer_primary"]);
     const restarted = value.restart();

@@ -1,5 +1,11 @@
 # QA-065 Discussion benchmark review packet
 
+This record preserves the executed version 1 baseline and its fixed payloads.
+After reviewing it, the Owner requested removal of token and cost accounting.
+[ADR-0043](../adr/0043-remove-discussion-token-cost-accounting.md) governs the
+current product and version 2 report, which omit those metric fields. The
+historical report, answers and review below are unchanged evidence.
+
 ## Invocation and data boundary
 
 The prepared command is `npm run bench:discussion`. It invokes the local

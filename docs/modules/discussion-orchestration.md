@@ -116,8 +116,9 @@ Discussions migrate to `all_eligible` compatibility behavior.
 New finalization prefers the eligible frozen Reviewer, then eligible Task
 primary, then frozen ordinal. Broad contribution fallbacks are unchanged.
 The authorized read projection separately reports bound Run lifecycle counts,
-unbound slots and wall time; budget slots are not actual spending. Complete
-token/cost telemetry is absent and must remain unknown. QA-065 provides a
+unbound slots and wall time; budget slots count committed execution capacity.
+[ADR-0043](../adr/0043-remove-discussion-token-cost-accounting.md) removes token
+and monetary-cost accounting, read fields and Web placeholders. QA-065 provides a
 bounded real-task comparison with a single-Agent baseline, not a quality claim.
 
 `DISC-012` adds no generic soft barrier. Its accepted target is a separate
@@ -259,21 +260,23 @@ boundaries and do not claim policy satisfaction.
 Budget separates logical coordination from committed execution capacity:
 
 ```text
-logical Waves + committed member execution slots + input/output tokens + elapsed duration + cost
+logical Waves + committed member execution slots + elapsed duration
 ```
 
 For each ordinary Wave, closure advances the compatibility field `turnsUsed`
 once and `agentRunsUsed` by the persisted expected-member count. The latter is a
 committed execution-slot counter, not proof that every slot started a physical
-Runtime process. Lease and hard boundaries use logical Wave usage. MVP token and
-cost telemetry is not aggregated from Wave members, so missing values remain
-unknown. Two planned members in one Wave are one policy round and two committed
-execution slots.
+Runtime process. Lease and hard boundaries use logical Wave usage and elapsed
+duration. Two planned members in one Wave are one policy round and two committed
+execution slots. Token and monetary-cost accounting is removed under ADR-0043.
+Old persisted budgets are projected using only supported fields; new budget
+events leave legacy nullable token/cost columns unused. Historical rows and
+reviewed benchmark evidence are retained without rewriting them.
 
 The server grants a bounded lease instead of promising a fixed number of Waves.
 At lease exhaustion it may renew within the automatic boundary. Crossing a
 soft boundary moves to `awaiting_extension`; crossing a hard boundary stops new
-ordinary Waves. Missing Runtime token or cost telemetry is unknown, never zero.
+ordinary Waves.
 
 Finalization has a separate reserve that ordinary Waves cannot consume. This
 allows a hard-budget stop to still produce the best available conclusion,

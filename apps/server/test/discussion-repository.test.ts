@@ -131,9 +131,7 @@ test("Discussion aggregate versions fence duplicate turn scheduling", async () =
       ordinal: 1,
       eventType: "lease_granted",
       turns: defaultDiscussionPolicy.initialLeaseTurns,
-      tokens: null,
       durationSeconds: 0,
-      estimatedCostMicros: null,
       metadata: { source: "initial" },
       createdAt: now
     };
@@ -141,6 +139,33 @@ test("Discussion aggregate versions fence duplicate turn scheduling", async () =
       { discussionId: ids.discussion, ordinal: 0, agentId: ids.agent1, role: "participant" },
       { discussionId: ids.discussion, ordinal: 1, agentId: ids.agent2, role: "reviewer" }
     ], initialBudgetEvent);
+
+    assert.deepEqual(database.prepare(`
+      SELECT tokens, estimated_cost_micros FROM discussion_budget_events
+      WHERE budget_event_id = ?
+    `).get(initialBudgetEvent.budgetEventId), { tokens: null, estimated_cost_micros: null });
+    const legacyBudget = JSON.stringify({ ...budget, agentRunsUsed: undefined,
+      tokensUsed: 120, estimatedCostMicros: 35,
+      tokenTelemetryKnown: true, costTelemetryKnown: true });
+    database.prepare("UPDATE discussions SET budget_json = ? WHERE discussion_id = ?")
+      .run(legacyBudget, ids.discussion);
+    assert.deepEqual(repository.get(ids.discussion)?.budget, budget);
+    assert.deepEqual(database.prepare("SELECT budget_json FROM discussions WHERE discussion_id = ?")
+      .get(ids.discussion), { budget_json: legacyBudget });
+    database.prepare(`
+      INSERT INTO discussion_budget_events (
+        budget_event_id, discussion_id, ordinal, event_type, turns, tokens,
+        duration_seconds, estimated_cost_micros, metadata_json, created_at
+      ) VALUES (?, ?, 2, 'turn_recorded', 1, 120, 3, 35, '{}', ?)
+    `).run("budget_legacy_usage", ids.discussion, now);
+    assert.deepEqual(repository.listBudgetEvents(ids.discussion)[1], {
+      budgetEventId: "budget_legacy_usage", discussionId: ids.discussion, ordinal: 2,
+      eventType: "turn_recorded", turns: 1, durationSeconds: 3, metadata: {}, createdAt: now
+    });
+    assert.deepEqual(database.prepare(`
+      SELECT tokens, estimated_cost_micros FROM discussion_budget_events
+      WHERE budget_event_id = 'budget_legacy_usage'
+    `).get(), { tokens: 120, estimated_cost_micros: 35 });
 
     database.prepare(`
       UPDATE discussions SET progress_json = ? WHERE discussion_id = ?
@@ -185,7 +210,7 @@ test("Discussion aggregate versions fence duplicate turn scheduling", async () =
       /Stale Discussion aggregate version/
     );
     assert.equal(repository.listTurns(ids.discussion).length, 1);
-    assert.equal(repository.listBudgetEvents(ids.discussion)[0]?.tokens, null);
+    assert.deepEqual(repository.listBudgetEvents(ids.discussion)[0], initialBudgetEvent);
   } finally {
     database.close();
   }
@@ -232,9 +257,7 @@ test("Discussion decisions are atomic with aggregate updates", async () => {
       ordinal: 1,
       eventType: "lease_granted",
       turns: 4,
-      tokens: null,
       durationSeconds: 0,
-      estimatedCostMicros: null,
       metadata: {},
       createdAt: now
     });
@@ -330,9 +353,7 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
       ordinal: 1,
       eventType: "lease_granted",
       turns: 4,
-      tokens: null,
       durationSeconds: 0,
-      estimatedCostMicros: null,
       metadata: {},
       createdAt: now
     });
@@ -607,9 +628,7 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
         ordinal: 2,
         eventType: "turn_recorded" as const,
         turns: 1,
-        tokens: null,
         durationSeconds: 0,
-        estimatedCostMicros: null,
         metadata: { waveId: wave.waveId, agentRuns: 2 },
         createdAt: now
       }],

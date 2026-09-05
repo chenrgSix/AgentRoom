@@ -4,6 +4,7 @@
 - Date: 2026-09-05
 - Supersedes: none
 - Amends: DISC-011 selection and Web read projection
+- Amended by: [ADR-0043](0043-remove-discussion-token-cost-accounting.md), removing token/cost metrics
 
 ## Context
 

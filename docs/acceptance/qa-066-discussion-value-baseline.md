@@ -1,5 +1,10 @@
 # QA-066 Discussion value baseline
 
+This is the completed baseline before the Owner's subsequent request to remove
+token and cost accounting. [ADR-0043](../adr/0043-remove-discussion-token-cost-accounting.md)
+and DISC-017 govern that removal; the earlier acceptance evidence below remains
+historical, including its former null-metric display.
+
 ## Frozen goal
 
 The Owner authorized this iteration on 2026-09-05 and selected code review,
