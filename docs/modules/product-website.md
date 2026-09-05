@@ -55,7 +55,7 @@ generic asset. Installation links and stable-version claims must be rechecked
 when application packages change.
 
 Stable-version copy follows the actual verified application Release. Moving a
-download link to `v0.4.2` does not promise later main-branch changes or remove
+download link to `v0.5.0` does not promise later main-branch changes or remove
 the HTTP-only Agent, provider-credential, backup and physical-acceptance limits.
 
 ## Verification

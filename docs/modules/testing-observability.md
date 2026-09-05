@@ -74,7 +74,7 @@ Central; it is not packaged acceptance.
 ```sh
 CONVENE_WIRE_PRODUCT_SMOKE_IMAGE='sha256:FULL_IMAGE_ID' \
 CONVENE_WIRE_PRODUCT_SMOKE_BRIDGE='/absolute/released/convenewire-bridge' \
-CONVENE_WIRE_PRODUCT_SMOKE_VERSION='v0.5.0-rc.6' \
+CONVENE_WIRE_PRODUCT_SMOKE_VERSION='v0.5.0' \
 CONVENE_WIRE_PRODUCT_SMOKE_SOURCE='FULL_40_CHARACTER_RELEASE_SOURCE' \
 node scripts/test/run-with-temp-root.mjs -- \
   node --import tsx --test tests/e2e/governed-two-bridge-integration.test.ts
