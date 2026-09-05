@@ -151,14 +151,18 @@ test("home and guide have distinct truthful share metadata without an invented f
 test("product copy preserves release, authority, provider and license boundaries", () => {
   const home = textOnly(html["index.html"]);
   const guide = textOnly(html["guide/index.html"]);
-  assert.match(home, /v0\.5\.0-rc\.5 预发布版/u);
+  assert.match(home, /v0\.5\.0-rc\.6 预发布版/u);
   assert.match(home, /稳定 Latest 仍为 v0\.4\.2/u);
-  assert.match(guide, /v0\.5\.0-rc\.5 是预发布版/u);
+  assert.match(home, /精简的 12 资产分发/u);
+  assert.match(guide, /v0\.5\.0-rc\.6 是预发布版/u);
   assert.match(guide, /稳定 Latest v0\.4\.2/u);
+  assert.match(guide, /convenewire-central_\*_source\.tar\.gz/u);
+  assert.match(guide, /源码包在目标主机通过 Docker Compose 构建/u);
   assert.match(guide, /评估 RC 前请备份中央数据库/u);
   for (const page of [html["index.html"], html["guide/index.html"]]) {
-    assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.5"));
+    assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.6"));
     assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2"));
+    assert.doesNotMatch(page, /releases\/tag\/v0\.5\.0-rc\.5/u);
     assert.doesNotMatch(page, /releases\/tag\/v0\.5\.0-rc\.4/u);
     assert.doesNotMatch(page, /releases\/tag\/v0\.5\.0-rc\.3/u);
     assert.doesNotMatch(page, /releases\/tag\/v0\.4\.1/u);

@@ -26,7 +26,7 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Stable release:
   [ConveneWire v0.4.2](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2)
 - Current prerelease:
-  [ConveneWire v0.5.0-rc.5](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.5)
+  [ConveneWire v0.5.0-rc.6](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.6)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -40,15 +40,17 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 
 Stable v0.4.2 includes Central HTTP Agents and the
 [product experience iteration](docs/acceptance/qa-040-product-experience.md).
-The v0.5.0-rc.5 prerelease additionally packages
+The v0.5.0-rc.6 prerelease additionally packages
 [client owner collaboration entry](docs/adr/0035-connect-client-owners-to-team-collaboration.md)
 and the completed governed software-team execution route through its
 [final Core audit](docs/acceptance/qa-055-final-core-audit-goal.md), together
 with explicit CA-free trusted-LAN browser HTTP, the neutral Graphite Central
 interface and an advanced private-HTTPS browser-trust assistant under Bridge
-settings. Install
-Central, Web and Bridge from the same release. Before evaluating the RC, read
-its [upgrade and verification notes](docs/releases/v0.5.0-rc.5.md), take a
+settings. It is also the first candidate with the streamlined 12-asset
+distribution, one verified source-build Central archive and the accepted
+Discussion review, instruction, evidence and lexical-novelty integrity fixes.
+Install Central, Web and Bridge from the same release. Before evaluating the
+RC, read its [upgrade and verification notes](docs/releases/v0.5.0-rc.6.md), take a
 verified Central backup and retain the v0.4.2 packages and secrets. Website
 publication is not an application Release.
 
