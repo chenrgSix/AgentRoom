@@ -640,6 +640,22 @@ Server/Web locally through the existing controlled lifecycle.
 | OPS-017 | DONE | Package one controlled source-build Central release | GOV-029, OPS-016 | The [QA-063 implementation record](acceptance/qa-063-streamlined-release-workflow.md), schema-3 closed source package and verifier, three controller helpers, source-build runtime identity checks, controller/Compose gates, real package verification, mutation rejection and physical owned-root removal prove the single Central artifact path without making publication or target-host installation claims |
 | QA-063 | DONE | Publish and verify v0.5.0-rc.6 through the streamlined Release workflow | BRG-075, OPS-017, QA-008, DISC-013, DISC-014 | The [accepted transition-release record](acceptance/qa-063-streamlined-release-workflow.md), exact source `6349571`, annotated tag object `bbcce30`, CI 33940607248 and all 10 Release jobs in 33940981997 prove native Windows stable upgrade, the single Central source archive, authenticated Draft and anonymous public 12-asset verification, physical macOS source-build identity/cleanup and stable Latest remaining v0.4.2 |
 
+## Everyday Work Efficiency
+
+The [frozen iteration goal](acceptance/qa-064-everyday-work-efficiency.md)
+keeps all changes on existing Web APIs and authority boundaries. Delivery state
+is recorded only here; BRG-013, WEB-050 and QA-038 retain their separate gates.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-030 | DONE | Freeze five everyday work improvements | WEB-066, QA-060 | Owner-authorized scope, owning Web module and QA-064 acceptance criteria preserve existing contracts and human approval |
+| WEB-067 | ACTIVE | Connect quick work filters and debounce composed search | GOV-030 | Focused URL/filter/pagination, search/IME and context-race regression; production browser desktop and narrow layout evidence |
+| WEB-068 | READY | Render and export readable Result reports | GOV-030 | Safe Markdown, exact Result/review/criteria/evidence reporting, clipboard/download failure and stale-context tests; browser report evidence |
+| WEB-069 | READY | Show actionable work across application pages | GOV-030 | Server-authorized bounded attention query, live refresh, session/Team/permission fences, navigation and accessible sidebar indicator tests |
+| WEB-070 | READY | Copy a Task definition into an independent draft | GOV-030 | Explicit editable goal/criteria copy through existing create API; no inherited execution, Results, approval, assignment or repository authority; real Server-backed regression |
+| WEB-071 | READY | Edit common plan fields through a bounded form | GOV-030 | Full-definition preservation, validated goal/Agent/budget edits, stale revision and unchanged explicit approval controls; real Server-backed regression |
+| QA-064 | PLANNED | Accept the everyday work efficiency iteration | WEB-067, WEB-068, WEB-069, WEB-070, WEB-071 | Relevant complete Web/Server/build/schema/docs and deterministic E2E gates; actual production-browser desktop/720/390 checks, report download, negative cases and owned-preview cleanup |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

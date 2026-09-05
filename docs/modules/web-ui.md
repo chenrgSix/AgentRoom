@@ -782,6 +782,37 @@ focus/semantic-state hierarchy without changing component ownership, commands,
 authorization, navigation or authoritative fact order. Its frozen acceptance
 record is `docs/acceptance/web-066-central-visual-system-goal.md`.
 
+## Everyday work efficiency
+
+WEB-067 through WEB-071 implement the Owner-authorized
+[everyday work goal](../acceptance/qa-064-everyday-work-efficiency.md).
+The Web passes attention, Room, Agent and priority filters to the existing
+authorized Workbench API and retains them in validated navigation intent.
+Search waits for a short idle interval and completed IME composition; scope
+changes cancel old requests immediately. Pagination remains Server-owned.
+
+Result summaries reuse safe Markdown rendering. Explicit copy/download produces
+a bounded Markdown report from the selected authorized Result, including its
+version, review state, criterion claims, risks and evidence links. A report never
+upgrades a claim to a verification/integration fact or includes raw credentials,
+client paths or unrequested Artifact bytes.
+
+A bounded, filter-independent Workbench attention query powers a sidebar
+indicator across pages. It represents available actionable work, not an exact
+Team-wide count, and clears on logout, Team changes or failed authorization.
+The first version needs no browser notification permission or external channel.
+
+Copying a Task explicitly pre-fills a new editable draft with its title, goal
+and criteria. It uses the existing create API and copies no assignments, Runs,
+Results, Plan, review, budget usage, parent linkage or local grants. Execution
+Agent selection happens separately through existing Task/Room controls.
+
+The common plan editor changes only explicitly presented fields in a full
+cloned definition. Unexposed graph, source, repository and gate fields survive
+unchanged. Saving retains a new revision through the existing API; approval
+continues to require separate human review of the exact revision and digest.
+Advanced JSON editing remains available for the full definition.
+
 ## Dependencies
 
 Team/Room, Task Collaboration, Registry, Run Orchestration, Runtime Adapters,
