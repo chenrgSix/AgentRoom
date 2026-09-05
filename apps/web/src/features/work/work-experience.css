@@ -197,3 +197,11 @@
 .task-copy-criteria > div { margin-bottom: 16px; }
 .task-copy-criteria label { display: block; }
 .task-copy-criteria input[type="checkbox"] { width: auto; margin-right: 6px; }
+
+.work-plan-common-editor, .work-plan-common-editor fieldset { min-width: 0; border: 1px solid var(--cw-border); border-radius: 8px; padding: 12px; }
+.work-plan-common-editor label { display: grid; min-width: 0; gap: 6px; margin-block: 10px; }
+.work-plan-common-editor input, .work-plan-common-editor select { width: 100%; min-width: 0; max-width: 100%; }
+.work-plan-common-editor textarea { min-height: 100px; }
+.work-plan-common-editor textarea[spellcheck="false"] { min-height: 320px; }
+.work-plan-common-editor > fieldset { margin-block: 14px; }
+.work-plan-budget-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px; }

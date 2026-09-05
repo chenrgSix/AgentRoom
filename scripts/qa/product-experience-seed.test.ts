@@ -103,6 +103,17 @@ for (const mode of ["local", "trusted-team", "trusted-team-lan"] as const) test(
   assert.equal(supersessionControl.statusCode, 200);
   assert.equal(supersessionControl.json().candidate, null);
 
+  const editableTask = taskList.find(({ title }) => title === "QA · 编辑常用计划字段");
+  assert.ok(editableTask);
+  const editablePage = await app.inject({ method: "GET", url: `/api/tasks/${editableTask.taskId}/execution-plans`, headers });
+  assert.equal(editablePage.statusCode, 200);
+  const editable = editablePage.json().plans[0];
+  assert.equal(editable.state, "draft");
+  assert.equal(editable.current.revision, 1);
+  assert.deepEqual(editable.compiledTasks, []);
+  const editableApprovals = await app.inject({ method: "GET", url: `/api/execution-plans/${editable.planId}/approvals`, headers });
+  assert.deepEqual(editableApprovals.json().approvals, []);
+
   const quorumTask = taskList.find(({ title }) =>
     title === "QA · 审计只读 Quorum 与迟到证据");
   assert.ok(quorumTask);

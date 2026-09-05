@@ -430,6 +430,24 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
       principal,
       quorum.discussion.discussionId
     ).supplementalEvidence.length, 1);
+
+    // Keep an independently editable draft beside the approved replanning fixture.
+    const editableTask = await request<TaskProjection>("POST", `/api/rooms/${options.roomId}/tasks`, {
+      title: "QA · 编辑常用计划字段", goal: "用表单澄清目标、执行者与预算，再单独审查新修订。", lifecycleState: "draft"
+    });
+    const editableMessage = await request<{ message: { messageId: string; sequence: number } }>("POST", `/api/rooms/${options.roomId}/messages`, {
+      taskId: editableTask.taskId, content: "QA 合成决策：修订表单只生成新的计划版本。"
+    });
+    const editableDefinition = structuredClone(planDefinition);
+    editableDefinition.rootTaskId = editableTask.taskId;
+    editableDefinition.title = "QA · 可编辑计划草案";
+    editableDefinition.decision.sources[0] = { evidenceRefId: "evidence_qa_editable0001", kind: "message", messageId: editableMessage.message.messageId };
+    editableDefinition.decision.sourceRevisions[0] = { evidenceRefId: "evidence_qa_editable0001", revision: editableMessage.message.sequence };
+    const editableRoot = await request<TaskProjection>("GET", `/api/tasks/${editableTask.taskId}`);
+    await request("POST", `/api/tasks/${editableTask.taskId}/execution-plans`, {
+      operationId: `op_qa_editable_${randomUUID().replaceAll("-", "_")}`,
+      expectedRootTaskRevision: editableRoot.taskRevision, definition: editableDefinition
+    });
   } finally {
     database.close();
   }

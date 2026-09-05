@@ -812,6 +812,12 @@ cloned definition. Unexposed graph, source, repository and gate fields survive
 unchanged. Saving retains a new revision through the existing API; approval
 continues to require separate human review of the exact revision and digest.
 Advanced JSON editing remains available for the full definition.
+The form exposes plan/node titles, new-node goals, exact Agent selections,
+concurrency and plan/node budgets; linked Task definitions remain pinned.
+Editor-open revision pins survive refresh, and an ambiguous revision response
+locks editing while an exact retained command is retried. The disposable
+product preview includes both an editable draft and the approved replanning
+fixture for separate acceptance.
 
 ## Dependencies
 

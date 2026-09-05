@@ -30,6 +30,7 @@ import {
   type PlanReviewReceiptScope
 } from "./plan-review-receipt.js";
 import { PlanSupersessionPanel } from "./PlanSupersessionPanel.js";
+import { PlanDefinitionEditor } from "./PlanDefinitionEditor.js";
 
 interface ExecutionPlanPanelProps {
   agentNames: ReadonlyMap<string, string>;
@@ -101,6 +102,8 @@ export function ExecutionPlanPanel({
   const [busy, setBusy] = useState<"revision" | "review" | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editorText, setEditorText] = useState("");
+  const [revisionUnknown, setRevisionUnknown] = useState(false);
+  const editBase = useRef<{ revision: number; rootTaskRevision: number } | null>(null);
   const [reviewReason, setReviewReason] = useState("");
   const [approvalConfirmed, setApprovalConfirmed] = useState(false);
   const [pendingReview, setPendingReview] = useState<PendingPlanReviewCommand | null>(null);
@@ -109,7 +112,7 @@ export function ExecutionPlanPanel({
   const listRequestId = useRef(0);
   const factsRequestId = useRef(0);
   const selectedIdRef = useRef<string | null>(null);
-  const revisionOperation = useRef<string | null>(null);
+  const revisionOperation = useRef<{ operationId: string; expectedRevision: number; expectedRootTaskRevision: number; definition: ExecutionPlanDefinition } | null>(null);
   const mounted = useRef(true);
   const sessionCurrent = useMemo(() => captureWebSessionScope(), [task.taskId, token]);
   const isCurrent = useCallback(() => mounted.current && sessionCurrent(), [sessionCurrent]);
@@ -231,6 +234,8 @@ export function ExecutionPlanPanel({
     setSelectedPlanId(planId);
     setEditOpen(false);
     setEditorText("");
+    revisionOperation.current = null;
+    setRevisionUnknown(false);
     setReviewReason("");
     setApprovalConfirmed(false);
     setPendingReview(null);
@@ -242,6 +247,9 @@ export function ExecutionPlanPanel({
   function beginEdit(): void {
     if (!selected || !canManage || selected.state !== "draft") return;
     setEditorText(JSON.stringify(selected.current.definition, null, 2));
+    editBase.current = { revision: selected.current.revision, rootTaskRevision: task.taskRevision };
+    revisionOperation.current = null;
+    setRevisionUnknown(false);
     setEditOpen(true);
     setCommandError(null);
   }
@@ -267,22 +275,21 @@ export function ExecutionPlanPanel({
     setBusy("revision");
     setCommandError(null);
     const selectedAtStart = selected;
-    const op = revisionOperation.current ?? operationId();
-    revisionOperation.current = op;
+    const command = revisionOperation.current ?? {
+      operationId: operationId(), expectedRevision: editBase.current?.revision ?? selected.current.revision,
+      expectedRootTaskRevision: editBase.current?.rootTaskRevision ?? task.taskRevision, definition
+    };
+    revisionOperation.current = command;
     try {
       const updated = await jsonRequest<ExecutionPlanProjection>(
         `/api/execution-plans/${selected.planId}/revisions`, {
           method: "POST",
-          body: JSON.stringify({
-            operationId: op,
-            expectedRevision: selected.current.revision,
-            expectedRootTaskRevision: task.taskRevision,
-            definition
-          })
+          body: JSON.stringify(command)
         }, token
       );
       if (!isCurrent() || selectedIdRef.current !== selectedAtStart.planId) return;
       revisionOperation.current = null;
+      setRevisionUnknown(false);
       replacePlan(updated);
       setEditOpen(false);
       setEditorText("");
@@ -291,7 +298,9 @@ export function ExecutionPlanPanel({
       onChanged();
     } catch (reason) {
       if (!isCurrent() || isStaleWebSessionError(reason)) return;
-      if (reason instanceof HttpRequestError) revisionOperation.current = null;
+      const unknown = !(reason instanceof HttpRequestError) || reason.status >= 500;
+      if (!unknown) revisionOperation.current = null;
+      setRevisionUnknown(unknown);
       setCommandError(t(
         `修订未确认：${String(reason)}。请重新载入；网络结果未知时，本页重试复用同一操作 ID。`,
         `Revision was not confirmed: ${String(reason)}. Reload it; this page reuses the same operation ID when the network outcome is unknown.`,
@@ -502,12 +511,11 @@ export function ExecutionPlanPanel({
 
     {canManage && selected.state === "draft" && <section className="work-plan-editor">
       <h5>{t("修订完整定义", "Revise complete definition", locale)}</h5>
-      {!editOpen ? <button disabled={busy !== null || pendingReview !== null} onClick={beginEdit} type="button">{t("编辑当前草案", "Edit current draft", locale)}</button> : <>
-        <label>{t("完整计划定义 JSON", "Complete plan definition JSON", locale)}
-          <textarea aria-label={t("完整计划定义 JSON", "Complete plan definition JSON", locale)} onChange={(event) => setEditorText(event.target.value)} spellCheck={false} value={editorText} />
-        </label>
-        <div><button disabled={busy !== null} onClick={() => void saveRevision()} type="button">{busy === "revision" ? t("正在保留…", "Retaining…", locale) : t("提交新修订", "Submit new revision", locale)}</button><button disabled={busy !== null} onClick={() => { setEditOpen(false); setEditorText(""); revisionOperation.current = null; }} type="button">{t("取消编辑", "Cancel editing", locale)}</button></div>
-      </>}
+      {!editOpen ? <button disabled={busy !== null || pendingReview !== null} onClick={beginEdit} type="button">{t("编辑当前草案", "Edit current draft", locale)}</button> : <form onSubmit={(event) => { event.preventDefault(); void saveRevision(); }}>
+        <PlanDefinitionEditor text={editorText} onChange={setEditorText} agentNames={agentNames} locale={locale} disabled={busy !== null || revisionUnknown} />
+        {revisionUnknown && <p role="status">{t("修订结果待确认。重试会发送上次的相同内容，请确认后再继续编辑。", "Revision outcome is unconfirmed. Retry sends the exact previous content; confirm it before editing again.", locale)}</p>}
+        <div><button disabled={busy !== null} type="submit">{busy === "revision" ? t("正在保留…", "Retaining…", locale) : revisionUnknown ? t("重试相同修订", "Retry exact revision", locale) : t("提交新修订", "Submit new revision", locale)}</button><button disabled={busy !== null || revisionUnknown} onClick={() => { setEditOpen(false); setEditorText(""); revisionOperation.current = null; }} type="button">{t("取消编辑", "Cancel editing", locale)}</button></div>
+      </form>}
     </section>}
 
     {canManage && selected.state === "draft" && <section className="work-plan-review">

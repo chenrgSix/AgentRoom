@@ -98,3 +98,19 @@ dialog into TASK-113, “QA-064 · 可复用草稿”. Its overview reports draf
 required criterion and accepted-Result policy, zero attempts and no Run,
 Result or assignment. New criterion keys work on LAN HTTP without requiring
 secure-context random UUID support.
+
+## WEB-071 evidence
+
+The 15 focused plan-form, existing approval and supersession checks pass, as
+do the Web build and three real local/trusted/LAN preview-seed checks. The new
+tests cross Fastify/SQLite to prove complete-definition preservation, immutable
+history, unchanged linked-Task pins, numeric validation, stale-editor CAS after
+refresh and exact retry after a committed response is lost. No revision test
+creates a Run, compiled Task or approval.
+
+The actual built preview revised the independent TASK-113 plan from r1 to r2
+through title, goal, Agent and budget fields. The full-definition diff contains
+exactly those four edits; repository, dependency and verification fields remain.
+Concurrency 9 was blocked by the visible maximum 8 control. The saved plan
+remains draft with no approval receipt and an unchecked r2 approval control.
+The browser warning/error log is empty.

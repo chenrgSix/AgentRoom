@@ -250,6 +250,7 @@ test("owner revision and approval bind exact current Server pins", async () => {
     const page = within(dom.window.document.body);
     await page.findByRole("button", { name: "Edit current draft" });
     fireEvent.click(page.getByRole("button", { name: "Edit current draft" }));
+    fireEvent.click(page.getByRole("button", { name: "Advanced JSON" }));
     const editor = page.getByRole("textbox", { name: "Complete plan definition JSON" });
     const edited = JSON.parse((editor as HTMLTextAreaElement).value);
     edited.title = "Human revised exact plan";
